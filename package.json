@@ -1,0 +1,15 @@
+{
+  "name": "moodle-pending-tasks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Consulta tareas pendientes de Moodle con Playwright.",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "playwright": "^1.51.1"
+  }
+}
