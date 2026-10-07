@@ -73,7 +73,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
             with Console().status("Comprobando el acceso a Moodle...", spinner="dots", spinner_style="#ff6555"):
                 verify_credentials(config)
         except MoodleAuthenticationError:
-            show_dashboard(username, ConnectionState.PROBLEMS)
+            show_dashboard(username, ConnectionState.PROBLEMS, refresh=True)
             print("Moodle no aceptó el usuario o la contraseña. Vuelve a introducirlos.")
             continue
         except MoodleHTTPError as error:
@@ -118,23 +118,24 @@ def main(argv: list[str] | None = None) -> None:
         username = values.get("MOODLE_USERNAME")
         if not args.connect_only:
             prepare_browser(env_file.parent)
-            show_dashboard(username)
+            show_dashboard(username, refresh=True)
             config, verified = ask_account(url)
             username = config.username
             save_credentials(env_file, config.base_url, config.username, config.password)
+            show_dashboard(username, ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS, refresh=True)
             if not verified:
-                show_dashboard(username, ConnectionState.PROBLEMS)
+                print("Por ahora Moodle no responde; no se pudo comprobar el acceso al servidor.")
                 print("Tu cuenta quedó guardada en este equipo; la validación de la cuenta está pendiente.")
                 print("La instalación puede continuar. Cuando Moodle vuelva a responder, la próxima consulta intentará validar el acceso con tu cuenta guardada.")
                 print("También puedes comprobar el acceso más tarde con: mcp-moodle status")
         elif not env_file.is_file():
             raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
         else:
-            show_dashboard(username)
+            show_dashboard(username, refresh=True)
         agent = args.agent or ask_agent()
         path = register_agent(agent, env_file, args.agent_config)
         state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not args.connect_only else ConnectionState.NOT_STARTED
-        show_dashboard(username, state, agent=AGENTS[agent])
+        show_dashboard(username, state, agent=AGENTS[agent], refresh=True)
         print(f"\nMCP registrado en {AGENTS[agent]} para tu usuario.")
         print(f"Configuración del agente: {path}")
         print(f"Credenciales guardadas localmente en: {env_file}")
@@ -146,7 +147,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(130) from None
     except Exception as error:
         # Las excepciones de validación y configuración no incluyen las credenciales.
-        show_dashboard(username, ConnectionState.PROBLEMS)
+        show_dashboard(username, ConnectionState.PROBLEMS, refresh=True)
         print(f"No se pudo completar la configuración: {error}", file=sys.stderr)
         raise SystemExit(1) from None
 

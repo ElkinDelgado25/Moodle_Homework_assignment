@@ -47,8 +47,11 @@ def show_dashboard(
     agent: str | None = None,
     detail: str | None = None,
     console: Console | None = None,
+    refresh: bool = False,
 ) -> None:
     console = console or Console()
+    if refresh and console.is_terminal and not console.is_dumb_terminal:
+        console.clear()
     color = {ConnectionState.NOT_STARTED: "bright_black", ConnectionState.CONNECTED: "green",
              ConnectionState.PROBLEMS: "red"}[state]
     account = Text()
