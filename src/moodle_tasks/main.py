@@ -25,7 +25,7 @@ class Assignment:
     content: str
     due_date: str
     status: str
-    submitted: bool
+    submitted: bool | None
 
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
@@ -117,6 +117,14 @@ def find_assignment_links(page: Page, config: Config) -> list[str]:
     return sorted(links)
 
 
+def submission_state(status: str) -> bool | None:
+    if re.search(r"not submitted|no (?:se ha )?(?:entregad|enviado)|sin entrega|borrador|draft|no attempt|ning[uú]n env[ií]o", status, re.IGNORECASE):
+        return False
+    if re.search(r"submitted for grading|entregad[oa] para|enviad[oa] para|^submitted$|^entregad[oa]$|^enviad[oa]$", status, re.IGNORECASE):
+        return True
+    return None
+
+
 def read_assignment(page: Page, url: str) -> Assignment:
     open_page(page, url)
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
@@ -133,7 +141,13 @@ def read_assignment(page: Page, url: str) -> Assignment:
         page,
         "[data-region='submissions'], .submissionstatus, .submissionstatustable",
     ) or "Estado de entrega no visible."
-    submitted = bool(re.search(r"submitted|entregad|enviado|calificad", status, re.IGNORECASE))
+    submission = ""
+    for row in page.locator(".submissionstatustable tr").all():
+        label = clean_text(row.locator("th, td").first.text_content())
+        if re.search(r"submission status|estado de (?:la )?entrega", label, re.IGNORECASE):
+            submission = clean_text(row.locator("td").last.text_content())
+            break
+    submitted = submission_state(submission or status)
     return Assignment(title, page.url, content, due_date, status, submitted)
 
 

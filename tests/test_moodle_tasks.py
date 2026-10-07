@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 
 from playwright.sync_api import sync_playwright
 
-from moodle_tasks.main import Config, find_assignment_links, login, print_tasks
+from moodle_tasks.main import Config, find_assignment_links, login, print_tasks, read_assignment, submission_state
 
 
 class MoodleTests(unittest.TestCase):
@@ -20,6 +20,7 @@ class MoodleTests(unittest.TestCase):
 
     def setUp(self):
         self.page = self.browser.new_page()
+        self.page.set_default_timeout(250)
         self.config = Config("https://moodle.test", "test", "test", True)
 
     def tearDown(self):
@@ -64,6 +65,23 @@ class MoodleTests(unittest.TestCase):
             print_tasks([])
         self.assertIn("No se puede confirmar", output.getvalue())
         self.assertNotIn("✅", output.getvalue())
+
+    def test_submission_state_does_not_confuse_negative_or_unknown_status(self):
+        for text in ("Not submitted", "No entregado", "Borrador (no enviado)"):
+            self.assertIs(submission_state(text), False)
+        self.assertIs(submission_state("Submitted for grading"), True)
+        self.assertIs(submission_state("Entregado para calificar"), True)
+        self.assertIsNone(submission_state("Estado de entrega no visible."))
+        self.assertIsNone(submission_state("No calificado"))
+
+    def test_submission_row_takes_priority_over_grading_text(self):
+        self.page.route("**/*", lambda route: route.fulfill(content_type="text/html", body='''
+            <h1>Tarea</h1><table class="submissionstatustable">
+              <tr><th>Estado de la entrega</th><td>No entregado</td></tr>
+              <tr><th>Estado de calificación</th><td>No calificado</td></tr>
+            </table>'''))
+        task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1")
+        self.assertIs(task.submitted, False)
 
 
 if __name__ == "__main__":
