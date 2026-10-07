@@ -1,4 +1,4 @@
-name: Pruebas
+name: Build y pruebas multiplataforma
 
 on:
   push:
@@ -9,16 +9,71 @@ permissions:
 
 jobs:
   tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Ubuntu 24.04 (Debian)
+            runner: ubuntu-24.04
+            artifact: ubuntu
+          - platform: Windows Server 2025
+            runner: windows-2025
+            artifact: windows
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.11"
-      - name: Instalar dependencias de las pruebas
-        run: uv sync --locked
-      - name: Preparar Chromium para las pruebas
+      - name: Instalar dependencias
+        run: uv sync --locked --python 3.11
+      - name: Preparar Chromium y bibliotecas de Ubuntu
+        if: runner.os == 'Linux'
         run: uv run playwright install --with-deps chromium
-      - name: Ejecutar pruebas
-        run: uv run python -m unittest discover -s tests -v
+      - name: Preparar Chromium en Windows
+        if: runner.os == 'Windows'
+        run: uv run playwright install chromium
+      - name: Construir paquete
+        run: uv build --wheel
+      - name: Instalar el paquete y probar CLI, Chromium y MCP
+        run: uv run python scripts/ci_verify_install.py
+      - name: Guardar instalador verificado
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcp-moodle-${{ matrix.artifact }}
+          path: dist/mcp-moodle-installer-0.1.0.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  arch:
+    name: Arch Linux
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base
+      options: --shm-size=1g
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - name: Preparar Arch y bibliotecas de Chromium
+        run: pacman -Syu --noconfirm --needed git uv chromium
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Instalar Python y dependencias
+        run: uv sync --locked --python 3.11
+      - name: Preparar Chromium de Playwright
+        run: uv run playwright install chromium
+      - name: Construir paquete
+        run: uv build --wheel
+      - name: Instalar el paquete y probar CLI, Chromium y MCP
+        run: uv run python scripts/ci_verify_install.py
+      - name: Guardar instalador verificado
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcp-moodle-arch
+          path: dist/mcp-moodle-installer-0.1.0.zip
+          if-no-files-found: error
+          retention-days: 14
