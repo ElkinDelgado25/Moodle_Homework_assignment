@@ -12,6 +12,13 @@ from moodle_tasks.storage import save_credentials
 
 
 class StatusTests(unittest.TestCase):
+    def test_explicit_credentials_path_does_not_require_a_home_directory(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            path = Path(directory) / "credentials.env"
+            save_credentials(path, "https://moodle.test", "student", "private-password")
+            with patch("pathlib.Path.home", side_effect=RuntimeError("No home directory")), patch("moodle_tasks.status.verify_credentials"), redirect_stdout(io.StringIO()):
+                main(["--env-file", str(path)])
+
     def test_no_account_is_not_connected_and_does_not_consult_moodle(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             output = io.StringIO()

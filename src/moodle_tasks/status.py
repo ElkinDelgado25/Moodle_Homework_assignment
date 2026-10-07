@@ -5,13 +5,13 @@ from pathlib import Path
 
 from .main import config_values, load_config
 from .setup import verify_credentials
-from .storage import default_env_file
 from .ui import ConnectionState, show_dashboard
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="mcp-moodle status", description=__doc__)
-    parser.add_argument("--env-file", type=Path, default=default_env_file())
+    # config_values/load_config resuelven la ruta personal solo si no se indicó una.
+    parser.add_argument("--env-file", type=Path)
     args = parser.parse_args(argv)
     values = config_values(args.env_file)
     username = values.get("MOODLE_USERNAME")
