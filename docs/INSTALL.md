@@ -43,7 +43,9 @@ El asistente prepara Chromium y tiene dos etapas:
 1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, configura la cuenta dejando explícitamente pendiente su validación.
 2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.
 
-La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta y el estado:
+La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta, el sistema operativo detectado y el estado. Reconoce Arch Linux y sus derivadas, por ejemplo **CachyOS (basado en Arch Linux)**.
+
+La preparación de Chromium muestra un indicador de progreso y termina con **Chromium listo**. Las advertencias de compatibilidad de Playwright se capturan y no aparecen en una instalación correcta. Si hay un fallo real, el asistente muestra **Con problemas**, informa del fallo y guarda los detalles en `browser-install.log` junto a las credenciales, para poder revisarlos.
 
 - **Sin iniciar:** todavía no se ha comprobado una sesión, o falta configurar la cuenta.
 - **Conectado:** Moodle aceptó el inicio de sesión en la comprobación actual.
