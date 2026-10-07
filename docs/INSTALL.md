@@ -38,9 +38,9 @@ Esto instala el comando principal `mcp-moodle` y los alias `moodle-setup`, `mood
 mcp-moodle run
 ```
 
-El asistente prepara Chromium y tiene dos etapas:
+También puedes usar `mcp-moodle setup`; es el mismo asistente. Las dependencias de Python se instalan automáticamente con `uv tool install`. Al abrir el asistente, primero se detecta el sistema operativo y se prepara Chromium con una animación en la terminal y sin mostrar la salida interna de la instalación. Al terminar aparece la portada de Moodle y comienzan las preguntas:
 
-1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, configura la cuenta dejando explícitamente pendiente su validación.
+1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión con una animación de espera. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, o tarda demasiado en responder, guarda la cuenta antes de abrir el menú de agentes y vuelve a mostrar la portada con **Con problemas**. Informa que la cuenta está guardada y su validación está pendiente; puedes continuar la instalación. La cuenta se conserva incluso si cancelas en el menú de agentes. Cuando el servidor vuelva a responder, la próxima consulta intentará iniciar sesión con esa cuenta; no hay reintentos automáticos permanentes en segundo plano.
 2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.
 
 La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta, el sistema operativo detectado y el estado. Reconoce Arch Linux y sus derivadas, por ejemplo **CachyOS (basado en Arch Linux)**.
