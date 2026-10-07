@@ -9,9 +9,50 @@ from unittest.mock import patch
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import load_config
 from moodle_tasks.setup import main, valid_username
+from moodle_tasks.storage import save_credentials
 
 
 class SetupTests(unittest.TestCase):
+    def test_exit_from_saved_account_menu_preserves_credentials_and_agents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "account/credentials.env"
+            save_credentials(path, "https://moodle.test", "saved", "saved-password")
+            before = path.read_bytes()
+            with patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.register_agent") as register:
+                output = self.run_wizard(root, ["3"], [])
+            account.assert_not_called()
+            register.assert_not_called()
+            self.assertEqual(path.read_bytes(), before)
+            self.assertIn("Tu configuración se conserva", output)
+
+    def test_saved_account_menu_can_register_another_agent_without_asking_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "account/credentials.env"
+            save_credentials(path, "https://moodle.test", "saved", "saved-password")
+            before = path.read_bytes()
+            with patch("moodle_tasks.setup.ask_account") as account:
+                self.run_wizard(root, ["2", "3"], [])
+            account.assert_not_called()
+            self.assertEqual(path.read_bytes(), before)
+            self.assertTrue((root / "agent.json").is_file())
+
+    def test_change_credentials_preserves_moodle_url_and_does_not_ask_for_an_agent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "account/credentials.env"
+            save_credentials(path, "https://custom.moodle.test", "saved", "saved-password")
+            with patch("moodle_tasks.setup.ask_agent") as agent:
+                output = self.run_wizard(root, ["1", "updated"], [None])
+            agent.assert_not_called()
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_config(path)
+            self.assertEqual(config.username, "updated")
+            self.assertEqual(config.base_url, "https://custom.moodle.test")
+            self.assertIn("Credenciales actualizadas", output)
+            self.assertFalse((root / "agent.json").exists())
+
     def test_username_validation(self):
         self.assertTrue(valid_username("student"))
         self.assertTrue(valid_username("student@example.edu"))

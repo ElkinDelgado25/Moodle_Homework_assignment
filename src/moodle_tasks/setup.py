@@ -17,7 +17,7 @@ from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
-from .ui import ConnectionState, show_agent_menu, show_dashboard
+from .ui import ConnectionState, show_agent_menu, show_dashboard, show_setup_menu
 
 
 DEFAULT_URL = "https://aulavirtualmoodle.uleam.edu.ec"
@@ -99,27 +99,46 @@ def ask_agent() -> str:
         print("Selecciona un número entre 1 y 4.")
 
 
+def ask_setup_action() -> str:
+    show_setup_menu()
+    while True:
+        choice = input("Selecciona una opción (1-3): ").strip()
+        if choice in ("1", "2", "3"):
+            return choice
+        print("Selecciona un número entre 1 y 3.")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default=DEFAULT_URL, help="Dirección de Moodle; por defecto ULEAM")
+    parser.add_argument("--url", help="Dirección de Moodle; por defecto la guardada o ULEAM")
     parser.add_argument("--agent", choices=AGENTS, help="Agente que se desea configurar")
     parser.add_argument("--config-dir", type=Path, help="Carpeta personal alternativa para las credenciales")
     parser.add_argument("--agent-config", type=Path, help="Configuración alternativa del agente, por ejemplo un perfil de VS Code")
     parser.add_argument("--connect-only", action="store_true", help="Conectar otro agente usando la cuenta ya guardada")
     args = parser.parse_args(argv)
-    url = args.url.rstrip("/")
-    parsed = urlsplit(url)
-    if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-        parser.error("La dirección debe ser una URL HTTP o HTTPS de Moodle, sin credenciales, parámetros ni fragmentos.")
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
     username = None
     try:
         values = config_values(env_file)
         username = values.get("MOODLE_USERNAME")
-        if not args.connect_only:
+        url = (args.url or values.get("MOODLE_URL") or DEFAULT_URL).rstrip("/")
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            parser.error("La dirección debe ser una URL HTTP o HTTPS de Moodle, sin credenciales, parámetros ni fragmentos.")
+        connect_only = args.connect_only
+        edit_only = False
+        if not connect_only:
             prepare_browser(env_file.parent)
             show_dashboard(username, refresh=True)
             show_agent_menu(AGENTS, detect_agents(), title="Agentes en este equipo")
+            if env_file.is_file() and all((values.get(key) or "").strip() for key in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")):
+                choice = ask_setup_action()
+                if choice == "3":
+                    print("Hasta luego. Tu configuración se conserva.")
+                    return
+                connect_only = choice == "2"
+                edit_only = choice == "1"
+        if not connect_only:
             config, verified = ask_account(url)
             username = config.username
             save_credentials(env_file, config.base_url, config.username, config.password)
@@ -129,18 +148,21 @@ def main(argv: list[str] | None = None) -> None:
                 print("Tu cuenta quedó guardada en este equipo; la validación de la cuenta está pendiente.")
                 print("La instalación puede continuar. Cuando Moodle vuelva a responder, la próxima consulta intentará validar el acceso con tu cuenta guardada.")
                 print("También puedes comprobar el acceso más tarde con: mcp-moodle status")
+            if edit_only:
+                print("Credenciales actualizadas. Los agentes configurados con esta cuenta usarán los nuevos datos.")
+                return
         elif not env_file.is_file():
             raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
         else:
             show_dashboard(username, refresh=True)
         agent = args.agent or ask_agent()
         path = register_agent(agent, env_file, args.agent_config)
-        state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not args.connect_only else ConnectionState.NOT_STARTED
+        state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not connect_only else ConnectionState.NOT_STARTED
         show_dashboard(username, state, agent=AGENTS[agent], refresh=True)
         print(f"\nMCP registrado en {AGENTS[agent]} para tu usuario.")
         print(f"Configuración del agente: {path}")
         print(f"Credenciales guardadas localmente en: {env_file}")
-        if not args.connect_only and not verified:
+        if not connect_only and not verified:
             print("La validación de la cuenta está pendiente; la próxima consulta intentará iniciar sesión.")
         print("Reinicia el agente y pide: Usa el MCP moodle para consultar mis tareas pendientes.")
     except (KeyboardInterrupt, EOFError):

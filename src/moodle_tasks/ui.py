@@ -91,3 +91,12 @@ def show_agent_menu(agents: dict[str, str], detected: dict[str, AgentDetection] 
         options.append("\n")
     Console().print(Panel(options, title=title,
                           border_style="#ad3945", width=min(Console().width, 100)))
+
+
+def show_setup_menu() -> None:
+    options = Text()
+    for index, label in enumerate(("Cambiar credenciales", "Configurar otro agente", "Salir"), 1):
+        options.append(f"  {index}  ", style="bold #ff6555")
+        options.append(label + "\n")
+    Console().print(Panel(options, title="¿Qué quieres hacer?", border_style="#ad3945",
+                          width=min(Console().width, 100)))
