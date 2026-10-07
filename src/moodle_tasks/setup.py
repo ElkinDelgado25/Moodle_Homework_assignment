@@ -69,7 +69,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
             return config, False
         print("Cuenta verificada correctamente.")
         return config, True
-    raise ValueError("No se pudo configurar la cuenta después de tres intentos. Ejecuta moodle-setup para intentarlo otra vez.")
+    raise ValueError("No se pudo configurar la cuenta después de tres intentos. Ejecuta mcp-moodle run para intentarlo otra vez.")
 
 
 def ask_agent() -> str:
@@ -103,7 +103,7 @@ def main(argv: list[str] | None = None) -> None:
             prepare_browser()
             config, verified = ask_account(url)
         elif not env_file.is_file():
-            raise ValueError("Todavía no hay una cuenta guardada. Ejecuta moodle-setup primero.")
+            raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
         agent = args.agent or ask_agent()
         if not args.connect_only:
             save_credentials(env_file, config.base_url, config.username, config.password)

@@ -1,7 +1,6 @@
 """Comandos de terminal de Moodle MCP."""
 
 import argparse
-import sys
 
 from . import main as tasks
 from . import server, setup

@@ -41,7 +41,7 @@ def config_values(env_file: Path | None = None) -> dict[str, str | None]:
 def required_env(name: str, values: dict[str, str | None]) -> str:
     value = (values.get(name) or "").strip()
     if not value:
-        raise ValueError(f"Falta la variable {name}. Ejecuta moodle-setup para configurar tu cuenta.")
+        raise ValueError(f"Falta la variable {name}. Ejecuta mcp-moodle run para configurar tu cuenta.")
     return value
 
 
