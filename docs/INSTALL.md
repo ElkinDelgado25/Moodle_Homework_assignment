@@ -165,9 +165,11 @@ El CI de GitHub Actions se activa en push y pull requests y verifica tres entorn
 | --- | --- |
 | Ubuntu 24.04, familia Debian | Playwright instala Chromium y sus bibliotecas con `--with-deps`. |
 | Arch Linux en contenedor sobre un runner Linux | `pacman` prepara las bibliotecas con el paquete `chromium`; Playwright descarga el navegador que utiliza el proyecto. |
-| Windows Server 2025 | Playwright instala Chromium para Windows. |
+| Windows 11 de escritorio, runner ARM64 con Python x64 | Playwright instala Chromium x64, que se ejecuta mediante la emulación de Windows 11. |
 
 Cada job prepara Python 3.11, construye el wheel, lo instala globalmente con `uv tool install` y comprueba los comandos de terminal. Después ejecuta la suite completa desde el intérprete del paquete instalado, incluyendo pruebas de Chromium, errores de servidor y descubrimiento MCP por stdio. Las pruebas usan páginas y credenciales de prueba; no necesitan cuentas reales de Moodle. El CI construye, prueba y guarda instaladores; no publica paquetes ni despliega servicios.
+
+El check de Windows consulta la edición del sistema con PowerShell y exige **Windows 11 de escritorio**. El runner alojado disponible es `windows-11-arm`; no se utiliza Windows Server. Python y sus dependencias se seleccionan como x64 para comprobar los mismos binarios que instala un equipo Intel/AMD, pero ejecutados mediante emulación en ARM64. Esto no equivale a probar hardware x64 nativo. Para probar Windows 11 en un equipo Intel/AMD, hace falta registrar un runner propio con Windows 11 y cambiar el destino del job a sus etiquetas. [Runners alojados de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [emulación de Python x64 con uv](https://docs.astral.sh/uv/concepts/python-versions/#transparent-x86_64-emulation-on-aarch64).
 
 En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y pruebas multiplataforma** y descarga el artifact `mcp-moodle-windows`, `mcp-moodle-ubuntu` o `mcp-moodle-arch`. Se conservan durante 14 días. Cada artifact contiene `mcp-moodle-installer-0.1.0.zip`, con el wheel y estas instrucciones. El wheel de Python es compartido entre plataformas; las dependencias específicas se descargan en el equipo donde lo instales. Probar Ubuntu no garantiza todas las versiones de Debian, y el contenedor Arch no reproduce todas las derivadas ni un escritorio completo.
 
