@@ -10,6 +10,7 @@ from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 from .errors import MoodleHTTPError
+from .storage import default_env_file
 
 
 @dataclass(frozen=True)
@@ -30,17 +31,17 @@ class Assignment:
     submitted: bool | None
 
 
-ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+ENV_FILE = default_env_file()
 
 
 def config_values(env_file: Path | None = None) -> dict[str, str | None]:
-    return {**dotenv_values(env_file or ENV_FILE), **os.environ}
+    return {**dotenv_values(env_file or default_env_file(), interpolate=False), **os.environ}
 
 
 def required_env(name: str, values: dict[str, str | None]) -> str:
     value = (values.get(name) or "").strip()
     if not value:
-        raise ValueError(f"Falta la variable {name}. Cópiala desde .env.example a .env.")
+        raise ValueError(f"Falta la variable {name}. Ejecuta moodle-setup para configurar tu cuenta.")
     return value
 
 
