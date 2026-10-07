@@ -9,9 +9,26 @@ from mcp import Client, StdioServerParameters
 
 from moodle_tasks.main import Assignment, Config
 from moodle_tasks.server import create_server
+from moodle_tasks.errors import MoodleHTTPError
 
 
 class MCPTests(unittest.IsolatedAsyncioTestCase):
+    async def test_server_failure_is_a_clear_tool_error_for_task_queries(self):
+        failure = MoodleHTTPError(502, "https://moodle.test/login/index.php")
+        config = Config("https://moodle.test", "test", "test", True)
+        with patch("moodle_tasks.server.load_config", return_value=config), patch("moodle_tasks.server.collect_assignments", side_effect=failure), patch("moodle_tasks.server.login", side_effect=failure):
+            async with Client(create_server()) as client:
+                for tool, arguments in (("list_assignments", {}), ("get_assignment", {"assignment_id": 1})):
+                    result = await client.call_tool(tool, arguments)
+                    self.assertTrue(result.is_error)
+                    message = " ".join(block.text for block in result.content if block.type == "text")
+                    self.assertIn(str(failure), message)
+                    self.assertNotIn("No se encontraron tareas pendientes", message)
+                connection = await client.call_tool("check_moodle_connection")
+                self.assertEqual(connection.structured_content, {
+                    "connected": False, "error": str(failure), "http_status": 502, "error_code": "server_error"
+                })
+
     async def test_standard_stdio_discovery_from_another_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             env_file = Path(directory) / ".env"
