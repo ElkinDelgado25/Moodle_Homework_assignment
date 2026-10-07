@@ -9,7 +9,18 @@ Este programa usa Python, `uv` y Playwright para iniciar sesión en Moodle, revi
 - Una cuenta activa en Moodle.
 - Acceso a Internet.
 
-## Instalación
+## Instalación global recomendada
+
+Con `uv` y Git instalados:
+
+```bash
+uv tool install --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+moodle-setup
+```
+
+El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md).
+
+## Instalación para desarrollar desde este repositorio
 
 ```bash
 uv sync
@@ -45,7 +56,7 @@ Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python
 
 ## Integración con agentes mediante MCP
 
-El servidor `uv run moodle-mcp` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Copilot y otros clientes compatibles con `stdio`. Consulta [la guía de conexión y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
+El servidor `moodle-mcp` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Antigravity, Copilot y otros clientes compatibles con `stdio`. Usa `moodle-setup` para configurarlo o consulta [la guía de conexión manual y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
 
 ## Notas
 

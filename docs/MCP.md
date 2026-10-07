@@ -1,5 +1,7 @@
 # Moodle como servidor MCP
 
+Para instalar y conectar el MCP con preguntas en la terminal, sigue [la instalación global con asistente](INSTALL.md). Las instrucciones de esta página también permiten conectarlo manualmente desde un checkout de desarrollo.
+
 El proyecto usa el [SDK oficial de MCP para Python](https://github.com/modelcontextprotocol/python-sdk) v2. El servidor se comunica por `stdio`, por lo que pueden usarlo Codex, Claude Code, Claude Desktop, Copilot en VS Code y otros clientes que admitan servidores MCP locales. Cada cliente inicia su propia instancia cuando lo necesita.
 
 ## Preparación
