@@ -9,6 +9,8 @@ from urllib.parse import urljoin
 from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
+from .errors import MoodleHTTPError
+
 
 @dataclass(frozen=True)
 class Config:
@@ -66,9 +68,10 @@ def first_text(page: Page, selectors: str) -> str:
 
 def open_page(page: Page, url: str) -> None:
     response = page.goto(url, wait_until="domcontentloaded")
-    if response is None or response.status >= 400:
-        status = response.status if response is not None else "sin respuesta"
-        raise RuntimeError(f"Moodle no pudo cargar la página (HTTP {status}): {url}")
+    if response is None:
+        raise RuntimeError(f"Moodle no pudo cargar la página (sin respuesta): {url}")
+    if response.status >= 400:
+        raise MoodleHTTPError(response.status, url)
 
 
 def login(page: Page, config: Config) -> None:

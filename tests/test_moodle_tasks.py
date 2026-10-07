@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 from playwright.sync_api import sync_playwright
 
 from moodle_tasks.main import Config, find_assignment_links, login, print_tasks, read_assignment, submission_state
+from moodle_tasks.errors import MoodleHTTPError
 
 
 class MoodleTests(unittest.TestCase):
@@ -30,8 +31,17 @@ class MoodleTests(unittest.TestCase):
         self.page.route("**/*", lambda route: route.fulfill(
             status=502, content_type="text/html", body="<h1>502 Bad Gateway</h1>"
         ))
-        with self.assertRaisesRegex(RuntimeError, "HTTP 502"):
+        with self.assertRaises(MoodleHTTPError) as caught:
             login(self.page, self.config)
+        self.assertEqual(caught.exception.status, 502)
+        self.assertIn("Por ahora no se pudieron consultar tus tareas", str(caught.exception))
+        self.assertIn("error del servidor", str(caught.exception))
+
+    def test_server_failures_share_friendly_message_without_hiding_other_errors(self):
+        for status in (500, 502, 503, 504):
+            self.assertIn("error del servidor", str(MoodleHTTPError(status, "https://moodle.test")))
+        self.assertIn("HTTP 403", str(MoodleHTTPError(403, "https://moodle.test")))
+        self.assertNotIn("error del servidor", str(MoodleHTTPError(403, "https://moodle.test")))
 
     def test_missing_login_form_requires_authenticated_session(self):
         self.page.route("**/*", lambda route: route.fulfill(
