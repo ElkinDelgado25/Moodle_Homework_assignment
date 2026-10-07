@@ -5,7 +5,7 @@ from contextlib import redirect_stdout
 from playwright.sync_api import sync_playwright
 
 from moodle_tasks.main import Config, find_assignment_links, login, print_tasks, read_assignment, submission_state
-from moodle_tasks.errors import MoodleHTTPError
+from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 
 
 class MoodleTests(unittest.TestCase):
@@ -49,6 +49,25 @@ class MoodleTests(unittest.TestCase):
         ))
         with self.assertRaisesRegex(RuntimeError, "sesión iniciada"):
             login(self.page, self.config)
+
+    def test_login_checks_credentials_and_post_login_server_failures(self):
+        form = '''<form id="login" method="post" action="/login/index.php">
+          <input name="username"><input name="password"><button type="submit">Acceder</button>
+        </form>'''
+        for status, body, expected in (
+            (200, form, MoodleAuthenticationError),
+            (502, "<h1>502 Bad Gateway</h1>", MoodleHTTPError),
+        ):
+            with self.subTest(status=status):
+                self.page.unroute("**/*")
+
+                def respond(route):
+                    route.fulfill(content_type="text/html", status=status if route.request.method == "POST" else 200,
+                                  body=body if route.request.method == "POST" else form)
+
+                self.page.route("**/*", respond)
+                with self.assertRaises(expected):
+                    login(self.page, self.config)
 
     def test_tasks_are_found_inside_courses_and_deduplicated(self):
         visited = []

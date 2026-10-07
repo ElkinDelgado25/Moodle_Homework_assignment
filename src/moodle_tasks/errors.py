@@ -1,3 +1,7 @@
+class MoodleAuthenticationError(RuntimeError):
+    """Moodle rechazó las credenciales introducidas."""
+
+
 class MoodleHTTPError(RuntimeError):
     """Error HTTP con un mensaje comprensible para la persona que consulta."""
 

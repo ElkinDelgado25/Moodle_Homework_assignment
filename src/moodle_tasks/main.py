@@ -9,7 +9,7 @@ from urllib.parse import urljoin
 from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
-from .errors import MoodleHTTPError
+from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .storage import default_env_file
 
 
@@ -85,13 +85,19 @@ def login(page: Page, config: Config) -> None:
 
     page.locator("input[name='username']").fill(config.username)
     page.locator("input[name='password']").fill(config.password)
-    page.locator("button[type='submit'], input[type='submit']").first.click()
-    page.wait_for_load_state("domcontentloaded")
+    with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+        page.locator("button[type='submit'], input[type='submit']").first.click()
+    response = navigation.value
+    if response is not None and response.status >= 400:
+        raise MoodleHTTPError(response.status, page.url)
 
     if "/login/" in page.url:
-        message = first_text(page, "[data-region='messages'], .alert-danger, .loginerrors")
-        suffix = f": {message}" if message else "."
-        raise RuntimeError(f"Moodle no aceptó el inicio de sesión{suffix}")
+        if page.locator("input[name='username'], input[name='password']").count():
+            raise MoodleAuthenticationError("Moodle no aceptó el usuario o la contraseña.")
+        raise RuntimeError("No se pudo confirmar el inicio de sesión en Moodle.")
+
+    if not page.locator("a[href*='/login/logout.php']").count():
+        raise RuntimeError("No se pudo confirmar una sesión iniciada en Moodle.")
 
 
 def find_assignment_links(page: Page, config: Config) -> list[str]:
