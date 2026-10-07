@@ -22,15 +22,31 @@ El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex,
 
 `mcp-moodle run` muestra el panel de Aula Moodle, con el logo en bloques rojos, tu cuenta y el estado. Usa `mcp-moodle status` para comprobar la conexión de la cuenta guardada.
 
-## Instalación para desarrollar desde este repositorio
+## Ejecutar desde un repositorio clonado
 
-```bash
-uv sync
-uv run playwright install chromium
-cp .env.example .env
+Si clonaste este repositorio, abre PowerShell o una terminal dentro de la carpeta `Moodle_Homework_assignment` y ejecuta un único comando:
+
+```powershell
+uv run mcp-moodle setup
 ```
 
-`uv sync` instala las dependencias de Python y `uv run playwright install chromium` instala el navegador que usa el programa. Este último comando se puede usar tanto en Ubuntu 24.04 como en distribuciones basadas en Arch Linux.
+Este comando instala automáticamente las dependencias indicadas en `uv.lock`, prepara Chromium y abre el asistente para guardar tu cuenta de Moodle y elegir el agente que quieres conectar. No hace falta ejecutar `uv sync`, crear un archivo `.env` ni instalar Chromium por separado para usar el asistente.
+
+No ejecutes `mcp-moodle setup` sin `uv run` desde un clon: ese comando solo existe directamente en la terminal cuando el paquete se instaló de forma global.
+
+Cuando ya hayas terminado la configuración, puedes volver a abrir el panel con:
+
+```powershell
+uv run mcp-moodle run
+```
+
+Y consultar las tareas desde la terminal con:
+
+```powershell
+uv run mcp-moodle tasks
+```
+
+Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
 
 Ubuntu 24.04 tiene soporte oficial de Playwright. En Arch Linux y sus derivadas puede aparecer esta advertencia:
 
@@ -40,17 +56,17 @@ BEWARE: your OS is not officially supported by Playwright; downloading fallback 
 
 No es un error: indica que Playwright usa una compilación de Chromium para Ubuntu 24.04 como alternativa. En este equipo se comprobó que Chromium inicia correctamente. Si aparece solo esta advertencia y el comando termina sin errores, puedes continuar.
 
-Edita `.env` y completa `MOODLE_USERNAME` y `MOODLE_PASSWORD`. No compartas ni subas ese archivo: está incluido en `.gitignore`.
+El asistente guarda las credenciales en la configuración local del usuario. Si usas el modo de desarrollo heredado con `.env`, no compartas ni subas ese archivo: está incluido en `.gitignore`.
 
-## Ejecutar
+## Ejecución directa con variables de entorno
 
-En distribuciones basadas en Arch Linux, ejecuta desde la carpeta del proyecto:
+Para el modo de desarrollo heredado basado en `.env`, ejecuta desde la carpeta del proyecto:
 
 ```bash
 uv run moodle-tasks
 ```
 
-El mismo comando sirve en Ubuntu 24.04. `uv run` ejecuta el programa dentro del entorno de Python del proyecto, sin tener que activarlo manualmente; no es exclusivo de Arch Linux.
+`uv run` ejecuta el programa dentro del entorno de Python del proyecto, sin tener que activarlo manualmente.
 
 El programa consulta Moodle una vez y avisa por la terminal. Puedes volver a ejecutarlo cuando enciendas la computadora. Para ver el navegador durante una prueba, cambia `MOODLE_HEADLESS=false` en `.env`.
 
