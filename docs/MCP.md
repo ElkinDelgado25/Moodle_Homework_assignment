@@ -28,6 +28,12 @@ Las herramientas son de consulta. Las credenciales permanecen en `.env`; no hace
 
 Los resultados usan `submitted=true`, `false` o `null` (estado desconocido). Los estados desconocidos también se incluyen al pedir pendientes. `reviewed_count`, `incomplete`, `errors` y `coverage` indican el alcance de la consulta: cero actividades o errores no permiten afirmar que no hay tareas pendientes. La búsqueda actual recorre los enlaces del área personal y de los cursos encontrados; puede omitir actividades en otras secciones o páginas.
 
+Si Moodle devuelve un error del servidor, como 502, las herramientas de consulta devuelven este mensaje:
+
+> Por ahora no se pudieron consultar tus tareas porque Moodle tiene un error del servidor. Inténtalo de nuevo más tarde.
+
+El mismo mensaje se usa para otros errores HTTP 5xx. `check_moodle_connection` también devuelve `connected=false`, `error_code="server_error"` y `http_status` con el código recibido. Las instrucciones del MCP piden al agente comunicar el fallo sin afirmar que no hay pendientes ni reintentar automáticamente en esa respuesta. Reinicia el servidor MCP en cada cliente después de actualizar para cargar estas instrucciones.
+
 ## Codex
 
 Desde la carpeta del proyecto, registra el servidor para tu usuario:
