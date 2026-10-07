@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "moodle": {
+      "command": "uv",
+      "args": ["--directory", "/RUTA/ABSOLUTA/Moodle_Homework_assignment", "run", "moodle-mcp"]
+    }
+  }
+}

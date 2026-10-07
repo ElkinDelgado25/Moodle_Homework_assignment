@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "moodle": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["--directory", "${workspaceFolder}", "run", "moodle-mcp"]
+    }
+  }
+}
