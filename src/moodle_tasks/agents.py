@@ -22,6 +22,25 @@ class AgentDetection:
     moodle_configured: bool = False
 
 
+def read_json_config(agent: str, path: Path) -> dict:
+    if not path.exists():
+        return {}
+    text = path.read_text(encoding="utf-8-sig")
+    if not text.strip():
+        return {}
+    try:
+        document = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"La configuración de {AGENTS[agent]} contiene JSON inválido en {path} "
+            f"(línea {error.lineno}, columna {error.colno}). "
+            "Corrige el formato del archivo y vuelve a intentarlo; su contenido se conservó."
+        ) from None
+    if not isinstance(document, dict):
+        raise ValueError(f"La configuración de {AGENTS[agent]} en {path} debe ser un objeto JSON.")
+    return document
+
+
 def detect_agents() -> dict[str, AgentDetection]:
     """Inspeccionar comandos y configuración local sin ejecutar los agentes."""
     commands = {"codex": ("codex",), "claude": ("claude",),
@@ -50,8 +69,7 @@ def detect_agents() -> dict[str, AgentDetection]:
             if path.is_file():
                 if not installed:
                     availability = "Configuración encontrada"
-                content = path.read_text(encoding="utf-8")
-                document = tomlkit.parse(content) if agent == "codex" else json.loads(content)
+                document = tomlkit.parse(path.read_text(encoding="utf-8")) if agent == "codex" else read_json_config(agent, path)
                 key = "mcp_servers" if agent == "codex" else "servers" if agent == "copilot" else "mcpServers"
                 servers = document.get(key, {}) if isinstance(document, dict) else {}
                 configured = isinstance(servers, dict) and isinstance(servers.get("moodle"), dict)
@@ -92,9 +110,7 @@ def register_agent(agent: str, env_file: Path, config_file: Path | None = None) 
         }
         content = tomlkit.dumps(document)
     else:
-        document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        if not isinstance(document, dict):
-            raise ValueError(f"La configuración de {AGENTS[agent]} debe ser un objeto JSON.")
+        document = read_json_config(agent, path)
         key = "servers" if agent == "copilot" else "mcpServers"
         if not isinstance(document.get(key, {}), dict):
             raise ValueError(f"El campo {key} no es un objeto JSON válido.")

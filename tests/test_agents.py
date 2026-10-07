@@ -9,6 +9,33 @@ from moodle_tasks.agents import AGENTS, detect_agents, register_agent
 
 
 class AgentTests(unittest.TestCase):
+    def test_empty_json_configurations_are_initialized_and_windows_bom_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for agent in ("antigravity", "claude", "copilot"):
+                for content in ("", " \n\t", "\ufeff", '\ufeff{"other_setting": true}'):
+                    with self.subTest(agent=agent, content=content):
+                        path = root / agent
+                        path.write_text(content, encoding="utf-8")
+                        register_agent(agent, root / "credentials.env", path)
+                        document = json.loads(path.read_text(encoding="utf-8"))
+                        key = "servers" if agent == "copilot" else "mcpServers"
+                        self.assertIn("moodle", document[key])
+                        if "other_setting" in content:
+                            self.assertTrue(document["other_setting"])
+
+    def test_invalid_antigravity_json_has_a_helpful_message_without_overwriting_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mcp_config.json"
+            original = '{"mcpServers":'
+            path.write_text(original, encoding="utf-8")
+            with self.assertRaises(ValueError) as caught:
+                register_agent("antigravity", Path(directory) / "credentials.env", path)
+            self.assertIn("Google Antigravity", str(caught.exception))
+            self.assertIn(str(path), str(caught.exception))
+            self.assertIn("línea 1", str(caught.exception))
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
     def test_detection_distinguishes_commands_configurations_and_existing_moodle(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
