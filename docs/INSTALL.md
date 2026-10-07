@@ -47,7 +47,9 @@ mcp-moodle run
 También puedes usar `mcp-moodle setup`; es el mismo asistente. Las dependencias de Python se instalan automáticamente con `uv tool install`. Al abrir el asistente, primero se detecta el sistema operativo y se prepara Chromium con una animación en la terminal y sin mostrar la salida interna de la instalación. Al terminar aparece la portada de Moodle y comienzan las preguntas:
 
 1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión con una animación de espera. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, o tarda demasiado en responder, guarda la cuenta antes de abrir el menú de agentes y vuelve a mostrar la portada con **Con problemas**. Informa que la cuenta está guardada y su validación está pendiente; puedes continuar la instalación. La cuenta se conserva incluso si cancelas en el menú de agentes. Cuando el servidor vuelva a responder, la próxima consulta intentará iniciar sesión con esa cuenta; no hay reintentos automáticos permanentes en segundo plano.
-2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.
+2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Al abrir el asistente y en este menú, muestra cuáles se detectan en el equipo y cuáles ya tienen **Moodle configurado**. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.
+
+La detección busca los comandos de los clientes en el PATH y sus archivos personales de configuración. **Configuración encontrada** indica que existe un archivo del cliente, aunque su ejecutable no se detecte; no confirma por sí sola que esté instalado. Para Copilot comprueba además las extensiones en las carpetas habituales de VS Code: si solo encuentra el editor, muestra **VS Code instalado; Copilot sin confirmar**. Las instalaciones o carpetas de extensiones personalizadas pueden no detectarse. Puedes seleccionar cualquier cliente manualmente, y **Moodle configurado** indica un registro existente, no una conexión verificada con Moodle.
 
 La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta, el sistema operativo detectado y el estado. Reconoce Arch Linux y sus derivadas, por ejemplo **CachyOS (basado en Arch Linux)**.
 
@@ -181,5 +183,11 @@ uv tool update-shell
 ```
 
 Abre una terminal nueva y ejecuta `mcp-moodle setup` para introducir tu cuenta y elegir el agente.
+
+Si tu Windows 11 usa un procesador ARM, selecciona explícitamente Python x64 para usar los binarios de Playwright mediante emulación, como hace el CI:
+
+```powershell
+uv tool install --python cpython-3.11-windows-x86_64-none .\moodle_homework_assignment-0.1.0-py3-none-any.whl
+```
 
 Para generar el instalador que puedes compartir, desde el checkout de desarrollo ejecuta `uv build --wheel`. El paquete aparece en `dist/` y contiene los comandos y el código, sin el `.env` local.
