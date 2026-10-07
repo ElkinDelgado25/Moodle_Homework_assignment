@@ -3,9 +3,10 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urljoin
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 
@@ -27,20 +28,27 @@ class Assignment:
     submitted: bool
 
 
-def required_env(name: str) -> str:
-    value = os.getenv(name, "").strip()
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def config_values(env_file: Path | None = None) -> dict[str, str | None]:
+    return {**dotenv_values(env_file or ENV_FILE), **os.environ}
+
+
+def required_env(name: str, values: dict[str, str | None]) -> str:
+    value = (values.get(name) or "").strip()
     if not value:
         raise ValueError(f"Falta la variable {name}. Cópiala desde .env.example a .env.")
     return value
 
 
-def load_config() -> Config:
-    load_dotenv()
+def load_config(env_file: Path | None = None) -> Config:
+    values = config_values(env_file)
     return Config(
-        base_url=required_env("MOODLE_URL").rstrip("/"),
-        username=required_env("MOODLE_USERNAME"),
-        password=required_env("MOODLE_PASSWORD"),
-        headless=os.getenv("MOODLE_HEADLESS", "true").lower() != "false",
+        base_url=required_env("MOODLE_URL", values).rstrip("/"),
+        username=required_env("MOODLE_USERNAME", values),
+        password=required_env("MOODLE_PASSWORD", values),
+        headless=(values.get("MOODLE_HEADLESS") or "true").lower() != "false",
     )
 
 
@@ -129,7 +137,26 @@ def read_assignment(page: Page, url: str) -> Assignment:
     return Assignment(title, page.url, content, due_date, status, submitted)
 
 
-def print_tasks(tasks: list[Assignment]) -> None:
+def collect_assignments(config: Config) -> tuple[list[Assignment], list[str]]:
+    tasks: list[Assignment] = []
+    errors: list[str] = []
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=config.headless)
+        try:
+            page = browser.new_page()
+            page.set_default_timeout(15_000)
+            login(page, config)
+            for url in find_assignment_links(page, config):
+                try:
+                    tasks.append(read_assignment(page, url))
+                except Exception as error:
+                    errors.append(f"No se pudo leer {url}: {error}")
+        finally:
+            browser.close()
+    return tasks, errors
+
+
+def print_tasks(tasks: list[Assignment], incomplete: bool = False) -> None:
     pending = [task for task in tasks if not task.submitted]
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
@@ -140,7 +167,10 @@ def print_tasks(tasks: list[Assignment]) -> None:
         return
 
     if not pending:
-        print("\n✅ No se encontraron tareas pendientes de entrega.")
+        if incomplete:
+            print("\n⚠️ La consulta quedó incompleta; no se pueden descartar tareas pendientes.")
+        else:
+            print("\n✅ No se encontraron tareas pendientes entre las actividades revisadas.")
         return
 
     print(f"\n⚠️ Tienes {len(pending)} tarea(s) pendiente(s):\n")
@@ -155,21 +185,10 @@ def print_tasks(tasks: list[Assignment]) -> None:
 def main() -> None:
     try:
         config = load_config()
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=config.headless)
-            page = browser.new_page()
-            page.set_default_timeout(15_000)
-            try:
-                login(page, config)
-                tasks = []
-                for url in find_assignment_links(page, config):
-                    try:
-                        tasks.append(read_assignment(page, url))
-                    except Exception as error:
-                        print(f"No se pudo leer {url}: {error}", file=sys.stderr)
-                print_tasks(tasks)
-            finally:
-                browser.close()
+        tasks, errors = collect_assignments(config)
+        for error in errors:
+            print(error, file=sys.stderr)
+        print_tasks(tasks, incomplete=bool(errors))
     except Exception as error:
         print(f"\n❌ No fue posible consultar Moodle: {error}", file=sys.stderr)
         raise SystemExit(1) from error
