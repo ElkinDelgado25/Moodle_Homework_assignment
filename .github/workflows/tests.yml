@@ -48,8 +48,6 @@ jobs:
     env:
       PYTHONUTF8: "1"
       UV_PYTHON_ARCH: x86_64
-      UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
-      UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
     steps:
       - name: Confirmar Windows 11 y procesador x64 nativo
         run: |
@@ -74,6 +72,9 @@ jobs:
       - name: Construir paquete
         run: uv build --wheel
       - name: Instalar el paquete y probar CLI, Chromium y MCP
+        env:
+          UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
         run: uv run python scripts/ci_verify_install.py
       - name: Guardar instalador verificado
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
