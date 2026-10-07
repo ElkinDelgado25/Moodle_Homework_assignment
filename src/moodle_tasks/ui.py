@@ -8,6 +8,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .system import describe_system
+from .agents import AgentDetection
 
 
 class ConnectionState(Enum):
@@ -77,10 +78,16 @@ def show_dashboard(
                         border_style="#ad3945", padding=(1, 2), width=width))
 
 
-def show_agent_menu(agents: dict[str, str]) -> None:
+def show_agent_menu(agents: dict[str, str], detected: dict[str, AgentDetection] | None = None, *, title: str = "¿En cuál agente quieres usar Moodle?") -> None:
     options = Text()
-    for index, label in enumerate(agents.values(), 1):
+    for index, (agent, label) in enumerate(agents.items(), 1):
         options.append(f"  {index}  ", style="bold #ff6555")
-        options.append(label + "\n")
-    Console().print(Panel(options, title="¿En cuál agente quieres usar Moodle?",
+        options.append(label)
+        if detected:
+            status = detected[agent]
+            options.append(" · " + status.availability, style="dim")
+            if status.moodle_configured:
+                options.append(" · Moodle configurado", style="green")
+        options.append("\n")
+    Console().print(Panel(options, title=title,
                           border_style="#ad3945", width=min(Console().width, 100)))

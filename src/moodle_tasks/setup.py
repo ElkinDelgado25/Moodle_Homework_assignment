@@ -12,7 +12,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 from rich.console import Console
 from rich.text import Text
 
-from .agents import AGENTS, register_agent
+from .agents import AGENTS, detect_agents, register_agent
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
@@ -91,7 +91,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
 
 def ask_agent() -> str:
     choices = list(AGENTS)
-    show_agent_menu(AGENTS)
+    show_agent_menu(AGENTS, detect_agents())
     while True:
         choice = input("Selecciona una opción (1-4): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= len(choices):
@@ -119,6 +119,7 @@ def main(argv: list[str] | None = None) -> None:
         if not args.connect_only:
             prepare_browser(env_file.parent)
             show_dashboard(username, refresh=True)
+            show_agent_menu(AGENTS, detect_agents(), title="Agentes en este equipo")
             config, verified = ask_account(url)
             username = config.username
             save_credentials(env_file, config.base_url, config.username, config.password)
