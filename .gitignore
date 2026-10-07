@@ -2,3 +2,6 @@ node_modules/
 .env
 playwright/.auth/
 *.log
+.venv/
+__pycache__/
+*.py[cod]
