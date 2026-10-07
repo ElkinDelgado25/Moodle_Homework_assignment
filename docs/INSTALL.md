@@ -161,31 +161,19 @@ La desinstalación conserva tus credenciales y las entradas MCP. Puedes retirar 
 
 ## Pruebas automáticas
 
-El CI de GitHub Actions tiene tres checks independientes. Ubuntu y Arch se ejecutan en push, pull requests y ejecuciones manuales. Windows 11 x64 se ejecuta en push o manualmente después de conectar un runner propio:
+El CI de GitHub Actions tiene tres checks independientes que se ejecutan automáticamente en push, pull requests y ejecuciones manuales:
 
 | Entorno | Preparación de Chromium |
 | --- | --- |
 | Ubuntu 24.04, familia Debian | Playwright instala Chromium y sus bibliotecas con `--with-deps`. |
 | Arch Linux en contenedor sobre un runner Linux | `pacman` prepara las bibliotecas con el paquete `chromium`; Playwright descarga el navegador que utiliza el proyecto. |
-| Windows 11 de escritorio, x64 Intel/AMD, runner propio | Playwright instala y ejecuta Chromium x64 nativo. Pendiente hasta conectar y habilitar el runner. |
+| Windows Server 2025 x64, runner alojado de GitHub | Playwright instala y ejecuta Chromium para Windows. |
 
 Cada job prepara Python 3.11, construye el wheel, lo instala globalmente con `uv tool install` y comprueba los comandos de terminal. Después ejecuta la suite completa desde el intérprete del paquete instalado, incluyendo pruebas de Chromium, errores de servidor y descubrimiento MCP por stdio. Las pruebas usan páginas y credenciales de prueba; no necesitan cuentas reales de Moodle. El CI construye, prueba y guarda instaladores; no publica paquetes ni despliega servicios.
 
-El check de Windows consulta la edición del sistema y la arquitectura del procesador con PowerShell, y exige **Windows 11 de escritorio con procesador x64 Intel/AMD**. GitHub no ofrece Windows 11 x64 entre sus runners estándar alojados; por eso este job usa un runner propio con las etiquetas `self-hosted`, `Windows`, `X64` y `windows-11`. [Runners alojados de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+El check de Windows usa `windows-2025`, el runner x64 alojado de GitHub. No requiere conectar tu equipo ni habilitar variables del repositorio. Comprueba la instalación y las pruebas en Windows Server 2025; esto no equivale a una comprobación específica en Windows 11 de escritorio. [Runners alojados de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-### Habilitar el check de Windows 11 x64
-
-Actualmente no hay un runner propio conectado al repositorio. El job de Windows queda **omitido**, no aprobado ni probado, hasta completar estos pasos desde un equipo o una máquina virtual con Windows 11 x64:
-
-1. En el repositorio, abre **Settings → Actions → Runners → New self-hosted runner** y selecciona **Windows / x64**.
-2. Sigue los comandos de descarga y registro que muestra GitHub. Agrega la etiqueta personalizada **`windows-11`** cuando el registro pregunte por etiquetas adicionales.
-3. Inicia el runner con `.\run.cmd` y comprueba que aparezca **Idle** en GitHub. Git y PowerShell 7 (`pwsh`) deben estar instalados en ese equipo; `uv` y Python los prepara el workflow.
-4. En **Settings → Secrets and variables → Actions → Variables**, crea la variable de repositorio **`WINDOWS11_RUNNER_ENABLED`** con valor **`true`**.
-5. En **Actions → Build y pruebas multiplataforma → Run workflow**, lanza la comprobación. El equipo debe permanecer encendido y el runner activo mientras se ejecuta.
-
-El check comprueba el sistema real antes de instalar el paquete. La instalación de prueba usa carpetas temporales del runner, separadas de tus herramientas globales. Si desconectas el equipo, desactiva el check cambiando `WINDOWS11_RUNNER_ENABLED` a `false`, para que no queden ejecuciones esperando un runner. [Registro de runners propios](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners).
-
-En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y pruebas multiplataforma** y descarga el artifact `mcp-moodle-ubuntu` o `mcp-moodle-arch`; `mcp-moodle-windows` estará disponible cuando el check nativo de Windows termine correctamente. Se conservan durante 14 días. Cada artifact contiene `mcp-moodle-installer-0.1.0.zip`, con el wheel y estas instrucciones. El wheel de Python es compartido entre plataformas; puedes instalar el wheel de cualquiera de los artifacts en Windows, aunque eso no significa que el CI lo haya probado allí. Probar Ubuntu no garantiza todas las versiones de Debian, y el contenedor Arch no reproduce todas las derivadas ni un escritorio completo.
+En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y pruebas multiplataforma** y descarga el artifact `mcp-moodle-windows`, `mcp-moodle-ubuntu` o `mcp-moodle-arch`. Se conservan durante 14 días. Cada artifact contiene `mcp-moodle-installer-0.1.0.zip`, con el wheel y estas instrucciones. El wheel de Python es compartido entre plataformas; las dependencias específicas se descargan en el equipo donde lo instales. Probar Ubuntu no garantiza todas las versiones de Debian, y el contenedor Arch no reproduce todas las derivadas ni un escritorio completo.
 
 En Windows, extrae el ZIP, abre PowerShell en esa carpeta y ejecuta:
 
