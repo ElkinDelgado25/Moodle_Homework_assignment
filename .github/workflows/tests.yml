@@ -17,20 +17,32 @@ jobs:
           - platform: Ubuntu 24.04 (Debian)
             runner: ubuntu-24.04
             artifact: ubuntu
-          - platform: Windows Server 2025
-            runner: windows-2025
+            python: "3.11"
+          - platform: Windows 11 (ARM64, Python x64)
+            runner: windows-11-arm
             artifact: windows
+            python: cpython-3.11-windows-x86_64-none
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     env:
       PYTHONUTF8: "1"
+      UV_PYTHON_ARCH: x86_64
     steps:
+      - name: Confirmar Windows 11 de escritorio
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $system = Get-CimInstance Win32_OperatingSystem
+          $system | Select-Object Caption, Version, OSArchitecture, ProductType | Format-List
+          if ($system.ProductType -ne 1 -or $system.Caption -notmatch 'Windows 11') {
+            throw "Este check requiere Windows 11 de escritorio."
+          }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
       - name: Instalar dependencias
-        run: uv sync --locked --python 3.11
+        run: uv sync --locked --python ${{ matrix.python }}
       - name: Preparar Chromium y bibliotecas de Ubuntu
         if: runner.os == 'Linux'
         run: uv run playwright install --with-deps chromium
