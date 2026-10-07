@@ -8,6 +8,7 @@ dependencies = [
     "mcp>=2,<3",
     "playwright>=1.51.0",
     "python-dotenv>=1.0.1",
+    "tomlkit>=0.13",
 ]
 
 [project.scripts]
