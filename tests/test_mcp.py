@@ -23,7 +23,8 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 cwd=directory,
                 env=environment,
             )
-            async with Client(params) as client:
+            # Comprueba también el handshake initialize usado por clientes MCP anteriores.
+            async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
                     "configuration_status", "check_moodle_connection", "list_assignments", "get_assignment"
