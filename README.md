@@ -11,14 +11,14 @@ Este programa usa Python, `uv` y Playwright para iniciar sesión en Moodle, revi
 
 ## Instalación global recomendada
 
-Con `uv` y Git instalados:
+Con `uv` instalado y el paquete `.whl` compartido por el autor, abre la terminal en la carpeta de descarga:
 
 ```bash
-uv tool install --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
 moodle-setup
 ```
 
-El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md).
+El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub para personas con acceso al repositorio privado.
 
 ## Instalación para desarrollar desde este repositorio
 

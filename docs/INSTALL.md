@@ -10,13 +10,25 @@ En Linux y macOS, si todavía no tienes `uv`:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-En Windows, usa el instalador de PowerShell de la [guía oficial de uv](https://docs.astral.sh/uv/getting-started/installation/). Abre una terminal nueva después de instalarlo. Comprueba `uv --version` y `git --version`; la instalación desde GitHub necesita Git y conexión a Internet.
+En Windows, usa el instalador de PowerShell de la [guía oficial de uv](https://docs.astral.sh/uv/getting-started/installation/). Abre una terminal nueva después de instalarlo. Comprueba `uv --version`. Si vas a instalar desde GitHub, también necesitarás Git; puedes comprobarlo con `git --version`.
 
 ## 2. Instalar Moodle MCP para tu usuario
+
+Si recibiste el paquete `.whl`, abre la terminal en la carpeta donde lo descargaste:
+
+```bash
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+```
+
+Esta opción permite compartir el instalador sin dar acceso al repositorio. No incluye las credenciales de quien creó el paquete. Hace falta Internet para descargar las dependencias y Chromium.
+
+Si tienes acceso al repositorio, también puedes instalar directamente desde GitHub:
 
 ```bash
 uv tool install --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
 ```
+
+El repositorio es privado actualmente: esta segunda opción requiere que tengas acceso y Git esté autenticado. El paquete `.whl` compartido no necesita acceso a GitHub ni Git instalado.
 
 Esto instala `moodle-setup`, `moodle-mcp` y `moodle-tasks` en un entorno aislado. `uv` obtiene Python 3.11 si hace falta. Es una instalación global para tu usuario, disponible desde cualquier carpeta. Si los comandos no aparecen, ejecuta `uv tool update-shell` y abre una terminal nueva. [Herramientas globales con uv](https://docs.astral.sh/uv/guides/tools/).
 
@@ -109,6 +121,8 @@ Para instalar los cambios publicados en la rama principal:
 uv tool install --force --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
 ```
 
+Si instalaste desde un paquete compartido, pide la versión nueva e instálala con `uv tool install --force --python 3.11 /ruta/al/paquete-nuevo.whl`.
+
 Después ejecuta `moodle-setup --connect-only` para actualizar la conexión del agente y reinícialo. La cuenta guardada se conserva.
 
 Para quitar los comandos:
@@ -122,3 +136,5 @@ La desinstalación conserva tus credenciales y las entradas MCP. Puedes retirar 
 ## Pruebas automáticas
 
 El CI de GitHub Actions se activa en push y pull requests. Prepara Python 3.11, las dependencias y Chromium, y ejecuta `python -m unittest discover -s tests -v`. Las pruebas usan páginas y credenciales de prueba; no necesitan cuentas reales de Moodle. El workflow solo ejecuta pruebas.
+
+Para generar el instalador que puedes compartir, desde el checkout de desarrollo ejecuta `uv build --wheel`. El paquete aparece en `dist/` y contiene los comandos y el código, sin el `.env` local.
