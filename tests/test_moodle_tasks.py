@@ -69,6 +69,31 @@ class MoodleTests(unittest.TestCase):
                 with self.assertRaises(expected):
                     login(self.page, self.config)
 
+    def test_valid_credentials_require_an_authenticated_session(self):
+        form = '''<form id="login" method="post" action="/login/index.php">
+          <input name="username"><input name="password"><button type="submit">Acceder</button>
+        </form>'''
+        for authenticated in (True, False):
+            with self.subTest(authenticated=authenticated):
+                self.page.unroute("**/*")
+
+                def respond(route):
+                    if route.request.method == "POST":
+                        route.fulfill(status=302, headers={"Location": "/my/"})
+                    elif "/my/" in route.request.url:
+                        route.fulfill(content_type="text/html", body=(
+                            '<a href="/login/logout.php">Salir</a>' if authenticated else '<h1>Error</h1>'
+                        ))
+                    else:
+                        route.fulfill(content_type="text/html", body=form)
+
+                self.page.route("**/*", respond)
+                if authenticated:
+                    login(self.page, self.config)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "confirmar una sesión"):
+                        login(self.page, self.config)
+
     def test_tasks_are_found_inside_courses_and_deduplicated(self):
         visited = []
 
