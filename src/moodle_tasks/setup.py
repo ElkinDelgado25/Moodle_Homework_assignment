@@ -16,6 +16,7 @@ from .agents import AGENTS, register_agent
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
+from .system import describe_system
 from .ui import ConnectionState, show_agent_menu, show_dashboard
 
 
@@ -30,7 +31,8 @@ def valid_username(username: str) -> bool:
 
 def prepare_browser(log_dir: Path | None = None) -> None:
     console = Console()
-    with console.status("Preparando Chromium para consultar Moodle...", spinner_style="#ff6555"):
+    console.print(Text(f"Sistema detectado: {describe_system()}"))
+    with console.status("Preparando Moodle MCP · instalando Chromium en segundo plano...", spinner="dots", spinner_style="#ff6555"):
         result = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -67,9 +69,9 @@ def ask_account(url: str) -> tuple[Config, bool]:
             print("La contraseña no puede estar vacía ni contener saltos de línea.")
             continue
         config = Config(url, username, password, True)
-        print("Comprobando el acceso a Moodle...")
         try:
-            verify_credentials(config)
+            with Console().status("Comprobando el acceso a Moodle...", spinner="dots", spinner_style="#ff6555"):
+                verify_credentials(config)
         except MoodleAuthenticationError:
             show_dashboard(username, ConnectionState.PROBLEMS)
             print("Moodle no aceptó el usuario o la contraseña. Vuelve a introducirlos.")
@@ -77,11 +79,10 @@ def ask_account(url: str) -> tuple[Config, bool]:
         except MoodleHTTPError as error:
             if 500 <= error.status < 600:
                 print(str(error))
-                print("La cuenta quedará configurada, pero su validación está pendiente porque Moodle no responde.")
                 return config, False
             raise
         except PlaywrightTimeoutError:
-            print("Moodle tardó demasiado en responder. La validación de la cuenta quedará pendiente.")
+            print("Por ahora no se pudo comprobar tu cuenta porque Moodle tardó demasiado en responder.")
             return config, False
         print("Cuenta verificada correctamente.")
         return config, True
@@ -115,16 +116,22 @@ def main(argv: list[str] | None = None) -> None:
     try:
         values = config_values(env_file)
         username = values.get("MOODLE_USERNAME")
-        show_dashboard(username)
         if not args.connect_only:
             prepare_browser(env_file.parent)
+            show_dashboard(username)
             config, verified = ask_account(url)
             username = config.username
+            save_credentials(env_file, config.base_url, config.username, config.password)
+            if not verified:
+                show_dashboard(username, ConnectionState.PROBLEMS)
+                print("Tu cuenta quedó guardada en este equipo; la validación de la cuenta está pendiente.")
+                print("La instalación puede continuar. Cuando Moodle vuelva a responder, la próxima consulta intentará validar el acceso con tu cuenta guardada.")
+                print("También puedes comprobar el acceso más tarde con: mcp-moodle status")
         elif not env_file.is_file():
             raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
+        else:
+            show_dashboard(username)
         agent = args.agent or ask_agent()
-        if not args.connect_only:
-            save_credentials(env_file, config.base_url, config.username, config.password)
         path = register_agent(agent, env_file, args.agent_config)
         state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not args.connect_only else ConnectionState.NOT_STARTED
         show_dashboard(username, state, agent=AGENTS[agent])

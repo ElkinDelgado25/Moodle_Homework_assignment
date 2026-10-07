@@ -42,7 +42,34 @@ class SetupTests(unittest.TestCase):
             self.assertIn("validación de la cuenta está pendiente", output)
             self.assertNotIn("Cuenta verificada correctamente", output)
             self.assertIn("Con problemas", output)
+            self.assertIn("Tu cuenta quedó guardada", output)
+            self.assertIn("mcp-moodle status", output)
             self.assertTrue((root / "agent.json").is_file())
+
+    def test_browser_preparation_finishes_before_showing_cover_and_asking_account(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            events = []
+            def ask_account(_url):
+                events.append("account")
+                raise EOFError()
+
+            with patch("moodle_tasks.setup.prepare_browser", side_effect=lambda *_: events.append("prepare")), patch("moodle_tasks.setup.show_dashboard", side_effect=lambda *_args, **_kwargs: events.append("cover")), patch("moodle_tasks.setup.ask_account", side_effect=ask_account), redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+                main(["--config-dir", str(root)])
+            self.assertEqual(events, ["prepare", "cover", "account"])
+
+    def test_pending_account_survives_cancellation_at_agent_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def select_agent():
+                # The account must already be on disk while the menu is open.
+                self.assertEqual(load_config(root / "account/credentials.env").username, "student")
+                raise EOFError()
+
+            with patch("moodle_tasks.setup.ask_agent", side_effect=select_agent), self.assertRaises(SystemExit) as caught:
+                self.run_wizard(root, ["student"], [MoodleHTTPError(502, "https://moodle.test")])
+            self.assertEqual(caught.exception.code, 130)
+            self.assertFalse((root / "agent.json").exists())
 
     def test_repeated_invalid_credentials_do_not_save_or_register(self):
         with tempfile.TemporaryDirectory() as directory:
