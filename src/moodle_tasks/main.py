@@ -56,11 +56,20 @@ def first_text(page: Page, selectors: str) -> str:
         return ""
 
 
+def open_page(page: Page, url: str) -> None:
+    response = page.goto(url, wait_until="domcontentloaded")
+    if response is None or response.status >= 400:
+        status = response.status if response is not None else "sin respuesta"
+        raise RuntimeError(f"Moodle no pudo cargar la página (HTTP {status}): {url}")
+
+
 def login(page: Page, config: Config) -> None:
-    page.goto(f"{config.base_url}/login/index.php", wait_until="domcontentloaded")
+    open_page(page, f"{config.base_url}/login/index.php")
     login_form = page.locator("form#login, form[action*='login']")
     if login_form.count() == 0:
-        return
+        if page.locator("a[href*='/login/logout.php']").count():
+            return
+        raise RuntimeError("No se encontró el formulario de acceso ni una sesión iniciada en Moodle.")
 
     page.locator("input[name='username']").fill(config.username)
     page.locator("input[name='password']").fill(config.password)
@@ -75,17 +84,33 @@ def login(page: Page, config: Config) -> None:
 
 def find_assignment_links(page: Page, config: Config) -> list[str]:
     links: set[str] = set()
+    courses: set[str] = set()
     for path in ("/my/", "/my/courses.php"):
-        page.goto(urljoin(f"{config.base_url}/", path.lstrip("/")), wait_until="domcontentloaded")
+        open_page(page, urljoin(f"{config.base_url}/", path.lstrip("/")))
+        # La lista de cursos puede cargarse después mediante JavaScript.
+        try:
+            page.locator("a[href*='/course/view.php'], a[href*='/mod/assign/view.php']").first.wait_for(
+                state="attached", timeout=10_000
+            )
+        except PlaywrightTimeoutError:
+            pass
+        courses.update(page.locator("a[href*='/course/view.php']").evaluate_all(
+            "(anchors) => anchors.map((anchor) => anchor.href)"
+        ))
         hrefs = page.locator("a[href*='/mod/assign/view.php']").evaluate_all(
             "(anchors) => anchors.map((anchor) => anchor.href)"
         )
         links.update(hrefs)
+    for course_url in sorted(courses):
+        open_page(page, course_url)
+        links.update(page.locator("a[href*='/mod/assign/view.php']").evaluate_all(
+            "(anchors) => anchors.map((anchor) => anchor.href)"
+        ))
     return sorted(links)
 
 
 def read_assignment(page: Page, url: str) -> Assignment:
-    page.goto(url, wait_until="domcontentloaded")
+    open_page(page, url)
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
     content = first_text(
         page,
@@ -109,6 +134,10 @@ def print_tasks(tasks: list[Assignment]) -> None:
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
     print(f"Tareas revisadas: {len(tasks)}")
+
+    if not tasks:
+        print("\n⚠️ No se pudieron revisar tareas. No se puede confirmar si tienes entregas pendientes.")
+        return
 
     if not pending:
         print("\n✅ No se encontraron tareas pendientes de entrega.")

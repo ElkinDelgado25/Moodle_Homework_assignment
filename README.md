@@ -45,6 +45,8 @@ Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python
 
 ## Notas
 
+- Si Moodle responde con un error como `HTTP 502`, la consulta no se completó. Vuelve a intentarlo cuando el servidor esté disponible.
+- El programa busca enlaces a tareas en el área personal, la lista de cursos y los cursos encontrados. Si muestra `Tareas revisadas: 0`, no puede confirmar si tienes tareas pendientes; algunas actividades pueden estar en secciones o páginas que todavía no se recorren.
 - La identificación de tareas pendientes depende del estado que Moodle muestre en cada actividad.
 - Si Moodle usa autenticación institucional, CAPTCHA o código de doble factor, el inicio de sesión automático puede requerir una sesión manual o una adaptación de los selectores.
 - El programa no entrega tareas ni modifica información en Moodle.
