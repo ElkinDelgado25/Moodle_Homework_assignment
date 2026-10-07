@@ -15,7 +15,7 @@ uv run playwright install chromium
 
 Completa y guarda `.env`, como indica el README. El servidor lee ese archivo aunque el cliente se ejecute desde otra carpeta. También acepta variables de entorno, que tienen prioridad, o una ruta explícita mediante `--env-file /ruta/a/.env`.
 
-El comando del servidor es `uv run moodle-mcp`. Un cliente MCP lo inicia y mantiene conectado; al ejecutarlo directamente en una terminal, espera mensajes del protocolo por la entrada estándar. La salida estándar está reservada para MCP.
+El comando del servidor es `uv run mcp-moodle serve`. Un cliente MCP lo inicia y mantiene conectado; al ejecutarlo directamente en una terminal, espera mensajes del protocolo por la entrada estándar. La salida estándar está reservada para MCP.
 
 ## Herramientas disponibles
 
@@ -41,7 +41,7 @@ El mismo mensaje se usa para otros errores HTTP 5xx. `check_moodle_connection` t
 Desde la carpeta del proyecto, registra el servidor para tu usuario:
 
 ```bash
-codex mcp add moodle -- uv --directory "$PWD" run moodle-mcp
+codex mcp add moodle -- uv --directory "$PWD" run mcp-moodle serve
 ```
 
 Abre una nueva sesión o reinicia la extensión para que cargue el servidor. Puedes comprobar su presencia con `/mcp` en Codex CLI. La configuración global permite usarlo desde otros proyectos. [Documentación de OpenAI](https://developers.openai.com/codex/mcp).
@@ -51,7 +51,7 @@ Abre una nueva sesión o reinicia la extensión para que cargue el servidor. Pue
 Desde la carpeta del proyecto:
 
 ```bash
-claude mcp add --transport stdio --scope user moodle -- uv --directory "$PWD" run moodle-mcp
+claude mcp add --transport stdio --scope user moodle -- uv --directory "$PWD" run mcp-moodle serve
 ```
 
 Inicia una nueva sesión y comprueba `/mcp`. [Documentación de Claude Code](https://code.claude.com/docs/en/mcp).

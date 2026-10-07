@@ -15,7 +15,7 @@ Con `uv` instalado y el paquete `.whl` compartido por el autor, abre la terminal
 
 ```bash
 uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
-moodle-setup
+mcp-moodle run
 ```
 
 El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub para personas con acceso al repositorio privado.
@@ -56,7 +56,7 @@ Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python
 
 ## Integración con agentes mediante MCP
 
-El servidor `moodle-mcp` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Antigravity, Copilot y otros clientes compatibles con `stdio`. Usa `moodle-setup` para configurarlo o consulta [la guía de conexión manual y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
+El servidor `mcp-moodle serve` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Antigravity, Copilot y otros clientes compatibles con `stdio`. Usa `mcp-moodle run` para configurarlo o consulta [la guía de conexión manual y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
 
 ## Notas
 

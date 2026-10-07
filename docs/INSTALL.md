@@ -2,7 +2,7 @@
 
 El proyecto se instala como una herramienta de Python con `uv`. No requiere clonar el repositorio ni editar archivos de configuración. Cada persona introduce su propia cuenta de Moodle en la terminal.
 
-## 1. Instalar uv y tener Git disponible
+## 1. Instalar uv
 
 En Linux y macOS, si todavía no tienes `uv`:
 
@@ -30,12 +30,12 @@ uv tool install --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homew
 
 El repositorio es privado actualmente: esta segunda opción requiere que tengas acceso y Git esté autenticado. El paquete `.whl` compartido no necesita acceso a GitHub ni Git instalado.
 
-Esto instala `moodle-setup`, `moodle-mcp` y `moodle-tasks` en un entorno aislado. `uv` obtiene Python 3.11 si hace falta. Es una instalación global para tu usuario, disponible desde cualquier carpeta. Si los comandos no aparecen, ejecuta `uv tool update-shell` y abre una terminal nueva. [Herramientas globales con uv](https://docs.astral.sh/uv/guides/tools/).
+Esto instala el comando principal `mcp-moodle` y los alias `moodle-setup`, `moodle-mcp` y `moodle-tasks` en un entorno aislado. `uv` obtiene Python 3.11 si hace falta. Es una instalación global para tu usuario, disponible desde cualquier carpeta. Si los comandos no aparecen, ejecuta `uv tool update-shell` y abre una terminal nueva. [Herramientas globales con uv](https://docs.astral.sh/uv/guides/tools/).
 
 ## 3. Ejecutar el asistente
 
 ```bash
-moodle-setup
+mcp-moodle run
 ```
 
 El asistente prepara Chromium y tiene dos etapas:
@@ -60,7 +60,7 @@ Selecciona una opción (1-4):
 El Moodle predeterminado es el de ULEAM. Para usar otro:
 
 ```bash
-moodle-setup --url https://moodle.tu-universidad.edu
+mcp-moodle run --url https://moodle.tu-universidad.edu
 ```
 
 El asistente comprueba accesos con usuario y contraseña. Un Moodle que requiera CAPTCHA, autenticación institucional o doble factor puede necesitar una adaptación antes de que se pueda confirmar la sesión.
@@ -71,21 +71,21 @@ Reinicia el cliente seleccionado para cargar el servidor. En Copilot, usa el mod
 
 > Usa el MCP moodle para consultar mis tareas pendientes.
 
-También puedes consultar directamente en la terminal con `moodle-tasks`.
+También puedes consultar directamente en la terminal con `mcp-moodle tasks`. El comando `mcp-moodle serve` está destinado a los clientes MCP y no abre preguntas interactivas.
 
 ## Conectar otro agente con la misma cuenta
 
 ```bash
-moodle-setup --connect-only
+mcp-moodle run --connect-only
 ```
 
 Solo pregunta cuál agente quieres conectar. También puedes elegirlo directamente:
 
 ```bash
-moodle-setup --connect-only --agent codex
-moodle-setup --connect-only --agent claude
-moodle-setup --connect-only --agent antigravity
-moodle-setup --connect-only --agent copilot
+mcp-moodle run --connect-only --agent codex
+mcp-moodle run --connect-only --agent claude
+mcp-moodle run --connect-only --agent antigravity
+mcp-moodle run --connect-only --agent copilot
 ```
 
 ## Configuración que administra el asistente
@@ -97,7 +97,7 @@ moodle-setup --connect-only --agent copilot
 | Google Antigravity | `~/.gemini/config/mcp_config.json` |
 | Copilot en VS Code | `Code/User/mcp.json` dentro de la configuración personal del sistema |
 
-Para un perfil de VS Code, una edición distinta o una ruta de configuración personalizada, puedes usar `moodle-setup --agent-config /ruta/al/mcp.json`.
+Para un perfil de VS Code, una edición distinta o una ruta de configuración personalizada, puedes usar `mcp-moodle run --agent-config /ruta/al/mcp.json`.
 
 El servidor usa la ruta absoluta del intérprete instalado y de las credenciales; no depende de que el agente tenga `uv` en su PATH. Las configuraciones de los agentes no contienen la contraseña. Los clientes compatibles con procesos locales pueden utilizarlo; un agente alojado solamente en la nube necesita una conexión remota, que esta instalación no proporciona.
 
@@ -111,7 +111,7 @@ La cuenta se guarda automáticamente en `credentials.env` dentro de la configura
 - macOS: `~/Library/Application Support/moodle-homework-assignment/`.
 - Windows: `%APPDATA%\moodle-homework-assignment\`.
 
-El archivo contiene la contraseña en texto local; en Linux y macOS se crea con permisos `600` para restringir su lectura a tu usuario. No se incorpora al repositorio. El asistente permite cambiar la cuenta al volver a ejecutar `moodle-setup`.
+El archivo contiene la contraseña en texto local; en Linux y macOS se crea con permisos `600` para restringir su lectura a tu usuario. No se incorpora al repositorio. El asistente permite cambiar la cuenta al volver a ejecutar `mcp-moodle run`.
 
 ## Actualizar y desinstalar
 
@@ -123,7 +123,7 @@ uv tool install --force --python 3.11 git+https://github.com/ElkinDelgado25/Mood
 
 Si instalaste desde un paquete compartido, pide la versión nueva e instálala con `uv tool install --force --python 3.11 /ruta/al/paquete-nuevo.whl`.
 
-Después ejecuta `moodle-setup --connect-only` para actualizar la conexión del agente y reinícialo. La cuenta guardada se conserva.
+Después ejecuta `mcp-moodle run --connect-only` para actualizar la conexión del agente y reinícialo. La cuenta guardada se conserva.
 
 Para quitar los comandos:
 
