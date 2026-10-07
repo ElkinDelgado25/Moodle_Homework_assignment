@@ -121,10 +121,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     return server
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=ENV_FILE, help="Ruta al .env con la configuración de Moodle")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     create_server(args.env_file.resolve()).run(transport="stdio")
 
 

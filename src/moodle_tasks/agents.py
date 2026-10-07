@@ -36,7 +36,7 @@ def register_agent(agent: str, env_file: Path, config_file: Path | None = None) 
     # El intérprete absoluto pertenece al entorno aislado de uv tool install.
     # No depende del PATH del editor ni de un checkout del repositorio.
     entry = {"command": sys.executable,
-             "args": ["-m", "moodle_tasks.server", "--env-file", str(env_file.resolve())]}
+             "args": ["-m", "moodle_tasks.cli", "serve", "--env-file", str(env_file.resolve())]}
     if agent == "codex":
         document = tomlkit.parse(path.read_text(encoding="utf-8")) if path.exists() else tomlkit.document()
         document.setdefault("mcp_servers", {})["moodle"] = {
