@@ -21,7 +21,6 @@ class MoodleTests(unittest.TestCase):
 
     def setUp(self):
         self.page = self.browser.new_page()
-        # El navegador puede ejecutarse bajo emulación en el runner Windows 11 ARM.
         # Comprobamos los resultados de Moodle, no el rendimiento del runner.
         self.page.set_default_timeout(15_000)
         self.config = Config("https://moodle.test", "test", "test", True)

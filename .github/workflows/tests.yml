@@ -3,51 +3,73 @@ name: Build y pruebas multiplataforma
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   tests:
-    name: ${{ matrix.platform }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: Ubuntu 24.04 (Debian)
-            runner: ubuntu-24.04
-            artifact: ubuntu
-            python: "3.11"
-          - platform: Windows 11 (ARM64, Python x64)
-            runner: windows-11-arm
-            artifact: windows
-            python: cpython-3.11-windows-x86_64-none
-    runs-on: ${{ matrix.runner }}
+    name: Ubuntu 24.04 (Debian)
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       PYTHONUTF8: "1"
-      UV_PYTHON_ARCH: x86_64
     steps:
-      - name: Confirmar Windows 11 de escritorio
-        if: runner.os == 'Windows'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.11"
+      - name: Instalar dependencias
+        run: uv sync --locked --python 3.11
+      - name: Preparar Chromium y bibliotecas de Ubuntu
+        run: uv run playwright install --with-deps chromium
+      - name: Construir paquete
+        run: uv build --wheel
+      - name: Instalar el paquete y probar CLI, Chromium y MCP
+        run: uv run python scripts/ci_verify_install.py
+      - name: Guardar instalador verificado
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcp-moodle-ubuntu
+          path: dist/mcp-moodle-installer-0.1.0.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  windows11:
+    name: Windows 11 x64 (Intel/AMD)
+    # Se activa después de registrar un equipo Windows 11 x64 en el repositorio.
+    if: vars.WINDOWS11_RUNNER_ENABLED == 'true' && github.event_name != 'pull_request'
+    runs-on: [self-hosted, Windows, X64, windows-11]
+    timeout-minutes: 20
+    defaults:
+      run:
         shell: pwsh
+    env:
+      PYTHONUTF8: "1"
+      UV_PYTHON_ARCH: x86_64
+      UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
+      UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
+    steps:
+      - name: Confirmar Windows 11 y procesador x64 nativo
         run: |
           $system = Get-CimInstance Win32_OperatingSystem
+          $processors = @(Get-CimInstance Win32_Processor)
           $system | Select-Object Caption, Version, OSArchitecture, ProductType | Format-List
+          $processors | Select-Object Name, Architecture | Format-List
           if ($system.ProductType -ne 1 -or $system.Caption -notmatch 'Windows 11') {
             throw "Este check requiere Windows 11 de escritorio."
+          }
+          if ($processors.Count -eq 0 -or @($processors | Where-Object Architecture -ne 9).Count -gt 0) {
+            throw "Este check requiere un procesador x64 Intel/AMD nativo."
           }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.11"
       - name: Instalar dependencias
-        run: uv sync --locked --python ${{ matrix.python }}
-      - name: Preparar Chromium y bibliotecas de Ubuntu
-        if: runner.os == 'Linux'
-        run: uv run playwright install --with-deps chromium
+        run: uv sync --locked --python 3.11
       - name: Preparar Chromium en Windows
-        if: runner.os == 'Windows'
         run: uv run playwright install chromium
       - name: Construir paquete
         run: uv build --wheel
@@ -56,7 +78,7 @@ jobs:
       - name: Guardar instalador verificado
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mcp-moodle-${{ matrix.artifact }}
+          name: mcp-moodle-windows
           path: dist/mcp-moodle-installer-0.1.0.zip
           if-no-files-found: error
           retention-days: 14
