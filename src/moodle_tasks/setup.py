@@ -12,8 +12,9 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 
 from .agents import AGENTS, register_agent
 from .errors import MoodleAuthenticationError, MoodleHTTPError
-from .main import Config, login
+from .main import Config, config_values, login
 from .storage import save_credentials, user_config_dir
+from .ui import ConnectionState, show_agent_menu, show_dashboard
 
 
 DEFAULT_URL = "https://aulavirtualmoodle.uleam.edu.ec"
@@ -56,6 +57,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
         try:
             verify_credentials(config)
         except MoodleAuthenticationError:
+            show_dashboard(username, ConnectionState.PROBLEMS)
             print("Moodle no aceptó el usuario o la contraseña. Vuelve a introducirlos.")
             continue
         except MoodleHTTPError as error:
@@ -74,9 +76,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
 
 def ask_agent() -> str:
     choices = list(AGENTS)
-    print("\n¿En cuál agente quieres usar Moodle?")
-    for index, agent in enumerate(choices, 1):
-        print(f"  {index}. {AGENTS[agent]}")
+    show_agent_menu(AGENTS)
     while True:
         choice = input("Selecciona una opción (1-4): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= len(choices):
@@ -98,17 +98,22 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("La dirección debe ser una URL HTTP o HTTPS de Moodle, sin credenciales, parámetros ni fragmentos.")
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
     try:
-        print("Configuración de Moodle MCP\n")
+        values = config_values(env_file)
+        username = values.get("MOODLE_USERNAME")
+        show_dashboard(username)
         if not args.connect_only:
             prepare_browser()
             config, verified = ask_account(url)
+            username = config.username
         elif not env_file.is_file():
             raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
         agent = args.agent or ask_agent()
         if not args.connect_only:
             save_credentials(env_file, config.base_url, config.username, config.password)
         path = register_agent(agent, env_file, args.agent_config)
-        print(f"\nMoodle quedó conectado a {AGENTS[agent]} para tu usuario.")
+        state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not args.connect_only else ConnectionState.NOT_STARTED
+        show_dashboard(username, state, agent=AGENTS[agent])
+        print(f"\nMCP registrado en {AGENTS[agent]} para tu usuario.")
         print(f"Configuración del agente: {path}")
         print(f"Credenciales guardadas localmente en: {env_file}")
         if not args.connect_only and not verified:

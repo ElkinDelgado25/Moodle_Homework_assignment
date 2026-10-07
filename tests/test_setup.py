@@ -32,6 +32,7 @@ class SetupTests(unittest.TestCase):
             with patch.dict(os.environ, {}, clear=True):
                 self.assertEqual(load_config(root / "account/credentials.env").username, "correct")
             self.assertIn("Cuenta verificada correctamente", output)
+            self.assertIn("Conectado", output)
             self.assertTrue((root / "agent.json").is_file())
 
     def test_502_allows_setup_but_does_not_claim_credentials_are_valid(self):
@@ -40,6 +41,7 @@ class SetupTests(unittest.TestCase):
             output = self.run_wizard(root, ["student", "4"], [MoodleHTTPError(502, "https://moodle.test")])
             self.assertIn("validación de la cuenta está pendiente", output)
             self.assertNotIn("Cuenta verificada correctamente", output)
+            self.assertIn("Con problemas", output)
             self.assertTrue((root / "agent.json").is_file())
 
     def test_repeated_invalid_credentials_do_not_save_or_register(self):
