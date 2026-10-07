@@ -1,0 +1,24 @@
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+      - name: Instalar dependencias de las pruebas
+        run: uv sync --locked
+      - name: Preparar Chromium para las pruebas
+        run: uv run playwright install --with-deps chromium
+      - name: Ejecutar pruebas
+        run: uv run python -m unittest discover -s tests -v
