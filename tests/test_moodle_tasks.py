@@ -70,7 +70,7 @@ class MoodleTests(unittest.TestCase):
                     login(self.page, self.config)
 
     def test_valid_credentials_require_an_authenticated_session(self):
-        form = '''<form id="login" method="post" action="/login/index.php">
+        form = '''<form id="login" method="post" action="/my/">
           <input name="username"><input name="password"><button type="submit">Acceder</button>
         </form>'''
         for authenticated in (True, False):
@@ -79,8 +79,6 @@ class MoodleTests(unittest.TestCase):
 
                 def respond(route):
                     if route.request.method == "POST":
-                        route.fulfill(status=302, headers={"Location": "/my/"})
-                    elif "/my/" in route.request.url:
                         route.fulfill(content_type="text/html", body=(
                             '<a href="/login/logout.php">Salir</a>' if authenticated else '<h1>Error</h1>'
                         ))
