@@ -3,11 +3,36 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from moodle_tasks.agents import AGENTS, register_agent
+from moodle_tasks.agents import AGENTS, detect_agents, register_agent
 
 
 class AgentTests(unittest.TestCase):
+    def test_detection_distinguishes_commands_configurations_and_existing_moodle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "codex").write_text('[mcp_servers.moodle]\ncommand="python"\n', encoding="utf-8")
+            (root / "claude").write_text('{"mcpServers":{"moodle":{"command":"python"}}}', encoding="utf-8")
+            (root / "antigravity").write_text('invalid json', encoding="utf-8")
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch("moodle_tasks.agents.shutil.which", side_effect=lambda name: "/bin/" + name if name in ("codex", "agy") else None), patch("pathlib.Path.home", return_value=root):
+                result = detect_agents()
+            self.assertEqual(result["codex"].availability, "Instalado")
+            self.assertTrue(result["codex"].moodle_configured)
+            self.assertEqual(result["claude"].availability, "Configuración encontrada")
+            self.assertTrue(result["claude"].moodle_configured)
+            self.assertEqual(result["antigravity"].availability, "Instalado")
+            self.assertFalse(result["antigravity"].moodle_configured)
+            self.assertEqual(result["copilot"].availability, "No detectado")
+
+    def test_vscode_alone_does_not_confirm_copilot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch("moodle_tasks.agents.shutil.which", side_effect=lambda name: "code" if name == "code" else None), patch("pathlib.Path.home", return_value=root):
+                self.assertEqual(detect_agents()["copilot"].availability, "VS Code instalado; Copilot sin confirmar")
+                (root / ".vscode/extensions/github.copilot-chat-1.0").mkdir(parents=True)
+                self.assertEqual(detect_agents()["copilot"].availability, "Instalado")
+
     def test_each_agent_keeps_existing_configuration_and_omits_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

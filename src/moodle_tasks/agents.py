@@ -2,7 +2,9 @@
 
 import json
 import os
+import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import tomlkit
@@ -12,6 +14,52 @@ from .storage import atomic_write
 
 AGENTS = {"codex": "Codex", "claude": "Claude Code",
           "antigravity": "Google Antigravity", "copilot": "Copilot en VS Code"}
+
+
+@dataclass(frozen=True)
+class AgentDetection:
+    availability: str
+    moodle_configured: bool = False
+
+
+def detect_agents() -> dict[str, AgentDetection]:
+    """Inspeccionar comandos y configuración local sin ejecutar los agentes."""
+    commands = {"codex": ("codex",), "claude": ("claude",),
+                "antigravity": ("agy", "antigravity"), "copilot": ("code", "code-insiders")}
+    detected = {}
+    for agent, names in commands.items():
+        installed = any(shutil.which(name) for name in names)
+        availability = "Instalado" if installed else "No detectado"
+        if agent == "copilot":
+            try:
+                home = Path.home()
+                copilot = any(
+                    any((home / folder).glob("github.copilot-*"))
+                    or any((home / folder).glob("github.copilot-chat-*"))
+                    for folder in (".vscode/extensions", ".vscode-insiders/extensions")
+                )
+            except (OSError, RuntimeError):
+                copilot = False
+            if installed and not copilot:
+                availability = "VS Code instalado; Copilot sin confirmar"
+            elif copilot and not installed:
+                availability = "Extensión Copilot encontrada; VS Code sin confirmar"
+        configured = False
+        try:
+            path = agent_config_file(agent)
+            if path.is_file():
+                if not installed:
+                    availability = "Configuración encontrada"
+                content = path.read_text(encoding="utf-8")
+                document = tomlkit.parse(content) if agent == "codex" else json.loads(content)
+                key = "mcp_servers" if agent == "codex" else "servers" if agent == "copilot" else "mcpServers"
+                servers = document.get(key, {}) if isinstance(document, dict) else {}
+                configured = isinstance(servers, dict) and isinstance(servers.get("moodle"), dict)
+        except (OSError, RuntimeError, ValueError, tomlkit.exceptions.ParseError):
+            # Un archivo ilegible o inválido no impide detectar los demás clientes.
+            pass
+        detected[agent] = AgentDetection(availability, configured)
+    return detected
 
 
 def agent_config_file(agent: str) -> Path:
