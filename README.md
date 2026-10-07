@@ -43,6 +43,10 @@ El programa consulta Moodle una vez y avisa por la terminal. Puedes volver a eje
 
 Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python/docs/intro) y [ejecución de comandos con uv](https://docs.astral.sh/uv/concepts/projects/run/).
 
+## Integración con agentes mediante MCP
+
+El servidor `uv run moodle-mcp` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Copilot y otros clientes compatibles con `stdio`. Consulta [la guía de conexión y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
+
 ## Notas
 
 - Si Moodle responde con un error como `HTTP 502`, la consulta no se completó. Vuelve a intentarlo cuando el servidor esté disponible.
