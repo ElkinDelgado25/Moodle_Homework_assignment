@@ -43,6 +43,20 @@ El asistente prepara Chromium y tiene dos etapas:
 1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, configura la cuenta dejando explícitamente pendiente su validación.
 2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.
 
+La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta y el estado:
+
+- **Sin iniciar:** todavía no se ha comprobado una sesión, o falta configurar la cuenta.
+- **Conectado:** Moodle aceptó el inicio de sesión en la comprobación actual.
+- **Con problemas:** falló la comprobación, por ejemplo por un error 502 o credenciales rechazadas.
+
+Para comprobar el estado de la cuenta guardada en cualquier momento:
+
+```bash
+mcp-moodle status
+```
+
+El estado se comprueba al ejecutar el comando; no es una conexión permanente ni cambia automáticamente cuando Moodle se recupera. Los colores se adaptan a la terminal y el panel se reorganiza si la ventana es pequeña. La interfaz visual no se imprime en el transporte `mcp-moodle serve`.
+
 Ejemplo de las preguntas:
 
 ```text
