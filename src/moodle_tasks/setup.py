@@ -9,11 +9,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+from rich.console import Console
+from rich.text import Text
 
 from .agents import AGENTS, register_agent
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, config_values, login
-from .storage import save_credentials, user_config_dir
+from .storage import atomic_write, save_credentials, user_config_dir
 from .ui import ConnectionState, show_agent_menu, show_dashboard
 
 
@@ -26,9 +28,21 @@ def valid_username(username: str) -> bool:
     return "@" not in username or bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", username))
 
 
-def prepare_browser() -> None:
-    print("Preparando Chromium para consultar Moodle...")
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+def prepare_browser(log_dir: Path | None = None) -> None:
+    console = Console()
+    with console.status("Preparando Chromium para consultar Moodle...", spinner_style="#ff6555"):
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+    if result.returncode:
+        log_file = (log_dir or user_config_dir()) / "browser-install.log"
+        atomic_write(log_file, (result.stdout or "") + "\n" + (result.stderr or ""))
+        raise RuntimeError(
+            "No se pudo preparar Chromium. Revisa los detalles del fallo e inténtalo de nuevo. "
+            f"Los detalles del fallo están en: {log_file}"
+        )
+    console.print(Text("✓ Chromium listo.", style="green"))
 
 
 def verify_credentials(config: Config) -> None:
@@ -97,12 +111,13 @@ def main(argv: list[str] | None = None) -> None:
     if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
         parser.error("La dirección debe ser una URL HTTP o HTTPS de Moodle, sin credenciales, parámetros ni fragmentos.")
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
+    username = None
     try:
         values = config_values(env_file)
         username = values.get("MOODLE_USERNAME")
         show_dashboard(username)
         if not args.connect_only:
-            prepare_browser()
+            prepare_browser(env_file.parent)
             config, verified = ask_account(url)
             username = config.username
         elif not env_file.is_file():
@@ -124,6 +139,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(130) from None
     except Exception as error:
         # Las excepciones de validación y configuración no incluyen las credenciales.
+        show_dashboard(username, ConnectionState.PROBLEMS)
         print(f"No se pudo completar la configuración: {error}", file=sys.stderr)
         raise SystemExit(1) from None
 
