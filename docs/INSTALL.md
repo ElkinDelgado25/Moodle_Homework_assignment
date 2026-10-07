@@ -45,6 +45,8 @@ También puedes usar `mcp-moodle setup`; es el mismo asistente. Las dependencias
 
 La terminal muestra **MOODLE** con letras de bloques en tonos rojos, el título **MCP · Aula Moodle**, la cuenta, el sistema operativo detectado y el estado. Reconoce Arch Linux y sus derivadas, por ejemplo **CachyOS (basado en Arch Linux)**.
 
+En una terminal interactiva, cada etapa renueva la pantalla: la portada con la cuenta y el estado actuales reemplaza la anterior, y al terminar desaparecen las preguntas y el menú de selección. Los mensajes de validación pendiente siguen visibles en la etapa correspondiente. Si rediriges la salida a un archivo, se conserva el historial sin códigos de limpieza de pantalla.
+
 La preparación de Chromium muestra un indicador de progreso y termina con **Chromium listo**. Las advertencias de compatibilidad de Playwright se capturan y no aparecen en una instalación correcta. Si hay un fallo real, el asistente muestra **Con problemas**, informa del fallo y guarda los detalles en `browser-install.log` junto a las credenciales, para poder revisarlos.
 
 - **Sin iniciar:** todavía no se ha comprobado una sesión, o falta configurar la cuenta.
