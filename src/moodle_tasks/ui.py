@@ -7,6 +7,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from .system import describe_system
+
 
 class ConnectionState(Enum):
     NOT_STARTED = "Sin iniciar"
@@ -56,6 +58,7 @@ def show_dashboard(
     account.append("● " + state.value, style="bold " + color)
     if agent:
         account.append("\nAgente: " + clean_display(agent), style="dim")
+    account.append("\nSistema: " + clean_display(describe_system()), style="dim")
     width = min(console.width, 100)
     mark = logo() if width >= 43 else Text("MOODLE", style="bold #ff6555")
     if width >= 78:
