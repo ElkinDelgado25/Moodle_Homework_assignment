@@ -206,8 +206,8 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                 task = cached_task
                 stats["cached_details"] += 1
             else:
-                task = read_assignment(page, url)
                 stats["detail_pages_read"] += 1
+                task = read_assignment(page, url)
                 task = replace(task, course=candidate.get("course") or task.course,
                                title=candidate.get("title") or task.title)
                 cache.setdefault("entries", {})[url] = {"row": fingerprint, "time": time.time(), "task": asdict(task)}

@@ -1,13 +1,14 @@
 import json
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
-from moodle_tasks.main import Config, is_pending, read_assignment
+from moodle_tasks.main import Config, collect_assignments, is_pending, read_assignment
 from moodle_tasks.search import assignment_url, parse_moodle_date, search_assignments
 
 
@@ -99,6 +100,15 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(stats['detail_pages_read'], 4)
         self.assertFalse(any('/mod/assign/index.php' in url for url in self.visited))
         self.assertFalse(any('action=' in url for url in self.visited))
+
+    def test_terminal_collector_supports_separate_timeline_and_detail_pages(self):
+        def configure_routes(page, config):
+            page.context.route('**/*', self.respond)
+
+        with patch('moodle_tasks.main.login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
+            tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
+        self.assertEqual(errors, [])
+        self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])
 
     def test_complete_search_checks_both_courses_and_skips_graded_and_submitted_details(self):
         tasks, stats = self.query(mode="all", limit=None)

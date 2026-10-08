@@ -244,7 +244,8 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=config.headless)
         try:
-            page = browser.new_page()
+            context = browser.new_context()
+            page = context.new_page()
             page.set_default_timeout(15_000)
             login(page, config)
             return search_assignments(page, config, mode=mode, limit=limit,
