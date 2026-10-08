@@ -44,11 +44,13 @@ mcp-moodle run
 
 No necesitas instalar Python ni Chromium manualmente. Sigue las preguntas del asistente y reinicia el agente elegido.
 
-### Linux — terminal
+### Linux — Debian y derivados (Debian-based)
 
-Playwright ofrece soporte para Debian 12/13 y Ubuntu 22.04/24.04/26.04 en x86-64 y ARM64. El CI comprueba Ubuntu 24.04 y Arch Linux; no reproduce todas las distribuciones o escritorios.
+Usa estos pasos en Debian, Ubuntu y distribuciones basadas en ellas, como Linux Mint. Consulta los [sistemas compatibles con Playwright](https://playwright.dev/python/docs/intro); el CI comprueba Ubuntu 24.04.
 
 ```bash
+sudo apt update
+sudo apt install -y curl ca-certificates
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
@@ -58,21 +60,41 @@ En una terminal nueva, desde la carpeta donde extrajiste el ZIP:
 uv --version
 uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
 uv tool update-shell
-```
-
-Si en Ubuntu/Debian Chromium informa que faltan bibliotecas del sistema, instálalas con el comando de Playwright; puede pedir permisos de administrador:
-
-```bash
 uvx --python 3.11 --from playwright playwright install-deps chromium
 ```
 
-En Arch Linux y sus derivadas, como CachyOS, el paquete del sistema `chromium` proporciona las bibliotecas necesarias:
+El último comando instala las bibliotecas del sistema para Chromium y puede pedir permisos de administrador. Consulta la [documentación de Playwright](https://playwright.dev/python/docs/browsers#install-system-dependencies).
+
+Abre otra terminal y ejecuta:
 
 ```bash
-sudo pacman -Syu --needed chromium
+mcp-moodle run
 ```
 
-Abre una terminal nueva y ejecuta `mcp-moodle run`. Playwright descarga su propio Chromium, aunque tengas el paquete del sistema. La preparación guiada descarga el navegador; no instala automáticamente los paquetes del sistema operativo.
+### Linux — Arch Linux y derivados (Arch-based)
+
+Usa estos pasos en Arch Linux y distribuciones basadas en ella, como CachyOS, EndeavourOS y Manjaro. El CI comprueba Arch Linux; no reproduce todas las derivadas ni un escritorio completo.
+
+```bash
+sudo pacman -Syu --needed curl ca-certificates chromium
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+El paquete [Chromium de Arch](https://archlinux.org/packages/extra/x86_64/chromium/) instala sus dependencias del sistema. En una terminal nueva, desde la carpeta donde extrajiste el ZIP:
+
+```bash
+uv --version
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+```
+
+Abre otra terminal y ejecuta:
+
+```bash
+mcp-moodle run
+```
+
+Elige únicamente el bloque de tu distribución: `apt` para la familia Debian o `pacman` para la familia Arch. En ambas, el asistente descarga su propio Chromium para Playwright; la preparación guiada no instala automáticamente los paquetes del sistema operativo.
 
 ### macOS — Terminal (Intel y Apple Silicon)
 
