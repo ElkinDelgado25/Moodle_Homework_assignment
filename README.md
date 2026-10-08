@@ -1,26 +1,67 @@
 # Moodle_Homework_assignment
 
-Este programa usa Python, `uv` y Playwright para iniciar sesión en Moodle, revisar las actividades tipo **Tarea**, mostrar las que todavía no aparecen como entregadas e imprimir su contenido, estado, fecha de vencimiento y enlace.
+Moodle MCP conecta tu cuenta de Moodle con Codex, Claude Code, Google Antigravity o Copilot. Usa Python, `uv` y Playwright. Por defecto muestra cinco tareas pendientes disponibles, su materia y el cierre con fecha, hora y tiempo restante. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
 
 ## Requisitos
 
-- Python 3.11 o superior.
-- `uv`.
-- Una cuenta activa en Moodle.
-- Acceso a Internet.
+- Windows 11 o Windows Server 2019+, macOS 14+, o Linux con las bibliotecas necesarias para Chromium. El CI comprueba Windows Server 2025, Ubuntu 24.04, Arch Linux y macOS 15 en Intel y Apple Silicon.
+- `uv`; obtiene Python 3.11 automáticamente si hace falta.
+- Una cuenta activa en Moodle, acceso a Internet y un agente compatible instalado.
 
-## Instalación global recomendada
+Los requisitos del navegador se basan en la [documentación oficial de Playwright](https://playwright.dev/python/docs/intro).
 
-Con `uv` instalado y el paquete `.whl` compartido por el autor, abre la terminal en la carpeta de descarga:
+## Instalación por sistema operativo
+
+Instala `uv` siguiendo el bloque de tu sistema y abre una terminal nueva. Los comandos de instalación de `uv` proceden de su [guía oficial](https://docs.astral.sh/uv/getting-started/installation/).
+
+### Windows — PowerShell
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Con el wheel descargado y el ZIP extraído, abre una nueva ventana de PowerShell en esa carpeta:
+
+```powershell
+uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+```
+
+Abre PowerShell de nuevo y ejecuta `mcp-moodle run`.
+
+### Linux — terminal
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+En una terminal nueva, desde la carpeta del wheel:
 
 ```bash
 uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
-mcp-moodle run
+uv tool update-shell
 ```
 
-El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub para personas con acceso al repositorio privado.
+Abre una terminal nueva y ejecuta `mcp-moodle run`. En Ubuntu/Debian puede hacer falta instalar bibliotecas del sistema para Chromium; la [guía de instalación](docs/INSTALL.md#linux--terminal) incluye el comando. En Arch y CachyOS también se necesitan esas bibliotecas.
 
-`mcp-moodle run` muestra el panel de Aula Moodle, con el logo en bloques rojos, tu cuenta y el estado. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso sin volver a introducir tus credenciales. También puedes usar `mcp-moodle status`.
+### macOS — Terminal (Intel y Apple Silicon)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+En una ventana nueva de Terminal, desde la carpeta del wheel:
+
+```bash
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+```
+
+Abre Terminal de nuevo y ejecuta `mcp-moodle run`. Usa una terminal nativa de tu Mac; `uv` y Playwright descargan Python y Chromium para su arquitectura. El asistente guarda la cuenta en `~/Library/Application Support/moodle-homework-assignment/`.
+
+El asistente pide tu cuenta, intenta validarla, prepara Chromium y te permite elegir el agente. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub, la actualización y los instaladores disponibles en Actions.
+
+`mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`.
 
 ## Ejecutar desde un repositorio clonado
 
@@ -89,10 +130,16 @@ Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python
 
 El servidor `mcp-moodle serve` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Antigravity, Copilot y otros clientes compatibles con `stdio`. Usa `mcp-moodle run` para configurarlo o consulta [la guía de conexión manual y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
 
+## CI e instaladores de esta entrega
+
+El [workflow multiplataforma](.github/workflows/tests.yml) construye el wheel, lo instala y ejecuta la suite completa en cinco entornos: Ubuntu 24.04, Arch Linux, Windows Server 2025, macOS 15 Apple Silicon y macOS 15 Intel. Las pruebas usan credenciales ficticias y páginas de prueba.
+
+Después de una ejecución correcta, descarga desde [GitHub Actions](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) el artifact de tu plataforma: `mcp-moodle-ubuntu`, `mcp-moodle-arch`, `mcp-moodle-windows`, `mcp-moodle-macos-arm64` o `mcp-moodle-macos-intel`. Extrae el ZIP: contiene el wheel y `INSTRUCCIONES.md`. El código Python es compartido; Python, Chromium y las dependencias se instalan para tu sistema.
+
 ## Notas
 
 - Si Moodle responde con un error como `HTTP 502`, la consulta no se completó. Vuelve a intentarlo cuando el servidor esté disponible.
 - La búsqueda rápida respeta el filtro de la línea de tiempo; la completa consulta los índices de las materias visibles en Mis cursos. Ambas muestran su alcance. Si no encuentra resultados, no puede descartar tareas fuera de esa cobertura.
-- Para identificar pendientes comprueba entrega, nota e instrucciones: una actividad ya calificada o que indique no subir documentos no se cuenta como pendiente solo por figurar sin entrega.
+- Para identificar pendientes comprueba los datos de entrega y nota disponibles en los listados: una actividad ya calificada o que indique no subir documentos no se cuenta como pendiente solo por figurar sin entrega.
 - Las cuentas institucionales de ULEAM usan Microsoft 365 y la selección del mismo perfil cuando aparece «Use a different account». Si Microsoft exige CAPTCHA, códigos o verificación adicional, el programa no los resuelve ni afirma que la sesión esté validada.
 - El programa no entrega tareas ni modifica información en Moodle.
