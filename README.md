@@ -46,7 +46,7 @@ Y consultar las tareas desde la terminal con:
 uv run mcp-moodle tasks
 ```
 
-Por defecto muestra las próximas cinco tareas desde la línea de tiempo del Área personal, confirmando sus estados y anexos. Para otras búsquedas:
+Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, confirmando sus estados y anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla. Para otras búsquedas:
 
 ```bash
 uv run mcp-moodle tasks --mode recent --limit 5
