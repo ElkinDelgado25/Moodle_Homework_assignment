@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300" role="img" aria-labelledby="title desc">
+<title id="title">Moodle MCP · Aula Moodle</title>
+<desc id="desc">Encabezado inspirado en el panel del asistente: Moodle en bloques rojos y el comando mcp-moodle setup.</desc>
+<rect width="1000" height="300" rx="18" fill="#10151d"/>
+<rect x="16" y="16" width="968" height="268" rx="12" fill="none" stroke="#ad3945" stroke-width="2"/>
+<rect x="370" y="4" width="260" height="24" fill="#10151d"/>
+<text x="500" y="23" text-anchor="middle" fill="#ff6555" font-size="17" font-weight="700" font-family="monospace">MCP · Aula Moodle</text>
+<circle cx="48" cy="47" r="4" fill="#ff6555"/><circle cx="64" cy="47" r="4" fill="#ff9d62"/><circle cx="80" cy="47" r="4" fill="#d6374b"/>
+<rect x="54" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="102" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="138" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="150" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="162" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="210" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="222" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="234" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="270" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="282" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="294" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="306" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="342" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="414" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="426" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="438" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="450" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="462" y="92" width="11" height="19" fill="#ff9d62"/>
+<rect x="54" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="66" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="90" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="102" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="126" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="174" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="198" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="246" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="270" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="318" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="342" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="414" y="112" width="11" height="19" fill="#ff805b"/>
+<rect x="54" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="78" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="102" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="126" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="174" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="198" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="246" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="270" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="318" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="342" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="414" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="426" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="438" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="450" y="132" width="11" height="19" fill="#ff6555"/>
+<rect x="54" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="102" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="126" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="174" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="198" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="246" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="270" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="318" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="342" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="414" y="152" width="11" height="19" fill="#ed4b52"/>
+<rect x="54" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="102" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="138" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="150" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="162" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="210" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="222" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="234" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="270" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="282" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="294" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="306" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="342" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="354" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="366" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="378" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="390" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="414" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="426" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="438" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="450" y="172" width="11" height="19" fill="#d6374b"/>
+<rect x="462" y="172" width="11" height="19" fill="#d6374b"/>
+<text x="54" y="231" fill="#98a3b3" font-size="16" font-family="monospace">Tu aula, conectada a tu agente.</text>
+<path d="M505 74V241" stroke="#303946"/>
+<text x="549" y="103" fill="#f4f6fa" font-size="28" font-weight="700" font-family="sans-serif">Tareas. Anexos. Documentos.</text>
+<text x="549" y="137" fill="#b6c0cd" font-size="16" font-family="sans-serif">Codex · Claude Code · Antigravity · Copilot</text>
+<rect x="549" y="165" width="376" height="45" rx="7" fill="#1b2330"/>
+<text x="569" y="194" fill="#ff9d62" font-size="19" font-family="monospace">$ mcp-moodle setup</text>
+<text x="549" y="244" fill="#98a3b3" font-size="15" font-family="sans-serif">Python 3.11+  /  uv  /  Playwright  /  MCP</text>
+</svg>

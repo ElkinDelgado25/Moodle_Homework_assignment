@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="128" viewBox="0 0 1000 128" role="img" aria-labelledby="title">
+<title id="title">Windows · PowerShell</title>
+<rect width="1000" height="128" rx="12" fill="#151b25"/>
+<path d="M12 0H7A7 7 0 0 0 0 7V121A7 7 0 0 0 7 128H12Z" fill="#0078D4"/>
+<rect x="32" y="30" width="68" height="68" rx="14" fill="#232c3a"/>
+<g transform="translate(42 40) scale(0.375)" fill="#0078D4"><ns0:path xmlns:ns0="http://www.w3.org/2000/svg" fill="#0078d4" d="M67.328 67.331h60.669V128H67.328zm-67.325 0h60.669V128H.003zM67.328 0h60.669v60.669H67.328zM.003 0h60.669v60.669H.003z" /></g>
+<text x="128" y="57" fill="#f4f6fa" font-size="27" font-weight="700" font-family="sans-serif">Windows</text>
+<text x="128" y="89" fill="#adb9c9" font-size="17" font-family="sans-serif">Windows 11 · Windows Server 2019+</text>
+<rect x="827" y="43" width="139" height="42" rx="21" fill="#232c3a"/>
+<text x="896" y="70" text-anchor="middle" fill="#0078D4" font-size="17" font-family="monospace">PowerShell</text>
+</svg>
