@@ -9,7 +9,7 @@ from urllib.parse import urljoin
 from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
-from .errors import MoodleAuthenticationError, MoodleHTTPError
+from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .storage import default_env_file
 
 
@@ -17,7 +17,7 @@ from .storage import default_env_file
 class Config:
     base_url: str
     username: str
-    password: str
+    password: str = field(repr=False)
     headless: bool
 
 
@@ -329,18 +329,20 @@ def main(argv: list[str] | None = None) -> None:
     if args.limit is not None and args.limit < 1:
         parser.error("El límite debe ser mayor que cero.")
     limit = args.limit if args.limit is not None else None if args.mode == "all" else 5
+    config = None
     try:
         config = load_config()
         stats = {}
         tasks, errors = collect_assignments(config, mode=args.mode, limit=limit,
                                           only_pending=True, refresh=args.refresh, summary_only=True, stats=stats)
         for error in errors:
-            print(error, file=sys.stderr)
+            print(redact_credentials(error, (config.username, config.password)), file=sys.stderr)
         print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"), summary_only=True)
         print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
-        print(f"\n❌ No fue posible consultar Moodle: {error}", file=sys.stderr)
-        raise SystemExit(1) from error
+        secrets = (config.username, config.password) if config else ()
+        print(f"\n❌ No fue posible consultar Moodle: {redact_credentials(error, secrets)}", file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

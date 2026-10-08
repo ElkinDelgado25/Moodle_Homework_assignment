@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.text import Text
 
 from .agents import AGENTS, detect_agents, register_agent
-from .errors import MoodleAuthenticationError, MoodleHTTPError
+from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
@@ -84,6 +84,8 @@ def ask_account(url: str) -> tuple[Config, bool]:
         except PlaywrightTimeoutError:
             print("Por ahora no se pudo comprobar tu cuenta porque Moodle tardó demasiado en responder.")
             return config, False
+        except Exception as error:
+            raise RuntimeError(redact_credentials(error, (username, password))) from None
         print("Cuenta verificada correctamente.")
         return config, True
     raise ValueError("No se pudo configurar la cuenta después de tres intentos. Ejecuta mcp-moodle run para intentarlo otra vez.")
@@ -118,6 +120,8 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
     username = None
+    config = None
+    values = {}
     try:
         values = config_values(env_file)
         username = values.get("MOODLE_USERNAME")
@@ -174,9 +178,11 @@ def main(argv: list[str] | None = None) -> None:
         print("\nConfiguración cancelada.")
         raise SystemExit(130) from None
     except Exception as error:
-        # Las excepciones de validación y configuración no incluyen las credenciales.
+        secrets = (values.get("MOODLE_USERNAME"), values.get("MOODLE_PASSWORD"))
+        if config:
+            secrets += (config.username, config.password)
         show_dashboard(username, ConnectionState.PROBLEMS, refresh=True)
-        print(f"No se pudo completar la configuración: {error}", file=sys.stderr)
+        print(f"No se pudo completar la configuración: {redact_credentials(error, secrets)}", file=sys.stderr)
         raise SystemExit(1) from None
 
 
