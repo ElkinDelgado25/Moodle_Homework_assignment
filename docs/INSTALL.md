@@ -106,6 +106,8 @@ mcp-moodle run --url https://moodle.tu-universidad.edu
 
 El asistente comprueba accesos con usuario y contraseña. Para correos institucionales de ULEAM selecciona **Microsoft 365 Uleam**, introduce los datos y vuelve a elegir el mismo perfil si aparece **Use a different account**, siguiendo el flujo comprobado en esa institución. Solo muestra **Conectado** cuando confirma la sesión de Moodle. Si Microsoft requiere CAPTCHA, códigos o una verificación adicional, el asistente no los resuelve y comunica que no se pudo confirmar el acceso.
 
+Para enviar la contraseña espera a que esté visible el botón **Sign in**, escribe con eventos de teclado y comprueba que el campo siga completo. Si Microsoft muestra **Please enter your password**, repite ese paso una sola vez; si vuelve a ocurrir, informa un fallo al enviar el formulario. Ese aviso no se presenta como contraseña incorrecta. Un rechazo explícito de las credenciales no se reintenta mediante este mecanismo.
+
 ## 4. Reiniciar el agente y consultar
 
 Reinicia el cliente seleccionado para cargar el servidor. En Copilot, usa el modo agente y habilita las herramientas de Moodle. Pide:
