@@ -119,6 +119,14 @@ class MoodleTests(unittest.TestCase):
         self.assertIn("No se puede confirmar", output.getvalue())
         self.assertNotIn("✅", output.getvalue())
 
+    def test_zero_matches_after_review_reports_the_search_scope(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            print_tasks([], reviewed_count=12)
+        self.assertIn("Tareas revisadas: 12", output.getvalue())
+        self.assertIn("cumplan esta búsqueda", output.getvalue())
+        self.assertNotIn("No se pudieron revisar", output.getvalue())
+
     def test_submission_state_does_not_confuse_negative_or_unknown_status(self):
         for text in ("Not submitted", "No entregado", "Borrador (no enviado)"):
             self.assertIs(submission_state(text), False)

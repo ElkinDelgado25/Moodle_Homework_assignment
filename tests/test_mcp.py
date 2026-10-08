@@ -98,6 +98,18 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(data['not_yet_open_count'], 1)
                 self.assertEqual([task['title'] for task in data['assignments']], ['Pendiente', 'No abierta'])
 
+    async def test_complete_review_can_report_zero_pending_after_checking_activities(self):
+        def collect(config, **options):
+            options['stats'].update(candidates_checked=12, source='course_indexes')
+            return [], []
+
+        with patch('moodle_tasks.server.collect_assignments', side_effect=collect), patch('moodle_tasks.server.load_config', return_value=Config('https://moodle.test', 'test', 'test', True)):
+            async with Client(create_server()) as client:
+                result = await client.call_tool('list_all_assignments')
+                self.assertFalse(result.structured_content['incomplete'])
+                self.assertEqual(result.structured_content['reviewed_count'], 12)
+                self.assertEqual(result.structured_content['pending_count'], 0)
+
     async def test_server_errors_hide_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"

@@ -94,7 +94,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         return {
             "checked_at": datetime.now().astimezone().isoformat(),
             "reviewed_count": stats.get("candidates_checked", len(tasks)),
-            "incomplete": bool(errors) or not tasks,
+            "incomplete": bool(errors) or not stats.get("candidates_checked", len(tasks)),
             "coverage": stats.get("coverage", "Solo actividades revisadas; no garantiza cubrir todo Moodle."),
             "search": stats,
             "returned_count": len(assignments),

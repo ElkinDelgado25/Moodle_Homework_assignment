@@ -254,14 +254,18 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
             browser.close()
 
 
-def print_tasks(tasks: list[Assignment], incomplete: bool = False) -> None:
+def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None) -> None:
     pending = [task for task in tasks if is_pending(task)]
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
-    print(f"Tareas revisadas: {len(tasks)}")
+    reviewed_count = len(tasks) if reviewed_count is None else reviewed_count
+    print(f"Tareas revisadas: {reviewed_count}")
 
     if not tasks:
-        print("\n⚠️ No se pudieron revisar tareas. No se puede confirmar si tienes entregas pendientes.")
+        if reviewed_count and not incomplete:
+            print("\nNo se encontraron tareas que cumplan esta búsqueda entre las actividades revisadas.")
+        else:
+            print("\n⚠️ No se pudieron revisar tareas. No se puede confirmar si tienes entregas pendientes.")
         return
 
     if not pending:
@@ -271,11 +275,14 @@ def print_tasks(tasks: list[Assignment], incomplete: bool = False) -> None:
             print("\n✅ No se encontraron tareas pendientes entre las actividades revisadas.")
         return
 
-    print(f"\n⚠️ Tienes {len(pending)} tarea(s) pendiente(s):\n")
+    label = "pendientes o por confirmar" if any(task.submitted is None for task in pending) else "pendientes"
+    print(f"\n⚠️ Esta búsqueda encontró {len(pending)} tarea(s) {label}:\n")
     for index, task in enumerate(pending, start=1):
         print(f"{index}. {task.title}")
         print(f"   Materia: {task.course or 'No identificada'}")
         print(f"   Vence: {task.due_date}")
+        if task.opens_at and task.opens_at > datetime.now().isoformat():
+            print(f"   Aún no habilitada. Apertura: {task.opens_at}")
         print(f"   Estado: {task.status}")
         print(f"   Contenido: {task.content}")
         for attachment in task.attachments:
@@ -302,7 +309,7 @@ def main(argv: list[str] | None = None) -> None:
                                           only_pending=True, refresh=args.refresh, stats=stats)
         for error in errors:
             print(error, file=sys.stderr)
-        print_tasks(tasks, incomplete=bool(errors))
+        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"))
         print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
         print(f"\n❌ No fue posible consultar Moodle: {error}", file=sys.stderr)
