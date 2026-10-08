@@ -15,7 +15,7 @@ from pydantic import Field
 from playwright.sync_api import sync_playwright
 
 from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
-from .errors import MoodleHTTPError
+from .errors import MoodleHTTPError, redact_credentials
 
 
 def create_server(env_file: Path = ENV_FILE) -> MCPServer:
@@ -57,12 +57,8 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         return replace(load_config(env_file), headless=True)
 
     def safe_error(error: Exception) -> str:
-        message = str(error)
         values = config_values(env_file)
-        for name in ("MOODLE_USERNAME", "MOODLE_PASSWORD"):
-            if values.get(name):
-                message = message.replace(values[name], "[oculto]")
-        return message
+        return redact_credentials(error, (values.get("MOODLE_USERNAME"), values.get("MOODLE_PASSWORD")))
 
     @server.tool(annotations=readonly, structured_output=True)
     def configuration_status() -> dict[str, Any]:

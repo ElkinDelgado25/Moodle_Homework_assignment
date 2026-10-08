@@ -19,7 +19,7 @@ Se encontró una copia local en `.env`, ignorada por Git, con permisos `0644`. S
 
 - `.gitignore` excluye variantes `.env.*`, `credentials.env`, `credentials.*.env` y los temporales `.moodle-*`, manteniendo `.env.example` publicable.
 - La representación de `Config` oculta la contraseña.
-- Los errores de la consulta por terminal y de la configuración ocultan las credenciales conocidas, incluidas variantes escapadas en URL. Esto cubre también fallos inesperados al verificar una contraseña nueva, antes de guardarla.
+- Los errores de la consulta por terminal, la configuración, el estado y el servidor MCP ocultan las credenciales conocidas, incluidas variantes escapadas en URL. Esto cubre también fallos inesperados al verificar una contraseña nueva, antes de guardarla.
 - Se añadieron pruebas para esos casos de exposición en errores.
 
 ## Límites

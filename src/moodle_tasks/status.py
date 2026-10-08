@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 
+from .errors import redact_credentials
 from .main import config_values, load_config
 from .setup import verify_credentials
 from .ui import ConnectionState, show_dashboard
@@ -22,9 +23,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         verify_credentials(config)
     except Exception as error:
-        detail = str(error)
-        for value in (config.username, config.password):
-            detail = detail.replace(value, "[oculto]")
+        detail = redact_credentials(error, (config.username, config.password))
         show_dashboard(username, ConnectionState.PROBLEMS, detail=detail)
         raise SystemExit(1) from None
     show_dashboard(username, ConnectionState.CONNECTED, detail="Acceso a Moodle verificado en esta consulta.")

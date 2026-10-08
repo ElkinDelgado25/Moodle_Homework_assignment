@@ -157,10 +157,11 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_server_errors_hide_credentials(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"
-            path.write_text("MOODLE_USERNAME=private-user\nMOODLE_PASSWORD=private-password\n")
-            with patch("moodle_tasks.server.collect_assignments", side_effect=RuntimeError("private-password private-user")), patch("moodle_tasks.server.load_config", return_value=Config("https://moodle.test", "private-user", "private-password", True)):
+            path.write_text("MOODLE_USERNAME=private-user\nMOODLE_PASSWORD=private/pass+word\n")
+            with patch("moodle_tasks.server.collect_assignments", side_effect=RuntimeError("private/pass+word private%2Fpass%2Bword private-user")), patch("moodle_tasks.server.load_config", return_value=Config("https://moodle.test", "private-user", "private/pass+word", True)):
                 async with Client(create_server(path)) as client:
                     result = await client.call_tool("list_assignments")
                     self.assertTrue(result.is_error)
-                    self.assertNotIn("private-password", str(result))
+                    self.assertNotIn("private/pass+word", str(result))
                     self.assertNotIn("private-user", str(result))
+                    self.assertNotIn("private%2Fpass%2Bword", str(result))
