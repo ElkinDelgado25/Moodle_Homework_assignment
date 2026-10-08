@@ -77,6 +77,10 @@ def open_page(page: Page, url: str) -> None:
 
 def login(page: Page, config: Config) -> None:
     open_page(page, f"{config.base_url}/login/index.php")
+    microsoft = page.get_by_role("link", name="Microsoft 365 Uleam", exact=True)
+    if microsoft.count() and config.username.lower().endswith(("@live.uleam.edu.ec", "@uleam.edu.ec")):
+        login_microsoft(page, config)
+        return
     login_form = page.locator("form#login, form[action*='login']")
     if login_form.count() == 0:
         if page.locator("a[href*='/login/logout.php']").count():
@@ -98,6 +102,44 @@ def login(page: Page, config: Config) -> None:
 
     if not page.locator("a[href*='/login/logout.php']").count():
         raise RuntimeError("No se pudo confirmar una sesión iniciada en Moodle.")
+
+
+def login_microsoft(page: Page, config: Config) -> None:
+    """Acceso institucional observado en ULEAM; no resuelve códigos ni MFA."""
+    page.get_by_role("link", name="Microsoft 365 Uleam", exact=True).click()
+    email = page.locator('input[name="loginfmt"]')
+    email.wait_for(state="visible", timeout=30_000)
+    email.fill(config.username)
+    page.locator("#idSIButton9").click()
+    password = page.locator('input[name="passwd"]')
+    password.wait_for(state="visible", timeout=30_000)
+    # La pantalla de Microsoft actualiza sus campos después de la transición.
+    page.wait_for_timeout(1500)
+    password.fill(config.password)
+    password.press("Tab")
+    page.locator("#idSIButton9").click()
+    selected_again = False
+    for _ in range(120):
+        if page.url.startswith(config.base_url + "/") and page.locator("a[href*='/login/logout.php']").count():
+            return
+        for selector in ("#passwordError", "#usernameError", "#errorText"):
+            error = page.locator(selector).first
+            if error.count() and error.is_visible() and clean_text(error.inner_text()):
+                raise MoodleAuthenticationError("Microsoft no aceptó el acceso: " + clean_text(error.inner_text()))
+        alternate = page.get_by_role("link", name=re.compile(
+            r"Use a different account|Usar una cuenta diferente|Utilizar otra cuenta", re.I))
+        if not selected_again and alternate.count() and alternate.first.is_visible():
+            alternate.first.click()
+            profile = page.get_by_text(config.username, exact=True).first
+            profile.wait_for(state="visible", timeout=20_000)
+            profile.click()
+            selected_again = True
+        stay = page.get_by_role("button", name="No", exact=True)
+        if stay.count() and stay.first.is_visible() and page.get_by_text(re.compile(
+            r"Stay signed in|mantener la sesión iniciada", re.I)).count():
+            stay.first.click()
+        page.wait_for_timeout(500)
+    raise RuntimeError("Microsoft requiere completar el acceso o una verificación adicional. No se confirmó una sesión de Moodle.")
 
 
 def find_assignment_links(page: Page, config: Config) -> list[str]:
