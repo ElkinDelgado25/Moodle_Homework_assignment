@@ -211,8 +211,22 @@ def submission_state(status: str) -> bool | None:
     return None
 
 
-def read_assignment(page: Page, url: str) -> Assignment:
-    open_page(page, url)
+def open_authenticated_page(page: Page, url: str, config: Config) -> None:
+    """Renueva una sesión vencida una vez, sin leer el formulario como una tarea."""
+    for attempt in range(2):
+        open_page(page, url)
+        if not ("/login/" in page.url or page.locator("input[name='username'], input[name='password'], input[name='loginfmt']").count()):
+            return
+        if attempt == 0:
+            login(page, config)
+    raise MoodleAuthenticationError("La sesión de Moodle sigue vencida después de volver a iniciar sesión.")
+
+
+def read_assignment(page: Page, url: str, config: Config | None = None) -> Assignment:
+    if config is not None:
+        open_authenticated_page(page, url, config)
+    else:
+        open_page(page, url)
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
     content = first_text(
         page,

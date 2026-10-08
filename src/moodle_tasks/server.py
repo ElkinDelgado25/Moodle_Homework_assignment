@@ -16,6 +16,7 @@ from playwright.sync_api import sync_playwright
 
 from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError, redact_credentials
+from .downloads import documents_directory, download_attachment
 
 
 def create_server(env_file: Path = ENV_FILE) -> MCPServer:
@@ -37,6 +38,13 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Cuando el usuario pida más información de una tarea o diga hagamos la primera tarea, usa get_assignment "
             "con el id del enlace de esa fila de la última tabla: lee entonces instrucciones y anexos solo de esa actividad. "
             "No confundas la posición de una fila con el id de Moodle ni repitas el listado completo. "
+            "Cuando el usuario pida descargar anexos o resolver una tarea con su material, usa "
+            "download_assignment_attachments con el mismo assignment_id y la carpeta solicitada; por defecto guarda en Documentos/Documents. "
+            "Esta herramienta inicia sesión y descarga con las cookies de Moodle, renovando una sesión vencida una vez. "
+            "No uses curl ni scripts externos, no busques ni exportes credenciales o cookies: un enlace pluginfile.php requiere autenticación. "
+            "La petición del usuario de descargar anexos autoriza esa descarga; no pidas una confirmación adicional salvo que el cliente la exija. "
+            "Usa las rutas locales devueltas para leer el material y continuar el trabajo solicitado. "
+            "Si incomplete=true, comunica qué anexos fallaron; no afirmes que todos se descargaron. "
             "Usa mode=overdue únicamente si el usuario pide expresamente tareas vencidas. "
             "Distingue tareas disponibles de actividades que aún no se abren. Una tarea ya calificada "
             "o que indica no subir documentos no se considera pendiente solo por figurar sin entrega. "
@@ -52,6 +60,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     )
     readonly = ToolAnnotations(
         read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True
+    )
+    download_annotations = ToolAnnotations(
+        read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
     )
 
     def config():
@@ -161,7 +172,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 page = browser.new_page()
                 page.set_default_timeout(15_000)
                 login(page, settings)
-                task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={assignment_id}")
+                task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={assignment_id}", settings)
                 return asdict(task)
             finally:
                 browser.close()
@@ -171,6 +182,40 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         """Lee instrucciones, fechas, estado y anexos de UNA tarea cuando el usuario pide más información o quiere hacerla. Usa el id del enlace de la fila seleccionada en la última lista, nunca su posición."""
         try:
             return await asyncio.to_thread(get_task, assignment_id)
+        except Exception as error:
+            raise ToolError(safe_error(error)) from None
+
+    def download_task(assignment_id: int, destination_directory: str | None) -> dict[str, Any]:
+        settings = config()
+        directory = Path(destination_directory).expanduser().resolve() if destination_directory else documents_directory().resolve()
+        files, errors = [], []
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                page = browser.new_page()
+                page.set_default_timeout(15_000)
+                login(page, settings)
+                task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={assignment_id}", settings)
+                urls = dict.fromkeys(attachment["url"] for attachment in task.attachments)
+                for url in urls:
+                    try:
+                        files.append(download_attachment(page, settings, url, directory))
+                    except Exception as error:
+                        errors.append({"url": url, "error": safe_error(error)})
+            finally:
+                browser.close()
+        return {"assignment_id": assignment_id, "title": task.title, "destination_directory": str(directory),
+                "attachment_count": len(urls), "downloaded_count": len(files), "files": files,
+                "incomplete": bool(errors), "errors": errors}
+
+    @server.tool(annotations=download_annotations, structured_output=True)
+    async def download_assignment_attachments(
+        assignment_id: Annotated[int, Field(ge=1)],
+        destination_directory: Annotated[str | None, Field(min_length=1, description="Carpeta local solicitada; por defecto ~/Documentos si existe o ~/Documents.")] = None,
+    ) -> dict[str, Any]:
+        """Descarga los anexos de UNA tarea con sesión autenticada, sin curl ni credenciales en el resultado. Usar cuando el usuario pide descargar material o resolver la tarea con sus anexos. Renueva la sesión una vez; rechaza HTML y PDF inválido. Devuelve rutas locales, sin sobrescribir archivos existentes, y errores de descargas parciales. Escribe archivos locales y no modifica entregas en Moodle."""
+        try:
+            return await asyncio.to_thread(download_task, assignment_id, destination_directory)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

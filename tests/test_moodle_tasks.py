@@ -1,6 +1,7 @@
 import io
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
@@ -143,6 +144,37 @@ class MoodleTests(unittest.TestCase):
             </table>'''))
         task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1")
         self.assertIs(task.submitted, False)
+
+    def test_expired_assignment_session_is_renewed_before_reading(self):
+        authenticated = False
+
+        def respond(route):
+            if not authenticated:
+                route.fulfill(
+                    content_type="text/html", body='<form id="login"><input name="username"></form>'
+                )
+            else:
+                route.fulfill(content_type="text/html", body='<h1>Taller</h1><div id="intro">Instrucciones reales</div>')
+
+        def renew(*args):
+            nonlocal authenticated
+            authenticated = True
+
+        self.page.route("**/*", respond)
+        with patch("moodle_tasks.main.login", side_effect=renew) as login_again:
+            task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1", self.config)
+        self.assertEqual(task.title, "Taller")
+        self.assertEqual(task.content, "Instrucciones reales")
+        login_again.assert_called_once()
+
+    def test_persistent_expiration_is_an_error_instead_of_a_fake_task(self):
+        self.page.route("**/*", lambda route: route.fulfill(
+            content_type="text/html", body='<h1>Acceder</h1><input name="username">'
+        ))
+        with patch("moodle_tasks.main.login") as renew:
+            with self.assertRaises(MoodleAuthenticationError):
+                read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1", self.config)
+            renew.assert_called_once()
 
 
 if __name__ == "__main__":

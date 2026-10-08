@@ -44,15 +44,45 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
-                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment"
+                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments"
                 })
-                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools))
+                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name != "download_assignment_attachments"))
+                download = next(tool for tool in tools.tools if tool.name == "download_assignment_attachments")
+                self.assertFalse(download.annotations.read_only_hint)
+                self.assertFalse(download.annotations.destructive_hint)
+                self.assertFalse(download.annotations.idempotent_hint)
                 result = await client.call_tool("configuration_status")
                 self.assertFalse(result.is_error)
                 self.assertEqual(result.structured_content, {"configured": True, "missing_variables": []})
                 self.assertNotIn("private-test-password", str(result))
                 invalid = await client.call_tool("get_assignment", {"assignment_id": -1})
                 self.assertTrue(invalid.is_error)
+                invalid_download = await client.call_tool("download_assignment_attachments", {"assignment_id": 0})
+                self.assertTrue(invalid_download.is_error)
+
+    async def test_download_reports_partial_results_and_preserves_files(self):
+        from unittest.mock import MagicMock
+        task = Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=9", "", "", "", False,
+                          attachments=[{"url": "https://moodle.test/pluginfile.php/good.pdf"},
+                                       {"url": "https://moodle.test/pluginfile.php/good.pdf"},
+                                       {"url": "https://moodle.test/pluginfile.php/bad.pdf"}])
+        playwright = MagicMock()
+        settings = Config("https://moodle.test", "test", "test", True)
+        with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.server.sync_playwright", return_value=playwright), patch(
+            "moodle_tasks.server.load_config", return_value=settings
+        ), patch("moodle_tasks.server.login"), patch("moodle_tasks.server.read_assignment", return_value=task), patch(
+            "moodle_tasks.server.download_attachment", side_effect=[{"path": str(Path(directory) / "good.pdf")}, RuntimeError("HTTP 403")]
+        ) as download:
+            async with Client(create_server()) as client:
+                result = await client.call_tool("download_assignment_attachments", {"assignment_id": 9, "destination_directory": directory})
+                self.assertFalse(result.is_error)
+                data = result.structured_content
+                self.assertTrue(data["incomplete"])
+                self.assertEqual(data["attachment_count"], 2)
+                self.assertEqual(data["downloaded_count"], 1)
+                self.assertIn("HTTP 403", data["errors"][0]["error"])
+                self.assertEqual(download.call_count, 2)
+                playwright.__enter__.return_value.chromium.launch.return_value.close.assert_called_once()
 
     async def test_pending_filter_includes_unknown_and_reports_partial_results(self):
         tasks = [Assignment("Tarea", "https://moodle.test/task", "Texto", "Mañana", "Estado", state)
