@@ -1,6 +1,28 @@
-# Moodle_Homework_assignment
+<p align="center">
+  <img src="docs/assets/readme/header.svg" width="1000" alt="Moodle MCP · Aula Moodle. Encabezado inspirado en mcp-moodle setup.">
+</p>
 
-Moodle MCP conecta tu cuenta de Moodle con Codex, Claude Code, Google Antigravity o Copilot. Usa Python, `uv` y Playwright. Por defecto muestra cinco tareas pendientes disponibles, su materia y el cierre con fecha, hora y tiempo restante. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
+<h1 align="center">Moodle MCP</h1>
+
+<p align="center">
+  Conecta tu cuenta de Moodle con tu agente y trabaja desde una sola conversación.
+</p>
+
+<p align="center">
+  <a href="#instalacion">Instalación</a> ·
+  <a href="#desde-un-clon">Desde un clon</a> ·
+  <a href="#consultar-tareas">Consultar tareas</a> ·
+  <a href="docs/MCP.md">Guía MCP</a> ·
+  <a href="docs/DOCUMENT_OUTPUT.md">Documentos</a>
+</p>
+
+| Consulta tus tareas | Descarga los anexos | Prepara tus documentos |
+| :--- | :--- | :--- |
+| Próximas cinco pendientes, materia y tiempo restante. | Descarga autenticada con la misma sesión de Moodle. | DOCX y PDF con portada ULEAM, APA 7 y Times New Roman. |
+
+Compatible con **Codex, Claude Code, Google Antigravity y Copilot**. Usa Python, `uv` y Playwright. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
+
+---
 
 ## Requisitos
 
@@ -10,9 +32,28 @@ Moodle MCP conecta tu cuenta de Moodle con Codex, Claude Code, Google Antigravit
 
 Los requisitos del navegador se basan en la [documentación oficial de Playwright](https://playwright.dev/python/docs/intro).
 
-## Instalación por sistema operativo
+<a id="instalacion"></a>
+
+## Elige tu sistema
+
+Descarga el instalador desde [GitHub Actions](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) y extrae el ZIP: contiene el wheel y las instrucciones. También puedes [instalar desde GitHub](docs/INSTALL.md#instalar-desde-github-o-desde-un-clon).
+
+<table>
+  <tr>
+    <td align="center"><a href="#windows"><img src="docs/assets/readme/windows.svg" width="42" height="42" alt="Windows"><br><strong>Windows</strong></a><br>PowerShell</td>
+    <td align="center"><a href="#debian"><img src="docs/assets/readme/debian.svg" width="42" height="42" alt="Debian"><br><strong>Debian y derivados</strong></a><br>apt</td>
+    <td align="center"><a href="#arch"><img src="docs/assets/readme/archlinux.svg" width="42" height="42" alt="Arch Linux"><br><strong>Arch y derivados</strong></a><br>pacman</td>
+    <td align="center"><a href="#macos"><img src="docs/assets/readme/apple.svg" width="42" height="42" alt="Apple"><br><strong>macOS</strong></a><br>Intel / Apple Silicon</td>
+  </tr>
+</table>
 
 Instala `uv` siguiendo el bloque de tu sistema y abre una terminal nueva. Los comandos de instalación de `uv` proceden de su [guía oficial](https://docs.astral.sh/uv/getting-started/installation/).
+
+---
+
+<a id="windows"></a>
+
+<img src="docs/assets/readme/windows-section.svg" width="1000" alt="Windows — PowerShell">
 
 ### Windows — PowerShell
 
@@ -29,7 +70,13 @@ uv tool update-shell
 
 Abre PowerShell de nuevo y ejecuta `mcp-moodle run`.
 
-### Linux — Debian y derivados (Debian-based)
+---
+
+<a id="debian"></a>
+
+<img src="docs/assets/readme/debian-section.svg" width="1000" alt="Debian y derivados · Debian-based">
+
+### Debian y derivados · Debian-based
 
 Para Debian, Ubuntu y distribuciones basadas en ellas, como Linux Mint, usa `apt`:
 
@@ -53,7 +100,13 @@ El último comando instala las bibliotecas de Chromium y puede pedir permisos de
 mcp-moodle run
 ```
 
-### Linux — Arch Linux y derivados (Arch-based)
+---
+
+<a id="arch"></a>
+
+<img src="docs/assets/readme/archlinux-section.svg" width="1000" alt="Arch Linux y derivados · Arch-based">
+
+### Arch Linux y derivados · Arch-based
 
 Para Arch Linux y distribuciones basadas en ella, como CachyOS, EndeavourOS y Manjaro, usa `pacman`:
 
@@ -77,7 +130,13 @@ mcp-moodle run
 
 En ambas familias, el asistente descarga el Chromium que utiliza Playwright. Los comandos de `apt` y `pacman` corresponden a tu distribución; no ejecutes ambos bloques. El CI comprueba Ubuntu 24.04 y Arch Linux. Consulta [la guía de instalación](docs/INSTALL.md#linux--debian-y-derivados-debian-based) para más detalles.
 
-### macOS — Terminal (Intel y Apple Silicon)
+---
+
+<a id="macos"></a>
+
+<img src="docs/assets/readme/apple-section.svg" width="1000" alt="macOS — Intel y Apple Silicon">
+
+### macOS — Intel y Apple Silicon
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -95,6 +154,10 @@ Abre Terminal de nuevo y ejecuta `mcp-moodle run`. Usa una terminal nativa de tu
 El asistente pide tu cuenta, intenta validarla, prepara Chromium y te permite elegir el agente. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub, la actualización y los instaladores disponibles en Actions.
 
 `mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`.
+
+---
+
+<a id="desde-un-clon"></a>
 
 ## Ejecutar desde un repositorio clonado
 
@@ -120,12 +183,18 @@ Y consultar las tareas desde la terminal con:
 uv run mcp-moodle tasks
 ```
 
+<a id="consultar-tareas"></a>
+
+## Consultar y resolver tareas
+
 Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, usando el cierre y el botón «Agregar entrega» para confirmar disponibilidad. No abre las actividades ni consulta instrucciones o anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla con **Tarea, Materia y Cierre (fecha y hora)**. Cada cierre incluye el tiempo restante calculado al consultar, por ejemplo `11/10/2026 23:59 (quedan 3 días y 8 horas)`. Para otras búsquedas:
 
 ```bash
 uv run mcp-moodle tasks --mode overdue
 uv run mcp-moodle tasks --mode all --refresh
 ```
+
+### Herramientas disponibles
 
 En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(complete_review=true)`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles cuando se solicita explícitamente. Sin ese parámetro devuelve las próximas cinco pendientes, incluso si el agente elige por error esa herramienta para una pregunta general. La revisión completa usa únicamente los índices de tareas por materia: cuenta entregas pendientes sin abrir actividades ni leer anexos. Los índices no confirman cuándo se abre cada tarea; por eso los contadores de disponibilidad son `null` en la revisión completa.
 
@@ -135,7 +204,11 @@ En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(c
 
 Pedir al agente «descarga los anexos en Documentos y resuelve esta tarea» autoriza ese trabajo. El cliente puede exigir permisos para herramientas que escriben archivos; el MCP declara la descarga como escritura local y no cambia las políticas de aprobación del cliente. Reinicia el MCP después de actualizar para que el agente descubra la herramienta nueva.
 
+### Entregables: DOCX y PDF
+
 Al resolver una tarea documental, el agente entrega por defecto **solo DOCX y PDF**, con el mismo nombre base, aplicando **APA 7 y Times New Roman de 12 puntos** al desarrollo. Usa **`get_document_template()`** para obtener la portada ULEAM con logo, numeración y campos de Materia, Docente, Estudiantes, Carrera, Curso y Año. La portada institucional se conserva como adaptación a APA y el desarrollo empieza en la segunda página. Los datos personales se pueden conservar en un perfil local; la plantilla pública tiene campos vacíos. Las fuentes, conversiones y capturas de revisión se guardan como temporales. Consulta [la política de documentos y portada](docs/DOCUMENT_OUTPUT.md).
+
+### Detalles de ejecución
 
 La vista superficial ordena por cierre; `recent` requiere datos de apertura que no aparecen en los listados y devuelve una explicación para usar `upcoming`. El motor interno conserva la lectura detallada para usos explícitos de desarrollo, pero las herramientas de listado y la terminal usan `summary_only=True`.
 
@@ -182,3 +255,11 @@ Después de una ejecución correcta, descarga desde [GitHub Actions](https://git
 - Para identificar pendientes comprueba los datos de entrega y nota disponibles en los listados: una actividad ya calificada o que indique no subir documentos no se cuenta como pendiente solo por figurar sin entrega.
 - Las cuentas institucionales de ULEAM usan Microsoft 365 y la selección del mismo perfil cuando aparece «Use a different account». Si Microsoft exige CAPTCHA, códigos o verificación adicional, el programa no los resuelve ni afirma que la sesión esté validada.
 - El programa no entrega tareas ni modifica información en Moodle.
+
+---
+
+<p align="center">
+  <a href="docs/INSTALL.md">Instalación completa</a> ·
+  <a href="docs/MCP.md">Conexión de agentes</a> ·
+  <a href="docs/assets/readme/SOURCES.md">Créditos visuales</a>
+</p>
