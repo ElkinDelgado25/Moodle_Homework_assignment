@@ -44,7 +44,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
-                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments"
+                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "get_document_template"
                 })
                 self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name != "download_assignment_attachments"))
                 download = next(tool for tool in tools.tools if tool.name == "download_assignment_attachments")
@@ -59,6 +59,35 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(invalid.is_error)
                 invalid_download = await client.call_tool("download_assignment_attachments", {"assignment_id": 0})
                 self.assertTrue(invalid_download.is_error)
+
+    async def test_document_template_is_packaged_and_has_no_unfilled_personal_defaults(self):
+        from zipfile import ZipFile
+        with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.server.user_config_dir", return_value=Path(directory)):
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_document_template")
+        self.assertFalse(result.is_error)
+        data = result.structured_content
+        self.assertEqual(data["local_defaults"], {})
+        self.assertEqual(data["output_formats"], ["docx", "pdf"])
+        self.assertTrue(Path(data["logo_path"]).is_file())
+        with ZipFile(data["template_path"]) as document:
+            xml = document.read("word/document.xml").decode()
+            for field in data["fields"]:
+                self.assertIn("{{" + field + "}}", xml)
+            self.assertIn("Universidad Laica", xml)
+
+    async def test_cover_profile_is_local_filtered_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.server.user_config_dir", return_value=Path(directory)):
+            profile = Path(directory) / "document_profile.json"
+            profile.write_text('{"student_1": "Test Student", "password": "excluded-test-value"}')
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_document_template")
+                self.assertEqual(result.structured_content["local_defaults"], {"student_1": "Test Student"})
+                self.assertNotIn("excluded-test-value", str(result))
+                profile.write_text('{"student_1": 123}')
+                invalid = await client.call_tool("get_document_template")
+                self.assertTrue(invalid.is_error)
+                self.assertIn("perfil local", str(invalid))
 
     async def test_download_reports_partial_results_and_preserves_files(self):
         from unittest.mock import MagicMock

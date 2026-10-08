@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import json
 import re
 from dataclasses import asdict, replace
 from datetime import datetime
@@ -17,6 +18,7 @@ from playwright.sync_api import sync_playwright
 from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError, redact_credentials
 from .downloads import documents_directory, download_attachment
+from .storage import user_config_dir
 
 
 def create_server(env_file: Path = ENV_FILE) -> MCPServer:
@@ -49,6 +51,11 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "No entregues ODT, HTML, Markdown, imágenes de revisión ni scripts como formatos adicionales, salvo petición explícita del usuario. "
             "Guarda conversiones, fuentes e imágenes de revisión en una carpeta temporal fuera de la carpeta de entrega. "
             "Comprueba visualmente el DOCX y el PDF antes de entregarlos y presenta solo los dos enlaces finales. "
+            "Antes de crear esos documentos usa get_document_template para obtener la portada editable ULEAM. "
+            "Conserva su logo arriba a la izquierda, número de página arriba a la derecha, tipografía Arial negra, "
+            "textos centrados y distribución de Materia, Docente, Estudiantes, Carrera, Curso y Año. "
+            "Completa los campos con los datos de la tarea y los que haya proporcionado el usuario; "
+            "no inventes docentes, estudiantes ni otros datos faltantes. Empieza el desarrollo en la página siguiente. "
             "Si incomplete=true, comunica qué anexos fallaron; no afirmes que todos se descargaron. "
             "Usa mode=overdue únicamente si el usuario pide expresamente tareas vencidas. "
             "Distingue tareas disponibles de actividades que aún no se abren. Una tarea ya calificada "
@@ -84,6 +91,30 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         missing = [name for name in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")
                    if not (values.get(name) or "").strip()]
         return {"configured": not missing, "missing_variables": missing}
+
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False,
+                                           idempotent_hint=True, open_world_hint=False), structured_output=True)
+    def get_document_template() -> dict[str, Any]:
+        """Obtiene la portada DOCX ULEAM para resolver tareas en DOCX y PDF. Copia el archivo local, sustituye los campos sin alterar la portada y añade el desarrollo desde la segunda página. No genera entregables ni publica nombres personales."""
+        assets = Path(__file__).resolve().parent / "assets"
+        profile_path = user_config_dir() / "document_profile.json"
+        fields = ["subject", "teacher", "student_1", "student_2", "degree", "class_group", "year"]
+        defaults = {}
+        if profile_path.is_file():
+            try:
+                profile = json.loads(profile_path.read_text(encoding="utf-8"))
+                if not isinstance(profile, dict) or any(not isinstance(value, str) for value in profile.values()):
+                    raise ValueError("Se esperaba un objeto JSON con valores de texto.")
+                defaults = {key: value for key, value in profile.items() if key in fields}
+            except (ValueError, OSError):
+                raise ToolError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato antes de generar el documento.") from None
+        return {"template_path": str(assets / "academic-cover.docx"),
+                "logo_path": str(assets / "uleam-logo.png"),
+                "output_formats": ["docx", "pdf"],
+                "fields": fields,
+                "local_defaults": defaults,
+                "field_syntax": "{{field}}",
+                "instructions": "Mantén la portada y su encabezado. Usa local_defaults solo cuando correspondan a la materia y año de la tarea; los datos actuales de Moodle y del usuario tienen prioridad. Completa solo datos confirmados; adapta la lista de estudiantes a la tarea. Añade un salto de página y el desarrollo. Exporta el PDF desde el DOCX. Guarda solo esos dos entregables en la carpeta solicitada; usa una carpeta temporal para fuentes y revisión."}
 
     def check_connection() -> dict[str, Any]:
         try:
