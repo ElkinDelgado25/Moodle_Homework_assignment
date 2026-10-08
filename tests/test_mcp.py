@@ -66,6 +66,20 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(data["incomplete"])
                 self.assertEqual([task["submitted"] for task in data["assignments"]], [False, None])
 
+    async def test_default_response_provides_one_table_with_the_requested_intro(self):
+        tasks = [Assignment('App de cuadrícula', 'https://moodle.test/mod/assign/view.php?id=3', '', '', '', False,
+                            course='A -- Aplicaciones Móviles Nativas--1208706--20262-1', due_at='2026-10-11T23:59:00')]
+        with patch('moodle_tasks.server.collect_assignments', return_value=(tasks, [])), patch('moodle_tasks.server.load_config', return_value=Config('https://moodle.test', 'test', 'test', True)):
+            async with Client(create_server()) as client:
+                result = await client.call_tool('list_assignments')
+                markdown = result.structured_content['response_markdown']
+                self.assertTrue(markdown.startswith('Estas son las tareas pendientes\n\n'))
+                self.assertIn('| Tarea | Materia | Fecha límite | Anexos |', markdown)
+                self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 | Sin anexos', markdown)
+                self.assertNotIn('1208706', markdown)
+                complete = await client.call_tool('list_all_assignments')
+                self.assertNotIn('response_markdown', complete.structured_content)
+
     async def test_complete_tool_has_no_limit_and_quick_tool_uses_five_by_default(self):
         settings = Config("https://moodle.test", "test", "test", True)
         with patch("moodle_tasks.server.collect_assignments", return_value=([], [])) as collect, patch("moodle_tasks.server.load_config", return_value=settings):

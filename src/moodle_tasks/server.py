@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import re
 from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
@@ -13,7 +14,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 from playwright.sync_api import sync_playwright
 
-from .main import ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
+from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError
 
 
@@ -21,16 +22,22 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     server = MCPServer(
         "moodle",
         instructions=(
+            "Para preguntas generales como 'qué tareas pendientes tengo', usa list_assignments(mode='upcoming', limit=5). "
+            "Responde 'Estas son las tareas pendientes' y una única tabla de hasta cinco filas con Tarea, Materia, Fecha límite y Anexos. "
+            "Usa response_markdown del resultado. No muestres vencidas, actividades aún no abiertas, totales globales ni grupos por urgencia. "
+            "Usa list_all_assignments SOLO si el usuario pide explícitamente todas las materias, un total o una revisión completa. "
             "Consulta Moodle con las credenciales locales. Usa configuration_status para verificar "
             "la configuración, check_moodle_connection para comprobar el acceso y list_assignments "
             "para consultar las próximas cinco tareas desde la línea de tiempo. "
             "Para preguntas como cuántas tareas pendientes hay en todas las materias, verificar todo "
             "o una revisión completa, usa list_all_assignments: recorre los índices de todas las materias visibles. "
-            "list_assignments con mode=recent muestra las abiertas más recientemente y mode=overdue las vencidas. "
+            "list_assignments con mode=recent muestra las abiertas más recientemente con plazo vigente. "
+            "Usa mode=overdue únicamente si el usuario pide expresamente tareas vencidas. "
             "Distingue tareas disponibles de actividades que aún no se abren. Una tarea ya calificada "
             "o que indica no subir documentos no se considera pendiente solo por figurar sin entrega. "
             "Una lista vacía o una consulta incompleta no demuestra que no "
             "haya tareas pendientes. submitted=null significa estado desconocido. "
+            "Si incomplete=true, explica el alcance o los errores después de la tabla. "
             "Si una herramienta informa un error del servidor, explica al usuario: "
             "Por ahora no se pudieron consultar tus tareas porque Moodle tiene un error del servidor. "
             "Inténtalo de nuevo más tarde. No afirmes que no hay tareas pendientes ni repitas "
@@ -91,7 +98,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         assignments = [task for task in tasks if not only_pending or is_pending(task)]
         now = datetime.now().isoformat()
         pending = [task for task in assignments if is_pending(task)]
-        return {
+        result = {
             "checked_at": datetime.now().astimezone().isoformat(),
             "reviewed_count": stats.get("candidates_checked", len(tasks)),
             "incomplete": bool(errors) or not stats.get("candidates_checked", len(tasks)),
@@ -106,6 +113,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "errors": [safe_error(RuntimeError(error)) for error in errors],
             "assignments": [asdict(task) for task in assignments],
         }
+        if mode in ("upcoming", "recent"):
+            result["response_markdown"] = pending_table(assignments)
+        return result
 
     @server.tool(annotations=readonly, structured_output=True)
     async def list_assignments(
@@ -114,7 +124,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         limit: Annotated[int, Field(ge=1, le=100)] = 5,
         refresh: bool = False,
     ) -> dict[str, Any]:
-        """Búsqueda limitada: próximas por vencimiento, recientes por apertura o vencidas. Incluye materia y anexos; no da un total global."""
+        """Usar para 'qué tareas pendientes tengo': cinco abiertas con plazo vigente y una tabla lista para mostrar. recent ordena por apertura; overdue solo para vencidas solicitadas explícitamente. No da un total global."""
         try:
             return await asyncio.to_thread(list_tasks, only_pending, mode, limit, refresh)
         except Exception as error:
@@ -122,7 +132,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     @server.tool(annotations=readonly, structured_output=True)
     async def list_all_assignments(only_pending: bool = True, refresh: bool = False) -> dict[str, Any]:
-        """Revisión completa sin límite de las tareas de todas las materias visibles. Usar para contar pendientes globales; distingue actividades aún no abiertas."""
+        """SOLO para solicitudes explícitas de todas las materias, total de pendientes o revisión completa. Incluye vencidas y actividades aún no abiertas. Para 'qué tareas pendientes tengo', usar list_assignments."""
         try:
             return await asyncio.to_thread(list_tasks, only_pending, "all", None, refresh)
         except Exception as error:
@@ -150,6 +160,21 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             raise ToolError(safe_error(error)) from None
 
     return server
+
+
+def pending_table(tasks: list[Assignment]) -> str:
+    def cell(value: str) -> str:
+        return " ".join(value.split()).replace("\\", "\\\\").replace("|", "\\|").replace("[", "\\[").replace("]", "\\]")
+
+    rows = ["Estas son las tareas pendientes", "", "| Tarea | Materia | Fecha límite | Anexos |",
+            "|---|---|---|---|"]
+    for task in tasks:
+        course = re.sub(r"^[A-Z]\s*--\s*", "", task.course)
+        course = re.split(r"\s*/\s*SOFTWARE\b|--\d", course, maxsplit=1, flags=re.I)[0]
+        due = datetime.fromisoformat(task.due_at).strftime("%d/%m/%Y %H:%M") if task.due_at else task.due_date
+        files = ", ".join(f"[{cell(file['name'])}]({file['url']})" for file in task.attachments) or "Sin anexos"
+        rows.append(f"| [{cell(task.title)}]({task.url}) | {cell(course) or 'Sin identificar'} | {cell(due)} | {files} |")
+    return "\n".join(rows)
 
 
 def main(argv: list[str] | None = None) -> None:
