@@ -104,7 +104,7 @@ El Moodle predeterminado es el de ULEAM. Para usar otro:
 mcp-moodle run --url https://moodle.tu-universidad.edu
 ```
 
-El asistente comprueba accesos con usuario y contraseña. Un Moodle que requiera CAPTCHA, autenticación institucional o doble factor puede necesitar una adaptación antes de que se pueda confirmar la sesión.
+El asistente comprueba accesos con usuario y contraseña. Para correos institucionales de ULEAM selecciona **Microsoft 365 Uleam**, introduce los datos y vuelve a elegir el mismo perfil si aparece **Use a different account**, siguiendo el flujo comprobado en esa institución. Solo muestra **Conectado** cuando confirma la sesión de Moodle. Si Microsoft requiere CAPTCHA, códigos o una verificación adicional, el asistente no los resuelve y comunica que no se pudo confirmar el acceso.
 
 ## 4. Reiniciar el agente y consultar
 

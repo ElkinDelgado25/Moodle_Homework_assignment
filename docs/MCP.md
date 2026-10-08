@@ -23,12 +23,21 @@ El comando del servidor es `uv run mcp-moodle serve`. Un cliente MCP lo inicia y
 | --- | --- |
 | `configuration_status` | Comprueba si están completas las variables, sin devolver usuario ni contraseña. |
 | `check_moodle_connection` | Comprueba el acceso a Moodle y devuelve el error si falla. |
-| `list_assignments(only_pending=true)` | Consulta posibles tareas pendientes, con texto, fecha, estado y enlace. Con `false`, devuelve todas las revisadas. |
+| `list_assignments(only_pending=true, mode="upcoming", limit=5, refresh=false)` | Consulta limitada. `upcoming` busca próximos vencimientos desde la línea de tiempo; `recent` ordena por apertura y excluye actividades aún no abiertas; `overdue` muestra vencidas. Devuelve materia, fechas, instrucciones y anexos. |
+| `list_all_assignments(only_pending=true, refresh=false)` | Herramienta separada para revisar todas las materias visibles, sin límite. Úsala para preguntas como «¿cuántas tareas tengo pendientes en todas las materias?». Con `only_pending=false` incluye entregadas y calificadas. |
 | `get_assignment(assignment_id)` | Consulta una actividad por el identificador `id` de su enlace. |
 
 Las herramientas son de consulta. Las credenciales permanecen en `.env`; no hace falta escribirlas en las configuraciones MCP.
 
-Los resultados usan `submitted=true`, `false` o `null` (estado desconocido). Los estados desconocidos también se incluyen al pedir pendientes. `reviewed_count`, `incomplete`, `errors` y `coverage` indican el alcance de la consulta: cero actividades o errores no permiten afirmar que no hay tareas pendientes. La búsqueda actual recorre los enlaces del área personal y de los cursos encontrados; puede omitir actividades en otras secciones o páginas.
+Los resultados usan `submitted=true`, `false` o `null` (estado desconocido). Los estados desconocidos también se incluyen al pedir pendientes. `requires_submission=false` identifica actividades entregadas, calificadas o que indican no subir documentos. Una actividad calificada que figura «Sin entrega» no se suma a las pendientes. Los anexos corresponden al material del docente, no a los archivos ya entregados por el estudiante. Las fechas normalizadas conservan la hora mostrada por Moodle, sin asignar una zona horaria que Moodle no indique.
+
+`reviewed_count`, `incomplete`, `errors` y `coverage` indican el alcance: cero actividades o errores no permiten afirmar que no hay tareas pendientes. `pending_count` cuenta los resultados pendientes de esa consulta; solo la herramienta completa sirve para estimar el total de todas las materias visibles. `available_pending_count`, `not_yet_open_count`, `overdue_count` y `uncertain_count` distinguen tareas ya abiertas, futuras, vencidas y de estado desconocido. Las vencidas forman parte de las ya abiertas; estos contadores no son categorías que deban sumarse.
+
+La consulta rápida lee el filtro actual de la línea de tiempo, carga más actividades si necesita completar el límite y abre solo los candidatos necesarios. No modifica los filtros de Moodle. Si no encuentra resultados o la línea de tiempo falla, usa los índices por materia como alternativa y comunica los errores. Su alcance está limitado al filtro, por ejemplo «Próximos 30 días»; no calcula automáticamente un total global ni incluye todas las tareas sin fecha o vencidas.
+
+La consulta completa recorre Mis cursos y el índice de tareas de cada materia, descarta las entregadas y calificadas antes de abrir detalles y conserva la cobertura y los fallos de cada curso. La caché local dura 15 minutos y se separa por cuenta y servidor. Solo reutiliza detalles cuando el índice recién consultado mantiene la misma fila (título, fecha, entrega y nota). Las instrucciones o anexos pueden permanecer en caché durante ese intervalo. `refresh=true` fuerza su lectura. La ruta rápida comprueba cada tarea directamente; no reutiliza estados desde la caché. `search` informa la fuente, candidatos, páginas de detalles abiertas y detalles reutilizados.
+
+Para una revisión completa de material y estado actual usa `list_all_assignments(refresh=true)`. Una materia que no sea visible en Mis cursos o actividades de otro tipo pueden quedar fuera; el resultado lo indica en `coverage`.
 
 Si Moodle devuelve un error del servidor, como 502, las herramientas de consulta devuelven este mensaje:
 

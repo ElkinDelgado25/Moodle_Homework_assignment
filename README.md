@@ -46,6 +46,16 @@ Y consultar las tareas desde la terminal con:
 uv run mcp-moodle tasks
 ```
 
+Por defecto muestra las próximas cinco tareas desde la línea de tiempo del Área personal, confirmando sus estados y anexos. Para otras búsquedas:
+
+```bash
+uv run mcp-moodle tasks --mode recent --limit 5
+uv run mcp-moodle tasks --mode overdue
+uv run mcp-moodle tasks --mode all --refresh
+```
+
+En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles. La revisión completa usa los índices de tareas por materia y una caché de detalles de 15 minutos, manteniendo la consulta del estado en los índices. `--refresh` evita reutilizar detalles.
+
 Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
 
 Ubuntu 24.04 tiene soporte oficial de Playwright. En Arch Linux y sus derivadas puede aparecer esta advertencia:
@@ -79,7 +89,7 @@ El servidor `mcp-moodle serve` usa el SDK oficial de MCP para Python y expone he
 ## Notas
 
 - Si Moodle responde con un error como `HTTP 502`, la consulta no se completó. Vuelve a intentarlo cuando el servidor esté disponible.
-- El programa busca enlaces a tareas en el área personal, la lista de cursos y los cursos encontrados. Si muestra `Tareas revisadas: 0`, no puede confirmar si tienes tareas pendientes; algunas actividades pueden estar en secciones o páginas que todavía no se recorren.
-- La identificación de tareas pendientes depende del estado que Moodle muestre en cada actividad.
-- Si Moodle usa autenticación institucional, CAPTCHA o código de doble factor, el inicio de sesión automático puede requerir una sesión manual o una adaptación de los selectores.
+- La búsqueda rápida respeta el filtro de la línea de tiempo; la completa consulta los índices de las materias visibles en Mis cursos. Ambas muestran su alcance. Si no encuentra resultados, no puede descartar tareas fuera de esa cobertura.
+- Para identificar pendientes comprueba entrega, nota e instrucciones: una actividad ya calificada o que indique no subir documentos no se cuenta como pendiente solo por figurar sin entrega.
+- Las cuentas institucionales de ULEAM usan Microsoft 365 y la selección del mismo perfil cuando aparece «Use a different account». Si Microsoft exige CAPTCHA, códigos o verificación adicional, el programa no los resuelve ni afirma que la sesión esté validada.
 - El programa no entrega tareas ni modifica información en Moodle.
