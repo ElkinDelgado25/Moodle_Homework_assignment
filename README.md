@@ -53,7 +53,7 @@ uv run mcp-moodle tasks --mode overdue
 uv run mcp-moodle tasks --mode all --refresh
 ```
 
-En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles. La revisión completa usa únicamente los índices de tareas por materia: cuenta entregas pendientes sin abrir actividades ni leer anexos. Los índices no confirman cuándo se abre cada tarea; por eso los contadores de disponibilidad son `null` en la revisión completa.
+En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(complete_review=true)`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles cuando se solicita explícitamente. Sin ese parámetro devuelve las próximas cinco pendientes, incluso si el agente elige por error esa herramienta para una pregunta general. La revisión completa usa únicamente los índices de tareas por materia: cuenta entregas pendientes sin abrir actividades ni leer anexos. Los índices no confirman cuándo se abre cada tarea; por eso los contadores de disponibilidad son `null` en la revisión completa.
 
 **`get_assignment(assignment_id=...)`** es la herramienta para profundizar en una tarea: devuelve instrucciones, fechas, estado y enlaces de anexos. Se utiliza cuando pides más información o dices «hagamos la primera tarea», con el ID del enlace de esa fila en la última tabla. No se vuelve a buscar en todas las materias.
 
