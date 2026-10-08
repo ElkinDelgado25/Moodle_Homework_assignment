@@ -4,6 +4,10 @@ node_modules/
 !.env.example
 credentials.env
 credentials.*.env
+document_profile.json
+document_profile.*.json
+/output/
+/private/
 .moodle-*
 playwright/.auth/
 *.log
