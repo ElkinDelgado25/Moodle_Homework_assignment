@@ -24,7 +24,8 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         instructions=(
             "Para preguntas generales como 'qué tareas pendientes tengo', usa list_assignments(mode='upcoming', limit=5). "
             "Responde 'Estas son las tareas pendientes' y una única tabla de hasta cinco filas con Tarea, Materia y Cierre (fecha y hora). No abras tareas ni busques anexos para elaborar esta lista. "
-            "Usa response_markdown del resultado. No muestres vencidas, actividades aún no abiertas, totales globales ni grupos por urgencia. "
+            "Usa response_markdown del resultado; conserva due_display con el tiempo restante entre paréntesis en cada cierre. "
+            "No muestres vencidas, actividades aún no abiertas, totales globales ni grupos por urgencia. "
             "Usa list_all_assignments(complete_review=true) SOLO si el usuario pide explícitamente todas las materias, un total o una revisión completa. "
             "Consulta Moodle con las credenciales locales. Usa configuration_status para verificar "
             "la configuración, check_moodle_connection para comprobar el acceso y list_assignments "
@@ -98,7 +99,8 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         tasks, errors = collect_assignments(config(), mode=mode, limit=limit,
                                            only_pending=only_pending, refresh=refresh, summary_only=True, stats=stats)
         assignments = [task for task in tasks if not only_pending or is_pending(task)]
-        now = datetime.now().isoformat()
+        checked_at = datetime.now()
+        now = checked_at.isoformat()
         pending = [task for task in assignments if is_pending(task)]
         result = {
             "checked_at": datetime.now().astimezone().isoformat(),
@@ -116,11 +118,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "errors": [safe_error(RuntimeError(error)) for error in errors],
             "details_loaded": False,
             "review_scope": "all_visible_courses" if mode == "all" else mode,
-            "assignments": [{key: value for key, value in asdict(task).items()
-                             if key not in ("content", "attachments")} for task in assignments],
+            "assignments": [dict({key: value for key, value in asdict(task).items()
+                                  if key not in ("content", "attachments")},
+                                 due_display=deadline_display(task, checked_at)) for task in assignments],
         }
         if mode in ("upcoming", "recent"):
-            result["response_markdown"] = pending_table(assignments)
+            result["response_markdown"] = pending_table(assignments, now=checked_at)
         return result
 
     @server.tool(annotations=readonly, structured_output=True)
@@ -174,7 +177,32 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     return server
 
 
-def pending_table(tasks: list[Assignment]) -> str:
+def deadline_display(task: Assignment, now: datetime) -> str:
+    if not task.due_at:
+        return task.due_date
+    due = datetime.fromisoformat(task.due_at)
+    seconds = (due - now).total_seconds()
+    if seconds < 0:
+        remaining = "plazo vencido"
+    elif seconds == 0:
+        remaining = "vence ahora"
+    elif seconds < 60:
+        remaining = "queda menos de 1 minuto"
+    else:
+        minutes = int(seconds // 60)
+        days, minutes = divmod(minutes, 24 * 60)
+        hours, minutes = divmod(minutes, 60)
+        if days:
+            remaining = f"quedan {days} {'día' if days == 1 else 'días'} y {hours} {'hora' if hours == 1 else 'horas'}"
+        elif hours:
+            remaining = f"{'queda' if hours == 1 else 'quedan'} {hours} {'hora' if hours == 1 else 'horas'}"
+        else:
+            remaining = f"{'queda' if minutes == 1 else 'quedan'} {minutes} {'minuto' if minutes == 1 else 'minutos'}"
+    return f"{due:%d/%m/%Y %H:%M} ({remaining})"
+
+
+def pending_table(tasks: list[Assignment], *, now: datetime | None = None) -> str:
+    now = now or datetime.now()
     def cell(value: str) -> str:
         return " ".join(value.split()).replace("\\", "\\\\").replace("|", "\\|").replace("[", "\\[").replace("]", "\\]")
 
@@ -183,7 +211,7 @@ def pending_table(tasks: list[Assignment]) -> str:
     for task in tasks:
         course = re.sub(r"^[A-Z]\s*--\s*", "", task.course)
         course = re.split(r"\s*/\s*SOFTWARE\b|--\d", course, maxsplit=1, flags=re.I)[0]
-        due = datetime.fromisoformat(task.due_at).strftime("%d/%m/%Y %H:%M") if task.due_at else task.due_date
+        due = deadline_display(task, now)
         rows.append(f"| [{cell(task.title)}]({task.url}) | {cell(course) or 'Sin identificar'} | {cell(due)} |")
     return "\n".join(rows)
 

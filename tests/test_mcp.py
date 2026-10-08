@@ -75,7 +75,8 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 markdown = result.structured_content['response_markdown']
                 self.assertTrue(markdown.startswith('Estas son las tareas pendientes\n\n'))
                 self.assertIn('| Tarea | Materia | Cierre (fecha y hora) |', markdown)
-                self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 |', markdown)
+                self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 (', markdown)
+                self.assertIn(result.structured_content['assignments'][0]['due_display'], markdown)
                 self.assertNotIn('1208706', markdown)
                 self.assertNotIn('Anexos', markdown)
                 self.assertFalse(result.structured_content['details_loaded'])
