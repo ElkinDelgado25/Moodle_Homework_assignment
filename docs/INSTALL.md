@@ -53,10 +53,11 @@ Cuando ya tienes una cuenta completa guardada, aparece primero este menú:
   1. Cambiar credenciales
   2. Configurar otro agente
   3. Salir
-Selecciona una opción (1-3):
+  4. Validar cuenta
+Selecciona una opción (1-4):
 ```
 
-La opción **1** pide los nuevos datos, comprueba el acceso y actualiza la cuenta que comparten los agentes registrados; conserva la dirección de Moodle guardada, salvo que indiques otra con `--url`. No vuelve a pedir que elijas un agente. La opción **2** abre el menú de agentes utilizando la cuenta guardada, sin pedir usuario ni contraseña. La opción **3** termina sin modificar tus credenciales ni registros MCP. En la primera instalación, o si faltan datos de la cuenta, comienza directamente con las preguntas de cuenta y agente:
+La opción **1** pide los nuevos datos, comprueba el acceso y actualiza la cuenta que comparten los agentes registrados; conserva la dirección de Moodle guardada, salvo que indiques otra con `--url`. No vuelve a pedir que elijas un agente. La opción **2** abre el menú de agentes utilizando la cuenta guardada, sin pedir usuario ni contraseña. La opción **3** termina sin modificar tus credenciales ni registros MCP. La opción **4**, **Validar cuenta**, intenta iniciar sesión con la cuenta guardada y muestra **Conectado** si Moodle acepta el acceso, o **Con problemas** si falla. Usa la dirección y las credenciales guardadas, sin modificarlas ni pedir que configures un agente. En la primera instalación, o si faltan datos de la cuenta, comienza directamente con las preguntas de cuenta y agente:
 
 1. **Cuenta de Moodle:** pide usuario o correo y contraseña oculta, comprueba el formato del usuario e intenta iniciar sesión con una animación de espera. Si Moodle rechaza la cuenta, permite corregirla hasta tres veces y no guarda las credenciales rechazadas. Si el servidor devuelve 502 u otro error 5xx, o tarda demasiado en responder, guarda la cuenta antes de abrir el menú de agentes y vuelve a mostrar la portada con **Con problemas**. Informa que la cuenta está guardada y su validación está pendiente; puedes continuar la instalación. La cuenta se conserva incluso si cancelas en el menú de agentes. Cuando el servidor vuelva a responder, la próxima consulta intentará iniciar sesión con esa cuenta; no hay reintentos automáticos permanentes en segundo plano.
 2. **Agente:** pide seleccionar Codex, Claude Code, Google Antigravity o Copilot en VS Code. Al abrir el asistente y en este menú, muestra cuáles se detectan en el equipo y cuáles ya tienen **Moodle configurado**. Registra automáticamente el MCP en la configuración personal del agente, conservando sus otros servidores y ajustes.

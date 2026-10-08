@@ -102,10 +102,10 @@ def ask_agent() -> str:
 def ask_setup_action() -> str:
     show_setup_menu()
     while True:
-        choice = input("Selecciona una opción (1-3): ").strip()
-        if choice in ("1", "2", "3"):
+        choice = input("Selecciona una opción (1-4): ").strip()
+        if choice in ("1", "2", "3", "4"):
             return choice
-        print("Selecciona un número entre 1 y 3.")
+        print("Selecciona un número entre 1 y 4.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -135,6 +135,11 @@ def main(argv: list[str] | None = None) -> None:
                 choice = ask_setup_action()
                 if choice == "3":
                     print("Hasta luego. Tu configuración se conserva.")
+                    return
+                if choice == "4":
+                    from .status import main as validate_account
+
+                    validate_account(["--env-file", str(env_file)])
                     return
                 connect_only = choice == "2"
                 edit_only = choice == "1"

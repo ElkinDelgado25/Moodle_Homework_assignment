@@ -6,6 +6,8 @@ from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import load_config
 from moodle_tasks.setup import main, valid_username
@@ -13,6 +15,46 @@ from moodle_tasks.storage import save_credentials
 
 
 class SetupTests(unittest.TestCase):
+    def test_validate_saved_account_preserves_credentials_and_agents(self):
+        failures = (
+            None,
+            MoodleAuthenticationError("Credenciales rechazadas"),
+            MoodleHTTPError(502, "https://custom.moodle.test"),
+            PlaywrightTimeoutError("Moodle tardó demasiado"),
+            RuntimeError("Error con saved-password"),
+        )
+        for failure in failures:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = root / "account/credentials.env"
+                save_credentials(path, "https://custom.moodle.test", "saved", "saved-password")
+                before = path.read_bytes()
+                agent_path = root / "agent.json"
+                agent_path.write_text('{"existing": true}')
+                agent_before = agent_path.read_bytes()
+                output = io.StringIO()
+                with patch("moodle_tasks.setup.prepare_browser"), patch("builtins.input", return_value="4"), patch.dict(os.environ, {}, clear=True), patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.ask_agent") as agent, patch("moodle_tasks.setup.register_agent") as register, patch("moodle_tasks.status.verify_credentials", side_effect=failure) as verify, redirect_stdout(output):
+                    arguments = ["--config-dir", str(path.parent), "--agent-config", str(agent_path)]
+                    if failure:
+                        with self.assertRaises(SystemExit) as caught:
+                            main(arguments)
+                        self.assertEqual(caught.exception.code, 1)
+                    else:
+                        main(arguments)
+                account.assert_not_called()
+                agent.assert_not_called()
+                register.assert_not_called()
+                verify.assert_called_once()
+                config = verify.call_args.args[0]
+                self.assertEqual(config.base_url, "https://custom.moodle.test")
+                self.assertEqual(config.username, "saved")
+                self.assertEqual(config.password, "saved-password")
+                self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(agent_path.read_bytes(), agent_before)
+                self.assertNotIn("saved-password", output.getvalue())
+                self.assertIn("Validar cuenta", output.getvalue())
+                self.assertIn("Con problemas" if failure else "Conectado", output.getvalue())
+
     def test_exit_from_saved_account_menu_preserves_credentials_and_agents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

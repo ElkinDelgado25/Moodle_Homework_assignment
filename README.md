@@ -20,7 +20,7 @@ mcp-moodle run
 
 El asistente pide tu cuenta, intenta validarla y te permite seleccionar **Codex, Claude Code, Google Antigravity o Copilot**. Prepara Chromium y configura el agente para tu usuario, sin editar archivos a mano. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub para personas con acceso al repositorio privado.
 
-`mcp-moodle run` muestra el panel de Aula Moodle, con el logo en bloques rojos, tu cuenta y el estado. Usa `mcp-moodle status` para comprobar la conexión de la cuenta guardada.
+`mcp-moodle run` muestra el panel de Aula Moodle, con el logo en bloques rojos, tu cuenta y el estado. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso sin volver a introducir tus credenciales. También puedes usar `mcp-moodle status`.
 
 ## Ejecutar desde un repositorio clonado
 
