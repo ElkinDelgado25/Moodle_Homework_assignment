@@ -116,6 +116,26 @@ def login(page: Page, config: Config) -> None:
         raise RuntimeError("No se pudo confirmar una sesión iniciada en Moodle.")
 
 
+def submit_microsoft_password(page: Page, password_value: str) -> None:
+    """Espera la etapa de contraseña y actualiza el formulario con teclado."""
+    password = page.locator('input[name="passwd"]')
+    submit = page.get_by_role("button", name=re.compile(r"^(Sign in|Iniciar sesión|Acceder)$", re.I))
+    try:
+        password.wait_for(state="visible", timeout=30_000)
+        submit.wait_for(state="visible", timeout=30_000)
+        for _ in range(2):
+            password.fill("")
+            password.press_sequentially(password_value, delay=40)
+            password.press("Tab")
+            if password.input_value() == password_value:
+                submit.click()
+                return
+    except Exception:
+        # Los errores de escritura de Playwright pueden incluir el argumento.
+        raise RuntimeError("No se pudo completar el campo de contraseña de Microsoft. El formulario no terminó de estar disponible.") from None
+    raise RuntimeError("Microsoft vació el campo de contraseña antes de enviarlo. No se pudo completar el formulario.")
+
+
 def login_microsoft(page: Page, config: Config) -> None:
     """Acceso institucional observado en ULEAM; no resuelve códigos ni MFA."""
     page.get_by_role("link", name="Microsoft 365 Uleam", exact=True).click()
@@ -123,21 +143,23 @@ def login_microsoft(page: Page, config: Config) -> None:
     email.wait_for(state="visible", timeout=30_000)
     email.fill(config.username)
     page.locator("#idSIButton9").click()
-    password = page.locator('input[name="passwd"]')
-    password.wait_for(state="visible", timeout=30_000)
-    # La pantalla de Microsoft actualiza sus campos después de la transición.
-    page.wait_for_timeout(1500)
-    password.fill(config.password)
-    password.press("Tab")
-    page.locator("#idSIButton9").click()
+    submit_microsoft_password(page, config.password)
     selected_again = False
+    retried_empty_field = False
     for _ in range(120):
         if page.url.startswith(config.base_url + "/") and page.locator("a[href*='/login/logout.php']").count():
             return
         for selector in ("#passwordError", "#usernameError", "#errorText"):
             error = page.locator(selector).first
             if error.count() and error.is_visible() and clean_text(error.inner_text()):
-                raise MoodleAuthenticationError("Microsoft no aceptó el acceso: " + clean_text(error.inner_text()))
+                message = clean_text(error.inner_text())
+                if re.search(r"please enter your password|(?:escriba|introduzca|ingresa|ingrese) (?:su |tu |la )?contraseña", message, re.I):
+                    if not retried_empty_field:
+                        retried_empty_field = True
+                        submit_microsoft_password(page, config.password)
+                        break
+                    raise RuntimeError("Microsoft sigue detectando el campo de contraseña vacío. Falló el envío del formulario; no se confirmó el acceso.")
+                raise MoodleAuthenticationError("Microsoft no aceptó el acceso: " + message)
         alternate = page.get_by_role("link", name=re.compile(
             r"Use a different account|Usar una cuenta diferente|Utilizar otra cuenta", re.I))
         if not selected_again and alternate.count() and alternate.first.is_visible():
