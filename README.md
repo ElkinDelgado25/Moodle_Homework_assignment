@@ -102,6 +102,8 @@ En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(c
 
 Pedir al agente «descarga los anexos en Documentos y resuelve esta tarea» autoriza ese trabajo. El cliente puede exigir permisos para herramientas que escriben archivos; el MCP declara la descarga como escritura local y no cambia las políticas de aprobación del cliente. Reinicia el MCP después de actualizar para que el agente descubra la herramienta nueva.
 
+Al resolver una tarea documental, el agente entrega por defecto **solo DOCX y PDF**, con el mismo nombre base. Usa **`get_document_template()`** para obtener la portada ULEAM con logo, numeración y campos de Materia, Docente, Estudiantes, Carrera, Curso y Año. El desarrollo empieza en la segunda página. Los datos personales se pueden conservar en un perfil local; la plantilla pública tiene campos vacíos. Las fuentes, conversiones y capturas de revisión se guardan como temporales. Consulta [la política de documentos y portada](docs/DOCUMENT_OUTPUT.md).
+
 La vista superficial ordena por cierre; `recent` requiere datos de apertura que no aparecen en los listados y devuelve una explicación para usar `upcoming`. El motor interno conserva la lectura detallada para usos explícitos de desarrollo, pero las herramientas de listado y la terminal usan `summary_only=True`.
 
 Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
