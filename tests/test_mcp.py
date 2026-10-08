@@ -69,12 +69,26 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         data = result.structured_content
         self.assertEqual(data["local_defaults"], {})
         self.assertEqual(data["output_formats"], ["docx", "pdf"])
+        self.assertEqual(data["formatting"]["font"], "Times New Roman")
+        self.assertEqual(data["formatting"]["font_size_pt"], 12)
+        self.assertEqual(data["formatting"]["line_spacing"], 2)
         self.assertTrue(Path(data["logo_path"]).is_file())
         with ZipFile(data["template_path"]) as document:
             xml = document.read("word/document.xml").decode()
             for field in data["fields"]:
                 self.assertIn("{{" + field + "}}", xml)
             self.assertIn("Universidad Laica", xml)
+            from xml.etree import ElementTree as ET
+            ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+            root = ET.fromstring(xml)
+            margins = root.find(".//w:pgMar", ns)
+            for edge in ("top", "bottom", "left", "right"):
+                self.assertEqual(margins.get("{" + ns["w"] + "}" + edge), "1440")
+            self.assertEqual(root.findall(".//w:pgBorders", ns), [])
+            styles = ET.fromstring(document.read("word/styles.xml"))
+            normal = styles.find("w:style[@w:styleId='Normal']", ns)
+            self.assertEqual(normal.find("w:rPr/w:rFonts", ns).get("{" + ns["w"] + "}ascii"), "Times New Roman")
+            self.assertEqual(normal.find("w:pPr/w:spacing", ns).get("{" + ns["w"] + "}line"), "480")
 
     async def test_cover_profile_is_local_filtered_and_validated(self):
         with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.server.user_config_dir", return_value=Path(directory)):

@@ -52,7 +52,11 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Guarda conversiones, fuentes e imágenes de revisión en una carpeta temporal fuera de la carpeta de entrega. "
             "Comprueba visualmente el DOCX y el PDF antes de entregarlos y presenta solo los dos enlaces finales. "
             "Antes de crear esos documentos usa get_document_template para obtener la portada editable ULEAM. "
-            "Conserva su logo arriba a la izquierda, número de página arriba a la derecha, tipografía Arial negra, "
+            "Aplica APA 7 al desarrollo: Times New Roman de 12 puntos, márgenes de 2,54 cm, interlineado doble, "
+            "texto alineado a la izquierda, sangría inicial de 1,27 cm y sin espacio extra entre párrafos. "
+            "Numera todas las páginas arriba a la derecha, desde la portada. No añadas bordes de página ni adornos. "
+            "Usa encabezados APA, citas autor-fecha y referencias verificadas en orden alfabético con sangría francesa de 1,27 cm; no inventes fuentes. "
+            "Conserva la portada institucional solicitada como adaptación a APA, su logo arriba a la izquierda, tipografía Times New Roman negra, "
             "textos centrados y distribución de Materia, Docente, Estudiantes, Carrera, Curso y Año. "
             "Completa los campos con los datos de la tarea y los que haya proporcionado el usuario; "
             "no inventes docentes, estudiantes ni otros datos faltantes. Empieza el desarrollo en la página siguiente. "
@@ -111,6 +115,11 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         return {"template_path": str(assets / "academic-cover.docx"),
                 "logo_path": str(assets / "uleam-logo.png"),
                 "output_formats": ["docx", "pdf"],
+                "formatting": {"standard": "APA 7", "font": "Times New Roman", "font_size_pt": 12,
+                               "margins_cm": 2.54, "line_spacing": 2, "first_line_indent_cm": 1.27,
+                               "alignment": "left", "paragraph_spacing_pt": 0,
+                               "references_hanging_indent_cm": 1.27,
+                               "cover": "Portada institucional ULEAM solicitada; adaptación de la portada APA estudiantil."},
                 "fields": fields,
                 "local_defaults": defaults,
                 "field_syntax": "{{field}}",
