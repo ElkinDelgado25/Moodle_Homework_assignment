@@ -31,6 +31,8 @@ La portada conserva el logo y los bloques institucionales que pidió el usuario.
 
 El perfil opcional `document_profile.json` se guarda junto a `credentials.env` en la configuración personal. Es un objeto JSON con los campos anteriores y valores de texto. El servidor solo devuelve esos campos; rechaza perfiles mal formados. Los nombres personales no se incorporan a la plantilla pública del paquete.
 
+Los nombres, docentes, materias y semestres concretos pertenecen al perfil local o al documento de cada tarea; no se versionan en la plantilla. Git excluye `document_profile.json`, sus variantes `document_profile.*.json` y las carpetas locales `output/` y `private/`. Si se usa el perfil, sus datos deben confirmarse para la tarea actual: una materia o un semestre anterior no se trasladan automáticamente a otra tarea. La plantilla del paquete conserva únicamente los marcadores editables.
+
 La plantilla y el logo están incluidos en `src/moodle_tasks/assets/`. Para reconstruir la plantilla en desarrollo, ejecuta `scripts/build_document_template.py` en un entorno con `python-docx`. Esta dependencia no se necesita para consultar la plantilla por MCP.
 
 ## Alcance
