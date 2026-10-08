@@ -54,7 +54,12 @@ class SearchTests(unittest.TestCase):
         return f"{date.day} de {months[date.month - 1]} de {date.year}, {date:%H:%M}"
 
     def event(self, identifier):
-        return f'<div data-region="event-list-item"><a href="/mod/assign/view.php?id={identifier}">Tarea {identifier}</a><a href="/mod/assign/view.php?id={identifier}&action=editsubmission">Agregar entrega</a></div>'
+        task = self.tasks[identifier]
+        action = (f'<a href="/mod/assign/view.php?id={identifier}&action=editsubmission">Agregar entrega</a>'
+                  if task['open'] <= 0 and task['grade'] == '-' and task['status'] != 'Enviado para calificar' else '')
+        return (f'<div data-region="event-list-item"><div class="event-name-container">'
+                f'<a aria-label="Pendiente para {self.date(task["due"])}" href="/mod/assign/view.php?id={identifier}">Tarea {identifier}</a>'
+                f'<small>Vencimiento de Tarea · Materia A</small></div>{action}</div>')
 
     def respond(self, route):
         url = route.request.url
@@ -92,6 +97,29 @@ class SearchTests(unittest.TestCase):
         tasks, errors = search_assignments(self.page, self.config, stats=stats, **kwargs)
         self.assertEqual(errors, [])
         return tasks, stats
+
+    def test_surface_list_reads_no_activity_or_attachment_and_skips_future_tasks(self):
+        self.timeline_ids = (1, 2, 5, 6, 3)
+        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
+            tasks, stats = self.query(mode='upcoming', limit=2, summary_only=True)
+        self.assertEqual([task.url.rsplit('=', 1)[1] for task in tasks], ['3', '4'])
+        self.assertEqual(stats['detail_pages_read'], 0)
+        self.assertEqual(stats['dashboard_load_more'], 1)
+        self.assertTrue(all(task.course == 'Materia A' and task.due_at for task in tasks))
+        self.assertTrue(all(not task.content and not task.attachments for task in tasks))
+        self.assertFalse(any('/mod/assign/view.php' in url or '/pluginfile.php' in url for url in self.visited))
+        # Profundizar se hace solo en la actividad seleccionada.
+        detail = read_assignment(self.page, tasks[0].url)
+        self.assertIn('Instrucciones', detail.content)
+        self.assertEqual(detail.attachments[0]['name'], 'guia.pdf')
+
+    def test_surface_complete_search_uses_only_indexes_and_preserves_pending_count(self):
+        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
+            tasks, stats = self.query(mode='all', limit=None, summary_only=True)
+        self.assertEqual([task.title for task in tasks], ['Vencida', 'Pendiente reciente', 'Pendiente anterior', 'Aún no abierta'])
+        self.assertEqual(stats['index_pages_read'], 2)
+        self.assertEqual(stats['detail_pages_read'], 0)
+        self.assertFalse(any('/mod/assign/view.php' in url for url in self.visited))
 
     def test_quick_search_paginates_deduplicates_and_stops_after_matching_limit(self):
         tasks, stats = self.query(mode="upcoming", limit=2)

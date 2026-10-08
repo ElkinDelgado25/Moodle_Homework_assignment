@@ -73,13 +73,22 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
         return
     seen = set()
     for _ in range(100):
-        links = region.locator("[data-region='event-list-item'] a[href*='/mod/assign/view.php']").evaluate_all(
-            "aa => aa.map(a => ({url:a.href, title:a.innerText}))")
+        links = region.locator("[data-region='event-list-item']").evaluate_all("""events => events.flatMap(e => {
+            const a = e.querySelector('a[href*="/mod/assign/view.php"]');
+            if (!a) return [];
+            const action = Array.from(e.querySelectorAll('a')).some(link =>
+                /[?&]action=editsubmission(?:&|$)/.test(link.href) &&
+                /Agregar entrega|Add submission/i.test(link.textContent));
+            return [{url:a.href, title:a.innerText.trim(),
+                deadline:a.getAttribute('aria-label') || '',
+                course:e.querySelector('.event-name-container > small')?.innerText.split('·').slice(1).join('·').trim() || '',
+                available:action}];
+        })""")
         for link in links:
             url = assignment_url(link["url"], config.base_url)
             if url and url not in seen:
                 seen.add(url)
-                yield {"url": url, "title": link["title"], "course": "", "row": None}
+                yield dict(link, url=url, row=None)
         more = region.get_by_role("button", name=re.compile(r"Mostrar más actividades|Show more activities", re.I))
         if not more.count() or not more.first.is_visible() or more.first.is_disabled():
             return
@@ -160,10 +169,12 @@ def cache_path(config: Config) -> Path:
 
 
 def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", limit: int | None = 5,
-                       only_pending: bool = True, refresh: bool = False,
+                       only_pending: bool = True, refresh: bool = False, summary_only: bool = False,
                        stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
     if mode not in MODES or limit is not None and limit < 1:
         raise ValueError("Modo o límite de consulta inválido.")
+    if summary_only and mode == "recent":
+        raise ValueError("La vista superficial no consulta aperturas. Usa upcoming para ordenar por fecha y hora de cierre.")
     stats = stats if stats is not None else {}
     stats.update(mode=mode, source="course_indexes", dashboard_pages_read=0, dashboard_load_more=0,
                  index_pages_read=0, detail_pages_read=0, cached_details=0, candidates_checked=0)
@@ -173,7 +184,7 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
     now = datetime.now()
     cache_file = cache_path(config)
     try:
-        cache = json.loads(cache_file.read_text())
+        cache = {"version": 1, "entries": {}} if summary_only else json.loads(cache_file.read_text())
         if not isinstance(cache, dict) or cache.get("version") != 1:
             cache = {"version": 1, "entries": {}}
     except (OSError, ValueError):
@@ -197,12 +208,25 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             # La caché solo se usa con un índice de entregas recién consultado.
             cached_task = None
             try:
-                if (not refresh and fingerprint and entry.get("row") == fingerprint
+                if (not summary_only and not refresh and fingerprint and entry.get("row") == fingerprint
                         and 0 <= time.time() - entry.get("time", 0) < CACHE_SECONDS):
                     cached_task = Assignment(**entry["task"])
             except (TypeError, ValueError, KeyError):
                 pass
-            if cached_task is not None:
+            if summary_only:
+                cells = candidate.get("cells", [])
+                due_text = candidate.get("deadline") or (cells[2] if len(cells) >= 3 else "")
+                due_at = parse_moodle_date(due_text)
+                available = candidate.get("available")
+                if mode in ("upcoming", "recent") and available is not True:
+                    if available is None:
+                        errors.append(f"El índice no confirma si está abierta: {candidate['title']}.")
+                    return
+                status = cells[-2] if len(cells) >= 5 else "Disponible para entregar" if available else "Estado desconocido"
+                task = Assignment(candidate["title"], url, "", due_text, status,
+                                  submission_state(status) if cells else False if available else None,
+                                  course=candidate.get("course", ""), due_at=due_at)
+            elif cached_task is not None:
                 task = cached_task
                 stats["cached_details"] += 1
             else:
@@ -247,13 +271,15 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
     else:
         tasks.sort(key=lambda task: task.due_at or "9999")
     stats["matched_count"] = len(tasks)
+    stats["summary_only"] = summary_only
     stats["coverage"] = (
         "Línea de tiempo con su filtro actual; no incluye necesariamente tareas vencidas, sin fecha o fuera del filtro."
         if stats["source"] == "dashboard" else
         "Índices de tareas de los cursos visibles en Mis cursos; otras actividades o cursos ocultos pueden quedar fuera."
     )
     try:
-        atomic_write(cache_file, json.dumps(cache, ensure_ascii=False))
+        if not summary_only:
+            atomic_write(cache_file, json.dumps(cache, ensure_ascii=False))
     except OSError:
         errors.append("No se pudo actualizar la caché local; la consulta de Moodle sí se realizó.")
     return tasks[:limit] if limit is not None else tasks, errors

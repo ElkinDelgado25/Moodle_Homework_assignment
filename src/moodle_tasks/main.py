@@ -259,7 +259,7 @@ def read_assignment(page: Page, url: str) -> Assignment:
 
 
 def collect_assignments(config: Config, *, mode: str = "all", limit: int | None = None,
-                        only_pending: bool = False, refresh: bool = False,
+                        only_pending: bool = False, refresh: bool = False, summary_only: bool = False,
                         stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
     from .search import search_assignments
 
@@ -271,7 +271,7 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
             page.set_default_timeout(15_000)
             login(page, config)
             return search_assignments(page, config, mode=mode, limit=limit,
-                                      only_pending=only_pending, refresh=refresh, stats=stats)
+                                      only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats)
         finally:
             browser.close()
 
