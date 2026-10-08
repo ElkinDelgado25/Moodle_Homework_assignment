@@ -276,8 +276,13 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
             browser.close()
 
 
-def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None) -> None:
+def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None,
+                summary_only: bool = False) -> None:
     pending = [task for task in tasks if is_pending(task)]
+    if summary_only and pending:
+        from .server import pending_table
+        print(pending_table(pending))
+        return
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
     reviewed_count = len(tasks) if reviewed_count is None else reviewed_count
@@ -319,7 +324,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Consulta tareas de Moodle.")
     parser.add_argument("--mode", choices=MODES, default="upcoming")
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--refresh", action="store_true", help="Releer los detalles sin usar la caché")
+    parser.add_argument("--refresh", action="store_true", help="Actualizar la consulta de Moodle")
     args = parser.parse_args(argv)
     if args.limit is not None and args.limit < 1:
         parser.error("El límite debe ser mayor que cero.")
@@ -328,10 +333,10 @@ def main(argv: list[str] | None = None) -> None:
         config = load_config()
         stats = {}
         tasks, errors = collect_assignments(config, mode=args.mode, limit=limit,
-                                          only_pending=True, refresh=args.refresh, stats=stats)
+                                          only_pending=True, refresh=args.refresh, summary_only=True, stats=stats)
         for error in errors:
             print(error, file=sys.stderr)
-        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"))
+        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"), summary_only=True)
         print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
         print(f"\n❌ No fue posible consultar Moodle: {error}", file=sys.stderr)

@@ -74,9 +74,13 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.call_tool('list_assignments')
                 markdown = result.structured_content['response_markdown']
                 self.assertTrue(markdown.startswith('Estas son las tareas pendientes\n\n'))
-                self.assertIn('| Tarea | Materia | Fecha límite | Anexos |', markdown)
-                self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 | Sin anexos', markdown)
+                self.assertIn('| Tarea | Materia | Cierre (fecha y hora) |', markdown)
+                self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 |', markdown)
                 self.assertNotIn('1208706', markdown)
+                self.assertNotIn('Anexos', markdown)
+                self.assertFalse(result.structured_content['details_loaded'])
+                self.assertNotIn('attachments', result.structured_content['assignments'][0])
+                self.assertNotIn('content', result.structured_content['assignments'][0])
                 complete = await client.call_tool('list_all_assignments')
                 self.assertNotIn('response_markdown', complete.structured_content)
 
@@ -109,7 +113,8 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.call_tool("list_all_assignments")
                 data = result.structured_content
                 self.assertEqual(data['pending_count'], 2)
-                self.assertEqual(data['not_yet_open_count'], 1)
+                self.assertIsNone(data['not_yet_open_count'])
+                self.assertFalse(data['availability_confirmed'])
                 self.assertEqual([task['title'] for task in data['assignments']], ['Pendiente', 'No abierta'])
 
     async def test_complete_review_can_report_zero_pending_after_checking_activities(self):
