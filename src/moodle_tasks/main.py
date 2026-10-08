@@ -1,7 +1,7 @@
 import os
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -29,6 +29,16 @@ class Assignment:
     due_date: str
     status: str
     submitted: bool | None
+    course: str = ""
+    attachments: list[dict[str, str]] = field(default_factory=list)
+    opens_at: str | None = None
+    due_at: str | None = None
+    grade: str | None = None
+    requires_submission: bool | None = None
+
+
+def is_pending(task: Assignment) -> bool:
+    return task.submitted is not True and task.requires_submission is not False
 
 
 ENV_FILE = default_env_file()
@@ -61,6 +71,8 @@ def clean_text(value: str | None) -> str:
 
 def first_text(page: Page, selectors: str) -> str:
     locator = page.locator(selectors).first
+    if not locator.count():
+        return ""
     try:
         return clean_text(locator.text_content())
     except PlaywrightTimeoutError:
@@ -170,7 +182,7 @@ def find_assignment_links(page: Page, config: Config) -> list[str]:
 
 
 def submission_state(status: str) -> bool | None:
-    if re.search(r"not submitted|no (?:se ha )?(?:entregad|enviado)|sin entrega|borrador|draft|no attempt|ning[uú]n env[ií]o", status, re.IGNORECASE):
+    if re.search(r"not submitted|no (?:se ha )?(?:entregad|enviado)|sin entrega|borrador|draft|no attempt|ning[uú]n env[ií]o|todav[ií]a no se han realizado env[ií]os", status, re.IGNORECASE):
         return False
     if re.search(r"submitted for grading|entregad[oa] para|enviad[oa] para|^submitted$|^entregad[oa]$|^enviad[oa]$", status, re.IGNORECASE):
         return True
@@ -182,12 +194,12 @@ def read_assignment(page: Page, url: str) -> Assignment:
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
     content = first_text(
         page,
-        ".activity-description, .mod_introbox, .box.generalbox, "
+        ".activity-description, .mod_introbox, #intro, .box.generalbox, "
         "[data-region='activity-information']",
     ) or "No se encontró una descripción visible."
     due_date = first_text(
         page,
-        "[data-region='activity-information'] .description, .activity-dates, .assign-dates",
+        ".activity-dates, .assign-dates, [data-region='activity-information'] .description",
     ) or "Fecha de vencimiento no indicada."
     status = first_text(
         page,
@@ -200,30 +212,49 @@ def read_assignment(page: Page, url: str) -> Assignment:
             submission = clean_text(row.locator("td").last.text_content())
             break
     submitted = submission_state(submission or status)
-    return Assignment(title, page.url, content, due_date, status, submitted)
+    from .search import parse_moodle_date
+
+    region = page.locator("#region-main, main").first
+    raw = region.inner_text() if region.count() else ""
+    date_region = page.locator(".activity-dates, .assign-dates").first
+    dates = date_region.inner_text() if date_region.count() else raw
+    opening = re.search(r"(?:Apertura|Opened|Opens):\s*([^\n]+)", dates, re.I)
+    closing = re.search(r"(?:Cierre|Due(?: date)?|Fecha de entrega):\s*([^\n]+)", dates, re.I)
+    # inner_text conserva las filas de la tabla de calificaciones.
+    grade_match = re.search(r"(?:^|\n)(?:Calificación|Grade)\s+([\d.,]+)\s*/\s*[\d.,]+", raw, re.I)
+    grade = grade_match.group(1) if grade_match else None
+    no_upload = bool(re.search(r"no deben subir|no (?:se )?requiere (?:subir|entrega)|do not (?:submit|upload)", content, re.I))
+    attachments = page.locator(
+        "#region-main a[href*='/mod_assign/introattachment/'], #intro a[href*='pluginfile.php'], "
+        ".activity-description a[href*='pluginfile.php'], .mod_introbox a[href*='pluginfile.php']"
+    ).evaluate_all("aa => aa.map(a => ({name: (a.innerText || a.getAttribute('title') || '').trim(), url: a.href}))")
+    course = first_text(page, ".breadcrumb a[href*='/course/view.php']")
+    return Assignment(title, page.url, content, closing.group(1) if closing else due_date, status, submitted,
+                      course=course, attachments=attachments,
+                      opens_at=parse_moodle_date(opening.group(1)) if opening else None,
+                      due_at=parse_moodle_date(closing.group(1)) if closing else None,
+                      grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None)
 
 
-def collect_assignments(config: Config) -> tuple[list[Assignment], list[str]]:
-    tasks: list[Assignment] = []
-    errors: list[str] = []
+def collect_assignments(config: Config, *, mode: str = "all", limit: int | None = None,
+                        only_pending: bool = False, refresh: bool = False,
+                        stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
+    from .search import search_assignments
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=config.headless)
         try:
             page = browser.new_page()
             page.set_default_timeout(15_000)
             login(page, config)
-            for url in find_assignment_links(page, config):
-                try:
-                    tasks.append(read_assignment(page, url))
-                except Exception as error:
-                    errors.append(f"No se pudo leer {url}: {error}")
+            return search_assignments(page, config, mode=mode, limit=limit,
+                                      only_pending=only_pending, refresh=refresh, stats=stats)
         finally:
             browser.close()
-    return tasks, errors
 
 
 def print_tasks(tasks: list[Assignment], incomplete: bool = False) -> None:
-    pending = [task for task in tasks if not task.submitted]
+    pending = [task for task in tasks if is_pending(task)]
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
     print(f"Tareas revisadas: {len(tasks)}")
@@ -242,19 +273,36 @@ def print_tasks(tasks: list[Assignment], incomplete: bool = False) -> None:
     print(f"\n⚠️ Tienes {len(pending)} tarea(s) pendiente(s):\n")
     for index, task in enumerate(pending, start=1):
         print(f"{index}. {task.title}")
+        print(f"   Materia: {task.course or 'No identificada'}")
         print(f"   Vence: {task.due_date}")
         print(f"   Estado: {task.status}")
         print(f"   Contenido: {task.content}")
+        for attachment in task.attachments:
+            print(f"   Anexo: {attachment['name']} — {attachment['url']}")
         print(f"   Enlace: {task.url}\n")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+    from .search import MODES
+
+    parser = argparse.ArgumentParser(description="Consulta tareas de Moodle.")
+    parser.add_argument("--mode", choices=MODES, default="upcoming")
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--refresh", action="store_true", help="Releer los detalles sin usar la caché")
+    args = parser.parse_args(argv)
+    if args.limit is not None and args.limit < 1:
+        parser.error("El límite debe ser mayor que cero.")
+    limit = args.limit if args.limit is not None else None if args.mode == "all" else 5
     try:
         config = load_config()
-        tasks, errors = collect_assignments(config)
+        stats = {}
+        tasks, errors = collect_assignments(config, mode=args.mode, limit=limit,
+                                          only_pending=True, refresh=args.refresh, stats=stats)
         for error in errors:
             print(error, file=sys.stderr)
         print_tasks(tasks, incomplete=bool(errors))
+        print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
         print(f"\n❌ No fue posible consultar Moodle: {error}", file=sys.stderr)
         raise SystemExit(1) from error
