@@ -5,7 +5,7 @@ import asyncio
 from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -13,7 +13,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 from playwright.sync_api import sync_playwright
 
-from .main import ENV_FILE, collect_assignments, config_values, load_config, login, read_assignment
+from .main import ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError
 
 
@@ -23,7 +23,13 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         instructions=(
             "Consulta Moodle con las credenciales locales. Usa configuration_status para verificar "
             "la configuración, check_moodle_connection para comprobar el acceso y list_assignments "
-            "para consultar tareas. Una lista vacía o una consulta incompleta no demuestra que no "
+            "para consultar las próximas cinco tareas desde la línea de tiempo. "
+            "Para preguntas como cuántas tareas pendientes hay en todas las materias, verificar todo "
+            "o una revisión completa, usa list_all_assignments: recorre los índices de todas las materias visibles. "
+            "list_assignments con mode=recent muestra las abiertas más recientemente y mode=overdue las vencidas. "
+            "Distingue tareas disponibles de actividades que aún no se abren. Una tarea ya calificada "
+            "o que indica no subir documentos no se considera pendiente solo por figurar sin entrega. "
+            "Una lista vacía o una consulta incompleta no demuestra que no "
             "haya tareas pendientes. submitted=null significa estado desconocido. "
             "Si una herramienta informa un error del servidor, explica al usuario: "
             "Por ahora no se pudieron consultar tus tareas porque Moodle tiene un error del servidor. "
@@ -78,22 +84,47 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         """Comprueba que Moodle responde y acepta el inicio de sesión. Distingue errores HTTP y de acceso."""
         return await asyncio.to_thread(check_connection)
 
-    def list_tasks(only_pending: bool) -> dict[str, Any]:
-        tasks, errors = collect_assignments(config())
+    def list_tasks(only_pending: bool, mode: str, limit: int | None, refresh: bool) -> dict[str, Any]:
+        stats = {}
+        tasks, errors = collect_assignments(config(), mode=mode, limit=limit,
+                                           only_pending=only_pending, refresh=refresh, stats=stats)
+        assignments = [task for task in tasks if not only_pending or is_pending(task)]
+        now = datetime.now().isoformat()
+        pending = [task for task in assignments if is_pending(task)]
         return {
             "checked_at": datetime.now().astimezone().isoformat(),
-            "reviewed_count": len(tasks),
+            "reviewed_count": stats.get("candidates_checked", len(tasks)),
             "incomplete": bool(errors) or not tasks,
-            "coverage": "Solo actividades enlazadas desde las páginas y cursos recorridos; no garantiza cubrir todo Moodle.",
+            "coverage": stats.get("coverage", "Solo actividades revisadas; no garantiza cubrir todo Moodle."),
+            "search": stats,
+            "returned_count": len(assignments),
+            "pending_count": len(pending),
+            "not_yet_open_count": sum(bool(task.opens_at and task.opens_at > now) for task in pending),
+            "available_pending_count": sum(not task.opens_at or task.opens_at <= now for task in pending),
+            "uncertain_count": sum(task.submitted is None and task.requires_submission is None for task in pending),
+            "overdue_count": sum(bool(task.due_at and task.due_at < now) for task in pending),
             "errors": [safe_error(RuntimeError(error)) for error in errors],
-            "assignments": [asdict(task) for task in tasks if not only_pending or task.submitted is not True],
+            "assignments": [asdict(task) for task in assignments],
         }
 
     @server.tool(annotations=readonly, structured_output=True)
-    async def list_assignments(only_pending: bool = True) -> dict[str, Any]:
-        """Consulta tareas, con contenido, fecha, estado y enlace. Incluye estados desconocidos entre las posibles pendientes."""
+    async def list_assignments(
+        only_pending: bool = True,
+        mode: Literal["upcoming", "recent", "overdue"] = "upcoming",
+        limit: Annotated[int, Field(ge=1, le=100)] = 5,
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Búsqueda limitada: próximas por vencimiento, recientes por apertura o vencidas. Incluye materia y anexos; no da un total global."""
         try:
-            return await asyncio.to_thread(list_tasks, only_pending)
+            return await asyncio.to_thread(list_tasks, only_pending, mode, limit, refresh)
+        except Exception as error:
+            raise ToolError(safe_error(error)) from None
+
+    @server.tool(annotations=readonly, structured_output=True)
+    async def list_all_assignments(only_pending: bool = True, refresh: bool = False) -> dict[str, Any]:
+        """Revisión completa sin límite de las tareas de todas las materias visibles. Usar para contar pendientes globales; distingue actividades aún no abiertas."""
+        try:
+            return await asyncio.to_thread(list_tasks, only_pending, "all", None, refresh)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 
