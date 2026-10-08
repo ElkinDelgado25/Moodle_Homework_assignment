@@ -40,6 +40,7 @@ class SearchTests(unittest.TestCase):
             5: {"title": "Vencida", "status": "Todavía no se han realizado envíos", "grade": "-", "open": -9, "due": -1},
             6: {"title": "Aún no abierta", "status": "Todavía no se han realizado envíos", "grade": "-", "open": 5, "due": 6},
         }
+        self.timeline_ids = (1, 2, 3)
         self.context.route("**/*", self.respond)
 
     def tearDown(self):
@@ -60,7 +61,7 @@ class SearchTests(unittest.TestCase):
         self.visited.append(url)
         if url.endswith("/my/"):
             more = json.dumps(self.event(4))
-            body = '<div class="block_timeline"><button>Próximos 30 días</button>' + ''.join(self.event(i) for i in (1, 2, 3))
+            body = '<div class="block_timeline"><button>Próximos 30 días</button>' + ''.join(self.event(i) for i in self.timeline_ids)
             body += f'<button onclick=\'this.insertAdjacentHTML("beforebegin", {more}); this.remove()\'>Mostrar más actividades</button></div>'
         elif url.endswith("/my/courses.php"):
             body = '<a href="/course/view.php?id=7">Materia A</a><a href="/course/view.php?id=8">Materia B</a>'
@@ -119,10 +120,31 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(stats['candidates_checked'], 6)
 
     def test_recent_excludes_future_openings_and_overdue_excludes_future_deadlines(self):
-        recent, _ = self.query(mode="recent", limit=2)
+        recent, _ = self.query(mode="recent", limit=5)
         self.assertEqual([task.title for task in recent], ['Pendiente reciente', 'Pendiente anterior'])
         overdue, _ = self.query(mode="overdue", limit=None)
         self.assertEqual([task.title for task in overdue], ['Vencida'])
+
+    def test_upcoming_skips_future_openings_and_expired_tasks_in_index_fallback(self):
+        self.context.unroute('**/*', self.respond)
+
+        def respond(route):
+            if route.request.url.endswith('/my/'):
+                route.fulfill(content_type='text/html', body='<main>Sin línea de tiempo</main>')
+            else:
+                self.respond(route)
+
+        self.context.route('**/*', respond)
+        tasks, stats = self.query(mode='upcoming', limit=5)
+        self.assertEqual([task.title for task in tasks], ['Pendiente reciente', 'Pendiente anterior'])
+        self.assertEqual(stats['source'], 'course_indexes')
+
+    def test_timeline_loads_more_to_replace_a_task_that_is_not_yet_open(self):
+        self.timeline_ids = (6, 3)
+        tasks, stats = self.query(mode='upcoming', limit=2)
+        self.assertEqual([task.url.rsplit('=', 1)[1] for task in tasks], ['3', '4'])
+        self.assertEqual(stats['dashboard_load_more'], 1)
+        self.assertEqual(stats['detail_pages_read'], 3)
 
     def test_cache_reuses_details_but_rechecks_indexes_and_invalidates_changed_rows(self):
         self.query(mode="all", limit=None)

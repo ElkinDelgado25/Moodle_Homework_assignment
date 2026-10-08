@@ -215,11 +215,11 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                 return
             due = datetime.fromisoformat(task.due_at) if task.due_at else None
             opening = datetime.fromisoformat(task.opens_at) if task.opens_at else None
-            if mode == "upcoming" and (due is None or due < now):
+            if mode == "upcoming" and (due is None or due < now or opening is not None and opening > now):
                 return
             if mode == "overdue" and (due is None or due >= now):
                 return
-            if mode == "recent" and (opening is None or opening > now):
+            if mode == "recent" and (opening is None or opening > now or due is not None and due < now):
                 return
             tasks.append(task)
         except Exception as error:
