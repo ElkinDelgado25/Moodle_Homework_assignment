@@ -46,15 +46,18 @@ Y consultar las tareas desde la terminal con:
 uv run mcp-moodle tasks
 ```
 
-Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, confirmando sus estados y anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla. Para otras búsquedas:
+Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, usando el cierre y el botón «Agregar entrega» para confirmar disponibilidad. No abre las actividades ni consulta instrucciones o anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla con **Tarea, Materia y Cierre (fecha y hora)**. Para otras búsquedas:
 
 ```bash
-uv run mcp-moodle tasks --mode recent --limit 5
 uv run mcp-moodle tasks --mode overdue
 uv run mcp-moodle tasks --mode all --refresh
 ```
 
-En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles. La revisión completa usa los índices de tareas por materia y una caché de detalles de 15 minutos, manteniendo la consulta del estado en los índices. `--refresh` evita reutilizar detalles.
+En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles. La revisión completa usa únicamente los índices de tareas por materia: cuenta entregas pendientes sin abrir actividades ni leer anexos. Los índices no confirman cuándo se abre cada tarea; por eso los contadores de disponibilidad son `null` en la revisión completa.
+
+**`get_assignment(assignment_id=...)`** es la herramienta para profundizar en una tarea: devuelve instrucciones, fechas, estado y enlaces de anexos. Se utiliza cuando pides más información o dices «hagamos la primera tarea», con el ID del enlace de esa fila en la última tabla. No se vuelve a buscar en todas las materias.
+
+La vista superficial ordena por cierre; `recent` requiere datos de apertura que no aparecen en los listados y devuelve una explicación para usar `upcoming`. El motor interno conserva la lectura detallada para usos explícitos de desarrollo, pero las herramientas de listado y la terminal usan `summary_only=True`.
 
 Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
 
