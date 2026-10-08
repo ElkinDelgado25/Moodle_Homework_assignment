@@ -22,7 +22,12 @@ class CLITests(unittest.TestCase):
     def test_tasks_runs_the_terminal_consultation(self):
         with patch("moodle_tasks.cli.tasks.main") as tasks:
             main(["tasks"])
-            tasks.assert_called_once_with()
+            tasks.assert_called_once_with([])
+
+    def test_tasks_forwards_search_options(self):
+        with patch("moodle_tasks.cli.tasks.main") as tasks:
+            main(["tasks", "--mode", "recent", "--limit", "5", "--refresh"])
+            tasks.assert_called_once_with(["--mode", "recent", "--limit", "5", "--refresh"])
 
     def test_no_subcommand_displays_help(self):
         output = io.StringIO()

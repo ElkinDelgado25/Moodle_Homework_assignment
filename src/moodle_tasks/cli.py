@@ -24,8 +24,9 @@ def main(argv: list[str] | None = None) -> None:
         status.main(options)
     elif args.command == "tasks":
         if options:
-            parser.error("El comando tasks no acepta opciones.")
-        tasks.main()
+            tasks.main(options)
+        else:
+            tasks.main([])
     else:
         if options:
             parser.error("Argumentos desconocidos: " + " ".join(options))
