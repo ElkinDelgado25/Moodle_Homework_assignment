@@ -46,7 +46,7 @@ Y consultar las tareas desde la terminal con:
 uv run mcp-moodle tasks
 ```
 
-Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, usando el cierre y el botón «Agregar entrega» para confirmar disponibilidad. No abre las actividades ni consulta instrucciones o anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla con **Tarea, Materia y Cierre (fecha y hora)**. Para otras búsquedas:
+Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, usando el cierre y el botón «Agregar entrega» para confirmar disponibilidad. No abre las actividades ni consulta instrucciones o anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla con **Tarea, Materia y Cierre (fecha y hora)**. Cada cierre incluye el tiempo restante calculado al consultar, por ejemplo `11/10/2026 23:59 (quedan 3 días y 8 horas)`. Para otras búsquedas:
 
 ```bash
 uv run mcp-moodle tasks --mode overdue
