@@ -25,12 +25,13 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Para preguntas generales como 'qué tareas pendientes tengo', usa list_assignments(mode='upcoming', limit=5). "
             "Responde 'Estas son las tareas pendientes' y una única tabla de hasta cinco filas con Tarea, Materia y Cierre (fecha y hora). No abras tareas ni busques anexos para elaborar esta lista. "
             "Usa response_markdown del resultado. No muestres vencidas, actividades aún no abiertas, totales globales ni grupos por urgencia. "
-            "Usa list_all_assignments SOLO si el usuario pide explícitamente todas las materias, un total o una revisión completa. "
+            "Usa list_all_assignments(complete_review=true) SOLO si el usuario pide explícitamente todas las materias, un total o una revisión completa. "
             "Consulta Moodle con las credenciales locales. Usa configuration_status para verificar "
             "la configuración, check_moodle_connection para comprobar el acceso y list_assignments "
             "para consultar las próximas cinco tareas desde la línea de tiempo. "
             "Para preguntas como cuántas tareas pendientes hay en todas las materias, verificar todo "
-            "o una revisión completa, usa list_all_assignments: recorre los índices de todas las materias visibles. "
+            "o una revisión completa, usa list_all_assignments(complete_review=true): recorre los índices de todas las materias visibles. "
+            "Sin complete_review=true esa herramienta también devuelve únicamente las próximas cinco tareas. "
             "La vista superficial se ordena por cierre; no permite determinar la apertura más reciente. "
             "Cuando el usuario pida más información de una tarea o diga hagamos la primera tarea, usa get_assignment "
             "con el id del enlace de esa fila de la última tabla: lee entonces instrucciones y anexos solo de esa actividad. "
@@ -118,6 +119,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "overdue_count": sum(bool(task.due_at and task.due_at < now) for task in pending),
             "errors": [safe_error(RuntimeError(error)) for error in errors],
             "details_loaded": False,
+            "review_scope": "all_visible_courses" if mode == "all" else mode,
             "assignments": [{key: value for key, value in asdict(task).items()
                              if key not in ("content", "attachments")} for task in assignments],
         }
@@ -139,10 +141,16 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             raise ToolError(safe_error(error)) from None
 
     @server.tool(annotations=readonly, structured_output=True)
-    async def list_all_assignments(only_pending: bool = True, refresh: bool = False) -> dict[str, Any]:
-        """SOLO para solicitudes explícitas de todas las materias, total de pendientes o revisión completa. Consulta estados y cierres de los índices sin abrir tareas ni leer anexos. La apertura no se confirma en los índices. Para 'qué tareas pendientes tengo', usar list_assignments."""
+    async def list_all_assignments(
+        only_pending: bool = True,
+        refresh: bool = False,
+        complete_review: Annotated[bool, Field(description="true únicamente cuando el usuario pide explícitamente todas las materias, el total o una revisión completa; false para preguntas generales de pendientes.")] = False,
+    ) -> dict[str, Any]:
+        """Por defecto muestra las próximas CINCO pendientes con fecha y hora, sin vencidas. Solo complete_review=true activa la revisión sin límite de todas las materias; usarlo únicamente si el usuario lo solicita explícitamente. Sin abrir tareas ni leer anexos. Para preguntas generales usar list_assignments."""
         try:
-            return await asyncio.to_thread(list_tasks, only_pending, "all", None, refresh)
+            if complete_review:
+                return await asyncio.to_thread(list_tasks, only_pending, "all", None, refresh)
+            return await asyncio.to_thread(list_tasks, True, "upcoming", 5, refresh)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

@@ -81,7 +81,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(result.structured_content['details_loaded'])
                 self.assertNotIn('attachments', result.structured_content['assignments'][0])
                 self.assertNotIn('content', result.structured_content['assignments'][0])
-                complete = await client.call_tool('list_all_assignments')
+                complete = await client.call_tool('list_all_assignments', {'complete_review': True})
                 self.assertNotIn('response_markdown', complete.structured_content)
 
     async def test_complete_tool_has_no_limit_and_quick_tool_uses_five_by_default(self):
@@ -91,7 +91,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 await client.call_tool("list_assignments")
                 self.assertEqual(collect.call_args.kwargs['mode'], 'upcoming')
                 self.assertEqual(collect.call_args.kwargs['limit'], 5)
-                await client.call_tool("list_all_assignments", {"refresh": True})
+                await client.call_tool("list_all_assignments", {"refresh": True, "complete_review": True})
                 self.assertEqual(collect.call_args.kwargs['mode'], 'all')
                 self.assertIsNone(collect.call_args.kwargs['limit'])
                 self.assertTrue(collect.call_args.kwargs['refresh'])
@@ -99,6 +99,31 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 invalid = await client.call_tool("list_assignments", {"limit": 0})
                 self.assertTrue(invalid.is_error)
                 self.assertEqual(collect.call_count, count)
+
+    async def test_wrong_tool_selection_still_defaults_to_five_current_pending_tasks(self):
+        settings = Config("https://moodle.test", "test", "test", True)
+        task = Assignment("Pendiente", "https://moodle.test/mod/assign/view.php?id=3", "", "", "", False,
+                          due_at="2999-01-01T23:59:00")
+        with patch("moodle_tasks.server.collect_assignments", return_value=([task], [])) as collect, patch("moodle_tasks.server.load_config", return_value=settings):
+            async with Client(create_server()) as client:
+                for arguments in ({}, {"complete_review": False, "only_pending": False}):
+                    result = await client.call_tool("list_all_assignments", arguments)
+                    self.assertFalse(result.is_error)
+                    self.assertEqual(collect.call_args.kwargs["mode"], "upcoming")
+                    self.assertEqual(collect.call_args.kwargs["limit"], 5)
+                    self.assertTrue(collect.call_args.kwargs["only_pending"])
+                    data = result.structured_content
+                    self.assertEqual(data["review_scope"], "upcoming")
+                    self.assertTrue(data["availability_confirmed"])
+                    self.assertTrue(data["response_markdown"].startswith("Estas son las tareas pendientes\n\n"))
+                    self.assertIn("01/01/2999 23:59", data["response_markdown"])
+                    self.assertFalse(data["details_loaded"])
+                tools = await client.list_tools()
+                complete_tool = next(tool for tool in tools.tools if tool.name == "list_all_assignments")
+                scope = complete_tool.input_schema["properties"]["complete_review"]
+                self.assertEqual(scope["type"], "boolean")
+                self.assertFalse(scope["default"])
+                self.assertIn("explícitamente", scope["description"])
 
     async def test_graded_activities_do_not_inflate_pending_count(self):
         tasks = [
@@ -110,7 +135,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         ]
         with patch("moodle_tasks.server.collect_assignments", return_value=(tasks, [])), patch("moodle_tasks.server.load_config", return_value=Config("https://moodle.test", "test", "test", True)):
             async with Client(create_server()) as client:
-                result = await client.call_tool("list_all_assignments")
+                result = await client.call_tool("list_all_assignments", {"complete_review": True})
                 data = result.structured_content
                 self.assertEqual(data['pending_count'], 2)
                 self.assertIsNone(data['not_yet_open_count'])
@@ -124,7 +149,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
 
         with patch('moodle_tasks.server.collect_assignments', side_effect=collect), patch('moodle_tasks.server.load_config', return_value=Config('https://moodle.test', 'test', 'test', True)):
             async with Client(create_server()) as client:
-                result = await client.call_tool('list_all_assignments')
+                result = await client.call_tool('list_all_assignments', {'complete_review': True})
                 self.assertFalse(result.structured_content['incomplete'])
                 self.assertEqual(result.structured_content['reviewed_count'], 12)
                 self.assertEqual(result.structured_content['pending_count'], 0)
