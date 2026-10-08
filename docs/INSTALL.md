@@ -2,41 +2,114 @@
 
 El proyecto se instala como una herramienta de Python con `uv`. No requiere clonar el repositorio ni editar archivos de configuración. Cada persona introduce su propia cuenta de Moodle en la terminal.
 
-## 1. Instalar uv
+## 1. Elegir el instalador de esta entrega
 
-En Linux y macOS, si todavía no tienes `uv`:
+Descarga el artifact de una ejecución correcta de [Build y pruebas multiplataforma](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) o utiliza el wheel compartido por el autor. Extrae el ZIP antes de instalar: contiene `moodle_homework_assignment-0.1.0-py3-none-any.whl` e `INSTRUCCIONES.md`.
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+| Sistema | Artifact verificado por CI |
+| --- | --- |
+| Windows x64 | `mcp-moodle-windows` |
+| Ubuntu 24.04 | `mcp-moodle-ubuntu` |
+| Arch Linux | `mcp-moodle-arch` |
+| macOS Apple Silicon | `mcp-moodle-macos-arm64` |
+| macOS Intel | `mcp-moodle-macos-intel` |
 
-En Windows, abre PowerShell y usa el instalador de la [guía oficial de uv](https://docs.astral.sh/uv/getting-started/installation/):
+El mismo wheel sirve para los tres sistemas operativos. `uv` instala Python 3.11 si hace falta y las dependencias para la arquitectura del equipo; el asistente descarga Chromium. El paquete no contiene cuentas de Moodle. Se necesita Internet durante la instalación y para consultar Moodle.
+
+## 2. Instalar según tu sistema
+
+Los comandos para instalar `uv` provienen de su [guía oficial](https://docs.astral.sh/uv/getting-started/installation/). Si ya lo tienes, comprueba `uv --version` y continúa con la instalación del wheel.
+
+### Windows — PowerShell
+
+Usa Windows 11 o Windows Server 2019 o posterior. El CI ejecuta las pruebas en Windows Server 2025 x64.
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-Abre una terminal nueva después de instalarlo. Comprueba `uv --version`. Si vas a instalar desde GitHub, también necesitarás Git; puedes comprobarlo con `git --version`.
+Abre una ventana nueva de PowerShell en la carpeta donde extrajiste el ZIP:
 
-## 2. Instalar Moodle MCP para tu usuario
-
-Si recibiste el paquete `.whl`, abre la terminal en la carpeta donde lo descargaste:
-
-```bash
-uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+```powershell
+uv --version
+uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
 ```
 
-Esta opción permite compartir el instalador sin dar acceso al repositorio. No incluye las credenciales de quien creó el paquete. Hace falta Internet para descargar las dependencias y Chromium.
+Abre PowerShell de nuevo y ejecuta:
 
-Si tienes acceso al repositorio, también puedes instalar directamente desde GitHub:
+```powershell
+mcp-moodle run
+```
+
+No necesitas instalar Python ni Chromium manualmente. Sigue las preguntas del asistente y reinicia el agente elegido.
+
+### Linux — terminal
+
+Playwright ofrece soporte para Debian 12/13 y Ubuntu 22.04/24.04/26.04 en x86-64 y ARM64. El CI comprueba Ubuntu 24.04 y Arch Linux; no reproduce todas las distribuciones o escritorios.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+En una terminal nueva, desde la carpeta donde extrajiste el ZIP:
+
+```bash
+uv --version
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+```
+
+Si en Ubuntu/Debian Chromium informa que faltan bibliotecas del sistema, instálalas con el comando de Playwright; puede pedir permisos de administrador:
+
+```bash
+uvx --python 3.11 --from playwright playwright install-deps chromium
+```
+
+En Arch Linux y sus derivadas, como CachyOS, el paquete del sistema `chromium` proporciona las bibliotecas necesarias:
+
+```bash
+sudo pacman -Syu --needed chromium
+```
+
+Abre una terminal nueva y ejecuta `mcp-moodle run`. Playwright descarga su propio Chromium, aunque tengas el paquete del sistema. La preparación guiada descarga el navegador; no instala automáticamente los paquetes del sistema operativo.
+
+### macOS — Terminal (Intel y Apple Silicon)
+
+Usa macOS 14 Sonoma o posterior, según los [requisitos actuales de Playwright](https://playwright.dev/python/docs/intro). El CI comprueba macOS 15 en Apple Silicon e Intel mediante los runners [oficiales de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Abre una ventana nueva de Terminal en la carpeta donde extrajiste el ZIP:
+
+```bash
+uv --version
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+```
+
+Abre Terminal de nuevo y ejecuta `mcp-moodle run`. Usa una terminal nativa de tu Mac para que Python y Chromium correspondan a Intel o Apple Silicon. La cuenta se guarda en `~/Library/Application Support/moodle-homework-assignment/`; no necesitas copiarla al proyecto.
+
+### Instalar desde GitHub o desde un clon
+
+Para instalar directamente desde GitHub necesitas Git (`git --version`):
 
 ```bash
 uv tool install --python 3.11 git+https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+uv tool update-shell
 ```
 
-El repositorio es privado actualmente: esta segunda opción requiere que tengas acceso y Git esté autenticado. El paquete `.whl` compartido no necesita acceso a GitHub ni Git instalado.
+Abre una terminal nueva y ejecuta `mcp-moodle run`. Esta alternativa instala la rama principal, que puede contener cambios posteriores al artifact que descargaste.
 
-Esto instala el comando principal `mcp-moodle` y los alias `moodle-setup`, `moodle-mcp` y `moodle-tasks` en un entorno aislado. `uv` obtiene Python 3.11 si hace falta. Es una instalación global para tu usuario, disponible desde cualquier carpeta. Si los comandos no aparecen, ejecuta `uv tool update-shell` y abre una terminal nueva. [Herramientas globales con uv](https://docs.astral.sh/uv/guides/tools/).
+Si ya clonaste el repositorio, abre la terminal dentro de esa carpeta y ejecuta:
+
+```bash
+uv run --python 3.11 mcp-moodle setup
+```
+
+El asistente prepara las dependencias y Chromium; no necesitas crear un `.env`. Desde un clon utiliza `uv run mcp-moodle ...` para los comandos siguientes. Una instalación con `uv tool install` permite usar `mcp-moodle` desde cualquier carpeta.
 
 ## 3. Ejecutar el asistente
 
@@ -114,6 +187,10 @@ Reinicia el cliente seleccionado para cargar el servidor. En Copilot, usa el mod
 
 > Usa el MCP moodle para consultar mis tareas pendientes.
 
+La respuesta predeterminada es una tabla de hasta cinco tareas pendientes ya disponibles, sin vencidas, con **Tarea, Materia y Cierre (fecha y hora)**. El cierre incluye el tiempo restante al consultar: `11/10/2026 23:59 (quedan 3 días y 8 horas)`. La lista no abre instrucciones ni anexos.
+
+Para profundizar, pide «hagamos la primera tarea» o más información de una actividad: el agente usa `get_assignment` con el ID de su enlace. Para contar o revisar todas las materias, pide explícitamente una revisión completa; `list_all_assignments` requiere `complete_review=true`. Sin ese parámetro también devuelve solo cinco pendientes.
+
 También puedes consultar directamente en la terminal con `mcp-moodle tasks`. El comando `mcp-moodle serve` está destinado a los clientes MCP y no abre preguntas interactivas.
 
 ## Conectar otro agente con la misma cuenta
@@ -178,21 +255,23 @@ La desinstalación conserva tus credenciales y las entradas MCP. Puedes retirar 
 
 ## Pruebas automáticas
 
-El CI de GitHub Actions tiene tres checks independientes que se ejecutan automáticamente en push, pull requests y ejecuciones manuales:
+El CI de GitHub Actions tiene cinco checks independientes que se ejecutan automáticamente en push, pull requests y ejecuciones manuales:
 
 | Entorno | Preparación de Chromium |
 | --- | --- |
 | Ubuntu 24.04, familia Debian | Playwright instala Chromium y sus bibliotecas con `--with-deps`. |
 | Arch Linux en contenedor sobre un runner Linux | `pacman` prepara las bibliotecas con el paquete `chromium`; Playwright descarga el navegador que utiliza el proyecto. |
 | Windows Server 2025 x64, runner alojado de GitHub | Playwright instala y ejecuta Chromium para Windows. |
+| macOS 15 Apple Silicon (`macos-15`) | Se verifica ARM64 y Playwright instala y ejecuta Chromium nativo. |
+| macOS 15 Intel (`macos-15-intel`) | Se verifica x86-64 y Playwright instala y ejecuta Chromium nativo. |
 
 Cada job prepara Python 3.11, construye el wheel, lo instala globalmente con `uv tool install` y comprueba los comandos de terminal. Después ejecuta la suite completa desde el intérprete del paquete instalado, incluyendo pruebas de Chromium, errores de servidor y descubrimiento MCP por stdio. Las pruebas usan páginas y credenciales de prueba; no necesitan cuentas reales de Moodle. El CI construye, prueba y guarda instaladores; no publica paquetes ni despliega servicios.
 
 El check de Windows usa `windows-2025`, el runner x64 alojado de GitHub. No requiere conectar tu equipo ni habilitar variables del repositorio. Comprueba la instalación y las pruebas en Windows Server 2025; esto no equivale a una comprobación específica en Windows 11 de escritorio. [Runners alojados de GitHub](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y pruebas multiplataforma** y descarga el artifact `mcp-moodle-windows`, `mcp-moodle-ubuntu` o `mcp-moodle-arch`. Se conservan durante 14 días. Cada artifact contiene `mcp-moodle-installer-0.1.0.zip`, con el wheel y estas instrucciones. El wheel de Python es compartido entre plataformas; las dependencias específicas se descargan en el equipo donde lo instales. Probar Ubuntu no garantiza todas las versiones de Debian, y el contenedor Arch no reproduce todas las derivadas ni un escritorio completo.
+En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y pruebas multiplataforma** y descarga el artifact `mcp-moodle-windows`, `mcp-moodle-ubuntu`, `mcp-moodle-arch`, `mcp-moodle-macos-arm64` o `mcp-moodle-macos-intel`. Se conservan durante 14 días. Cada artifact contiene `mcp-moodle-installer-0.1.0.zip`, con el wheel y estas instrucciones. El wheel de Python es compartido entre plataformas; las dependencias específicas se descargan en el equipo donde lo instales. Probar Ubuntu no garantiza todas las versiones de Debian, y el contenedor Arch no reproduce todas las derivadas ni un escritorio completo.
 
-En Windows, extrae el ZIP, abre PowerShell en esa carpeta y ejecuta:
+Cada artifact contiene las mismas instrucciones para Windows, Linux y macOS; utiliza los pasos de tu sistema descritos al inicio. Por ejemplo, en Windows extrae el ZIP, abre PowerShell en esa carpeta y ejecuta:
 
 ```powershell
 uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
