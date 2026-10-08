@@ -29,20 +29,53 @@ uv tool update-shell
 
 Abre PowerShell de nuevo y ejecuta `mcp-moodle run`.
 
-### Linux — terminal
+### Linux — Debian y derivados (Debian-based)
+
+Para Debian, Ubuntu y distribuciones basadas en ellas, como Linux Mint, usa `apt`:
 
 ```bash
+sudo apt update
+sudo apt install -y curl ca-certificates
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-En una terminal nueva, desde la carpeta del wheel:
+Abre una terminal nueva en la carpeta donde extrajiste el wheel:
+
+```bash
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool update-shell
+uvx --python 3.11 --from playwright playwright install-deps chromium
+```
+
+El último comando instala las bibliotecas de Chromium y puede pedir permisos de administrador. Consulta la [documentación de Playwright](https://playwright.dev/python/docs/browsers#install-system-dependencies). Abre otra terminal y ejecuta:
+
+```bash
+mcp-moodle run
+```
+
+### Linux — Arch Linux y derivados (Arch-based)
+
+Para Arch Linux y distribuciones basadas en ella, como CachyOS, EndeavourOS y Manjaro, usa `pacman`:
+
+```bash
+sudo pacman -Syu --needed curl ca-certificates chromium
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+El paquete [Chromium de Arch](https://archlinux.org/packages/extra/x86_64/chromium/) instala sus dependencias del sistema. Abre una terminal nueva en la carpeta donde extrajiste el wheel:
 
 ```bash
 uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
 uv tool update-shell
 ```
 
-Abre una terminal nueva y ejecuta `mcp-moodle run`. En Ubuntu/Debian puede hacer falta instalar bibliotecas del sistema para Chromium; la [guía de instalación](docs/INSTALL.md#linux--terminal) incluye el comando. En Arch y CachyOS también se necesitan esas bibliotecas.
+Abre otra terminal y ejecuta:
+
+```bash
+mcp-moodle run
+```
+
+En ambas familias, el asistente descarga el Chromium que utiliza Playwright. Los comandos de `apt` y `pacman` corresponden a tu distribución; no ejecutes ambos bloques. El CI comprueba Ubuntu 24.04 y Arch Linux. Consulta [la guía de instalación](docs/INSTALL.md#linux--debian-y-derivados-debian-based) para más detalles.
 
 ### macOS — Terminal (Intel y Apple Silicon)
 
