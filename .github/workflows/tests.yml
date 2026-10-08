@@ -98,3 +98,47 @@ jobs:
           path: dist/mcp-moodle-installer-0.1.0.zip
           if-no-files-found: error
           retention-days: 14
+
+  macos:
+    name: macOS 15 (${{ matrix.architecture }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+            artifact: mcp-moodle-macos-arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+            artifact: mcp-moodle-macos-intel
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.11"
+      - name: Instalar dependencias
+        run: uv sync --locked --python 3.11
+      - name: Comprobar arquitectura nativa
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: uv run python -c "import os, platform; assert platform.machine() == os.environ['EXPECTED_ARCHITECTURE'], platform.machine()"
+      - name: Preparar Chromium en macOS
+        run: uv run playwright install chromium
+      - name: Construir paquete
+        run: uv build --wheel
+      - name: Instalar el paquete y probar CLI, Chromium y MCP
+        env:
+          UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
+        run: uv run python scripts/ci_verify_install.py
+      - name: Guardar instalador verificado
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/mcp-moodle-installer-0.1.0.zip
+          if-no-files-found: error
+          retention-days: 14
