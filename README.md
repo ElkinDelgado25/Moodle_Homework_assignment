@@ -98,6 +98,10 @@ En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(c
 
 **`get_assignment(assignment_id=...)`** es la herramienta para profundizar en una tarea: devuelve instrucciones, fechas, estado y enlaces de anexos. Se utiliza cuando pides más información o dices «hagamos la primera tarea», con el ID del enlace de esa fila en la última tabla. No se vuelve a buscar en todas las materias.
 
+**`download_assignment_attachments(assignment_id=..., destination_directory=...)`** descarga los anexos con la misma automatización de Playwright y las cookies de la sesión de Moodle. Si no indicas carpeta, usa `~/Documentos` si existe o `~/Documents`. Devuelve las rutas locales para que el agente lea el material y continúe la tarea. No requiere `curl`, scripts externos ni exportar cookies. Si la sesión vence durante la lectura o descarga, intenta renovarla una vez; rechaza páginas HTML y archivos que se anuncian como PDF sin tener su firma. Conserva los archivos existentes usando otro nombre e informa las descargas parciales.
+
+Pedir al agente «descarga los anexos en Documentos y resuelve esta tarea» autoriza ese trabajo. El cliente puede exigir permisos para herramientas que escriben archivos; el MCP declara la descarga como escritura local y no cambia las políticas de aprobación del cliente. Reinicia el MCP después de actualizar para que el agente descubra la herramienta nueva.
+
 La vista superficial ordena por cierre; `recent` requiere datos de apertura que no aparecen en los listados y devuelve una explicación para usar `upcoming`. El motor interno conserva la lectura detallada para usos explícitos de desarrollo, pero las herramientas de listado y la terminal usan `summary_only=True`.
 
 Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
