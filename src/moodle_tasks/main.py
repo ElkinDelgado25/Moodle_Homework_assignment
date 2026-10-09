@@ -35,6 +35,7 @@ class Assignment:
     due_at: str | None = None
     grade: str | None = None
     requires_submission: bool | None = None
+    links: list[dict[str, str]] = field(default_factory=list)
 
 
 def is_pending(task: Assignment) -> bool:
@@ -265,8 +266,11 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
         ".activity-description a[href*='pluginfile.php'], .mod_introbox a[href*='pluginfile.php']"
     ).evaluate_all("aa => aa.map(a => ({name: (a.innerText || a.getAttribute('title') || '').trim(), url: a.href}))")
     course = first_text(page, ".breadcrumb a[href*='/course/view.php']")
+    from .linked_content import assignment_links
+
+    links = assignment_links(page, content, attachments)
     return Assignment(title, page.url, content, closing.group(1) if closing else due_date, status, submitted,
-                      course=course, attachments=attachments,
+                      course=course, attachments=attachments, links=links,
                       opens_at=parse_moodle_date(opening.group(1)) if opening else None,
                       due_at=parse_moodle_date(closing.group(1)) if closing else None,
                       grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None)

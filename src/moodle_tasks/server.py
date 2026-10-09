@@ -18,6 +18,7 @@ from playwright.sync_api import sync_playwright
 from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError, redact_credentials
 from .downloads import documents_directory, download_attachment
+from .linked_content import read_linked_resources
 from .storage import user_config_dir
 
 
@@ -39,6 +40,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "La vista superficial se ordena por cierre; no permite determinar la apertura más reciente. "
             "Cuando el usuario pida más información de una tarea o diga hagamos la primera tarea, usa get_assignment "
             "con el id del enlace de esa fila de la última tabla: lee entonces instrucciones y anexos solo de esa actividad. "
+            "get_assignment también lee las páginas web enlazadas en la descripción, aunque solo haya una URL. "
+            "Usa linked_resources como material de la tarea y cita su URL; no afirmes que faltan instrucciones sin revisar esos resultados. "
+            "Si linked_content_incomplete=true, explica qué enlaces fallaron, se truncaron o quedaron fuera del límite. "
             "No confundas la posición de una fila con el id de Moodle ni repitas el listado completo. "
             "Cuando el usuario pida descargar anexos o resolver una tarea con su material, usa "
             "download_assignment_attachments con el mismo assignment_id y la carpeta solicitada; por defecto guarda en Documentos/Documents. "
@@ -218,13 +222,14 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 page.set_default_timeout(15_000)
                 login(page, settings)
                 task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={assignment_id}", settings)
-                return asdict(task)
+                return {**asdict(task), **read_linked_resources(
+                    browser, task.links, (settings.username, settings.password))}
             finally:
                 browser.close()
 
     @server.tool(annotations=readonly, structured_output=True)
     async def get_assignment(assignment_id: Annotated[int, Field(ge=1)]) -> dict[str, Any]:
-        """Lee instrucciones, fechas, estado y anexos de UNA tarea cuando el usuario pide más información o quiere hacerla. Usa el id del enlace de la fila seleccionada en la última lista, nunca su posición."""
+        """Lee instrucciones, fechas, estado, anexos y hasta cinco páginas web enlazadas de UNA tarea, incluso si la descripción solo contiene una URL. Devuelve linked_resources con texto, fuente y errores parciales. Usa el id del enlace de la fila seleccionada, nunca su posición."""
         try:
             return await asyncio.to_thread(get_task, assignment_id)
         except Exception as error:

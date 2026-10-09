@@ -145,6 +145,17 @@ class MoodleTests(unittest.TestCase):
         task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1")
         self.assertIs(task.submitted, False)
 
+    def test_assignment_keeps_web_links_from_a_url_only_description(self):
+        self.page.route("**/*", lambda route: route.fulfill(content_type="text/html", body='''
+            <h1>Práctica Android</h1>
+            <div id="intro"><a href="https://developer.android.com/codelabs">https://developer.android.com/codelabs</a>
+            <a href="/pluginfile.php/1/material.pdf">Material PDF</a></div>'''))
+        task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1")
+        self.assertIn("https://developer.android.com/codelabs", task.content)
+        self.assertEqual(task.links, [{"name": "https://developer.android.com/codelabs",
+                                       "url": "https://developer.android.com/codelabs"}])
+        self.assertEqual(task.attachments[0]["url"], "https://moodle.test/pluginfile.php/1/material.pdf")
+
     def test_expired_assignment_session_is_renewed_before_reading(self):
         authenticated = False
 
