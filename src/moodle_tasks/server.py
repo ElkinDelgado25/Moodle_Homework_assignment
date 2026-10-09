@@ -8,6 +8,7 @@ from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import parse_qs, urlsplit
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -20,6 +21,26 @@ from .errors import MoodleHTTPError, redact_credentials
 from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
 from .storage import user_config_dir
+
+
+def assignment_id_from_reference(assignment_id: int | None, url: str | None, base_url: str) -> int:
+    """Acepta el id de Moodle o el enlace de una tarea, sin navegar a otra URL."""
+    if assignment_id is not None:
+        if url:
+            raise ValueError("Indica assignment_id o url, no ambos.")
+        return assignment_id
+    if not url:
+        raise ValueError("Indica el assignment_id o la URL de la tarea.")
+    try:
+        reference, base = urlsplit(url), urlsplit(base_url)
+        values = parse_qs(reference.query).get("id", [])
+    except ValueError:
+        raise ValueError("La URL de la tarea no es válida.") from None
+    if ((reference.scheme, reference.netloc) != (base.scheme, base.netloc)
+            or reference.path.rstrip("/") != "/mod/assign/view.php"
+            or len(values) != 1 or not values[0].isdigit() or int(values[0]) < 1):
+        raise ValueError("La URL debe ser el enlace de Moodle a una tarea (mod/assign/view.php?id=...).")
+    return int(values[0])
 
 
 def create_server(env_file: Path = ENV_FILE) -> MCPServer:
@@ -39,11 +60,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Sin complete_review=true esa herramienta también devuelve únicamente las próximas cinco tareas. "
             "La vista superficial se ordena por cierre; no permite determinar la apertura más reciente. "
             "Cuando el usuario pida más información de una tarea o diga hagamos la primera tarea, usa get_assignment "
-            "con el id del enlace de esa fila de la última tabla: lee entonces instrucciones y anexos solo de esa actividad. "
+            "con el id o la URL de Moodle de esa fila: lee entonces instrucciones y anexos solo de esa actividad. "
             "Si la descripción no tiene instrucciones escritas o solo muestra una URL, interpreta ese enlace como las instrucciones de la actividad. "
             "get_assignment abre y lee automáticamente las páginas web enlazadas en la descripción, aunque solo haya una URL. "
             "Cuando links no esté vacío, revisa linked_resources antes de responder: usa ese contenido como material de la tarea y menciona su URL. "
             "Nunca digas que no hay instrucciones adicionales si links contiene uno o más enlaces; explica solamente los fallos que aparezcan en linked_resources. "
+            "Tras una consulta exitosa de get_assignment, no explores archivos locales, código fuente ni credenciales para buscar instrucciones: usa los campos que ya devolvió la herramienta. "
             "Si linked_content_incomplete=true, explica qué enlaces fallaron, se truncaron o quedaron fuera del límite. "
             "No confundas la posición de una fila con el id de Moodle ni repitas el listado completo. "
             "Cuando el usuario pida descargar anexos o resolver una tarea con su material, usa "
@@ -215,25 +237,31 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 
-    def get_task(assignment_id: int) -> dict[str, Any]:
+    def get_task(assignment_id: int | None, url: str | None) -> dict[str, Any]:
         settings = config()
+        resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
                 page = browser.new_page()
                 page.set_default_timeout(15_000)
                 login(page, settings)
-                task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={assignment_id}", settings)
-                return {**asdict(task), **read_linked_resources(
-                    browser, task.links, (settings.username, settings.password))}
+                task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={resolved_id}", settings)
+                linked = read_linked_resources(browser, task.links, (settings.username, settings.password))
+                return {**asdict(task), **linked,
+                        "instruction_source": "linked_resources" if task.links else "moodle_description",
+                        "linked_instruction_count": len(task.links)}
             finally:
                 browser.close()
 
     @server.tool(annotations=readonly, structured_output=True)
-    async def get_assignment(assignment_id: Annotated[int, Field(ge=1)]) -> dict[str, Any]:
-        """Lee instrucciones, fechas, estado, anexos y hasta cinco páginas web enlazadas de UNA tarea, incluso si la descripción solo contiene una URL. Devuelve linked_resources con texto, fuente y errores parciales. Usa el id del enlace de la fila seleccionada, nunca su posición."""
+    async def get_assignment(
+        assignment_id: Annotated[int | None, Field(ge=1, description="Identificador numérico de la tarea en Moodle.")] = None,
+        url: Annotated[str | None, Field(min_length=1, description="URL de Moodle de la tarea, por ejemplo /mod/assign/view.php?id=362681.")] = None,
+    ) -> dict[str, Any]:
+        """Lee UNA tarea por assignment_id o por su URL de Moodle. Incluye instrucciones, fechas, estado, anexos y hasta cinco páginas enlazadas; una descripción que solo contiene una URL se lee como instrucciones. instruction_source y linked_instruction_count indican si hay material web que debes usar; no explores archivos locales para buscarlo."""
         try:
-            return await asyncio.to_thread(get_task, assignment_id)
+            return await asyncio.to_thread(get_task, assignment_id, url)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

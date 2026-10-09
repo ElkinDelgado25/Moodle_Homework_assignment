@@ -8,7 +8,7 @@ from unittest.mock import patch
 from mcp import Client, StdioServerParameters
 
 from moodle_tasks.main import Assignment, Config
-from moodle_tasks.server import create_server
+from moodle_tasks.server import assignment_id_from_reference, create_server
 from moodle_tasks.errors import MoodleHTTPError
 
 
@@ -17,6 +17,15 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         instructions = create_server().instructions
         self.assertIn("solo muestra una URL", instructions)
         self.assertIn("Nunca digas que no hay instrucciones adicionales", instructions)
+        self.assertIn("no explores archivos locales", instructions)
+
+    async def test_assignment_url_is_accepted_as_an_alternative_to_its_id(self):
+        base = "https://moodle.test"
+        self.assertEqual(assignment_id_from_reference(None, "https://moodle.test/mod/assign/view.php?id=362681", base), 362681)
+        self.assertEqual(assignment_id_from_reference(362681, None, base), 362681)
+        for url in ("https://other.test/mod/assign/view.php?id=362681", "https://moodle.test/mod/url/view.php?id=362681"):
+            with self.assertRaises(ValueError):
+                assignment_id_from_reference(None, url, base)
 
     async def test_server_failure_is_a_clear_tool_error_for_task_queries(self):
         failure = MoodleHTTPError(502, "https://moodle.test/login/index.php")
