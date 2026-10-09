@@ -13,6 +13,11 @@ from moodle_tasks.errors import MoodleHTTPError
 
 
 class MCPTests(unittest.IsolatedAsyncioTestCase):
+    async def test_server_instructs_agents_to_follow_a_link_only_description(self):
+        instructions = create_server().instructions
+        self.assertIn("solo muestra una URL", instructions)
+        self.assertIn("Nunca digas que no hay instrucciones adicionales", instructions)
+
     async def test_server_failure_is_a_clear_tool_error_for_task_queries(self):
         failure = MoodleHTTPError(502, "https://moodle.test/login/index.php")
         config = Config("https://moodle.test", "test", "test", True)
