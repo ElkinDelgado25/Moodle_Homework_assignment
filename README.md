@@ -84,22 +84,32 @@ El asistente permite cambiar las credenciales o conectar otro agente.
 
 ---
 
-### Linux
 
-Clona el repositorio y entra en su carpeta:
+<a id="debian"></a>
 
-```bash
-git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
-cd Moodle_Homework_assignment
-```
+<img src="docs/assets/readme/debian-section.svg" width="1000" alt="Debian y derivados">
 
-Luego ejecuta el instalador:
+### Debian y derivados
 
-```bash
-bash ./INSTALAR-LINUX.sh
-```
+1. Clona el repositorio:
 
-En Ubuntu y Debian prepara las bibliotecas de Chromium; en Arch Linux y derivadas instala el paquete `chromium`. Puede pedir la contrasena de `sudo`.
+   ```bash
+   git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+   ```
+
+2. Entra en la carpeta del repositorio:
+
+   ```bash
+   cd Moodle_Homework_assignment
+   ```
+
+3. Ejecuta el instalador:
+
+   ```bash
+   bash ./INSTALAR-LINUX.sh
+   ```
+
+El instalador prepara `uv`, las bibliotecas de Chromium y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`.
 
 Para configurar otra cuenta o conectar mas agentes:
 
@@ -109,63 +119,37 @@ uv run mcp-moodle setup
 
 ---
 
-<a id="debian"></a>
-
-<img src="docs/assets/readme/debian-section.svg" width="1000" alt="Debian y derivados · Debian-based">
-
-### Debian y derivados · Debian-based
-
-Para Debian, Ubuntu y distribuciones basadas en ellas, como Linux Mint, usa `apt`:
-
-```bash
-sudo apt update
-sudo apt install -y curl ca-certificates
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Abre una terminal nueva en la carpeta donde extrajiste el wheel:
-
-```bash
-uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
-uv tool update-shell
-uvx --python 3.11 --from playwright playwright install-deps chromium
-```
-
-El último comando instala las bibliotecas de Chromium y puede pedir permisos de administrador. Consulta la [documentación de Playwright](https://playwright.dev/python/docs/browsers#install-system-dependencies). Abre otra terminal y ejecuta:
-
-```bash
-mcp-moodle run
-```
-
----
-
 <a id="arch"></a>
 
-<img src="docs/assets/readme/archlinux-section.svg" width="1000" alt="Arch Linux y derivados · Arch-based">
+<img src="docs/assets/readme/archlinux-section.svg" width="1000" alt="Arch Linux y derivados">
 
-### Arch Linux y derivados · Arch-based
+### Arch Linux y derivados
 
-Para Arch Linux y distribuciones basadas en ella, como CachyOS, EndeavourOS y Manjaro, usa `pacman`:
+1. Clona el repositorio:
+
+   ```bash
+   git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+   ```
+
+2. Entra en la carpeta del repositorio:
+
+   ```bash
+   cd Moodle_Homework_assignment
+   ```
+
+3. Ejecuta el instalador:
+
+   ```bash
+   bash ./INSTALAR-LINUX.sh
+   ```
+
+El instalador prepara `uv`, instala el paquete `chromium` y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`.
+
+Para configurar otra cuenta o conectar mas agentes:
 
 ```bash
-sudo pacman -Syu --needed curl ca-certificates chromium
-curl -LsSf https://astral.sh/uv/install.sh | sh
+uv run mcp-moodle setup
 ```
-
-El paquete [Chromium de Arch](https://archlinux.org/packages/extra/x86_64/chromium/) instala sus dependencias del sistema. Abre una terminal nueva en la carpeta donde extrajiste el wheel:
-
-```bash
-uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
-uv tool update-shell
-```
-
-Abre otra terminal y ejecuta:
-
-```bash
-mcp-moodle run
-```
-
-En ambas familias, el asistente descarga el Chromium que utiliza Playwright. Los comandos de `apt` y `pacman` corresponden a tu distribución; no ejecutes ambos bloques. El CI comprueba Ubuntu 24.04 y Arch Linux. Consulta [la guía de instalación](docs/INSTALL.md#linux--debian-y-derivados-debian-based) para más detalles.
 
 ---
 
