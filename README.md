@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="#instalacion">Instalación</a> ·
-  <a href="#desde-un-clon">Desde un clon</a> ·
+  <a href="#opciones-extras">Opciones extras</a> ·
   <a href="#consultar-tareas">Consultar tareas</a> ·
   <a href="docs/MCP.md">Guía MCP</a> ·
   <a href="docs/DOCUMENT_OUTPUT.md">Documentos</a>
@@ -178,96 +178,33 @@ El asistente pide tu cuenta, intenta validarla, prepara Chromium y te permite el
 
 ---
 
-<a id="desde-un-clon"></a>
+<a id="opciones-extras"></a>
 
-## Ejecutar desde un repositorio clonado
+## Opciones extras
 
-Si clonaste este repositorio, abre PowerShell o una terminal dentro de la carpeta `Moodle_Homework_assignment` y ejecuta un único comando:
+Despues de instalar, usa estos comandos desde la carpeta del repositorio:
 
-```powershell
-uv run mcp-moodle setup
-```
+| Opcion | Comando |
+| --- | --- |
+| Ver el estado de la cuenta | `uv run mcp-moodle status` |
+| Abrir el asistente y conectar otra cuenta o agente | `uv run mcp-moodle setup` |
+| Consultar las proximas tareas pendientes | `uv run mcp-moodle tasks` |
+| Consultar tareas vencidas | `uv run mcp-moodle tasks --mode overdue` |
+| Revisar todas las materias | `uv run mcp-moodle tasks --mode all --refresh` |
+| Abrir de nuevo el panel de configuracion | `uv run mcp-moodle run` |
 
-Este comando instala automáticamente las dependencias indicadas en `uv.lock`, prepara Chromium y abre el asistente para guardar tu cuenta de Moodle y elegir el agente que quieres conectar. No hace falta ejecutar `uv sync`, crear un archivo `.env` ni instalar Chromium por separado para usar el asistente.
+Para integrar Moodle con Codex, Claude, Antigravity o Copilot, usa el asistente con `setup`. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
 
-No ejecutes `mcp-moodle setup` sin `uv run` desde un clon: ese comando solo existe directamente en la terminal cuando el paquete se instaló de forma global.
+## Entregables
 
-Cuando ya hayas terminado la configuración, puedes volver a abrir el panel con:
+Para crear un trabajo, el agente usa `get_document_template()`. La portada ULEAM y el logo estan incluidos en el repositorio en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png).
 
-```powershell
-uv run mcp-moodle run
-```
+El resultado documental predeterminado contiene dos archivos con el mismo nombre:
 
-Y consultar las tareas desde la terminal con:
+- Un DOCX editable.
+- Un PDF exportado desde ese DOCX.
 
-```powershell
-uv run mcp-moodle tasks
-```
-
-<a id="consultar-tareas"></a>
-
-## Consultar y resolver tareas
-
-Por defecto muestra las próximas cinco tareas **ya abiertas y con plazo vigente** desde la línea de tiempo del Área personal, usando el cierre y el botón «Agregar entrega» para confirmar disponibilidad. No abre las actividades ni consulta instrucciones o anexos. Excluye vencidas y actividades que todavía no se habilitan. En el agente la respuesta comienza con **Estas son las tareas pendientes** y una sola tabla con **Tarea, Materia y Cierre (fecha y hora)**. Cada cierre incluye el tiempo restante calculado al consultar, por ejemplo `11/10/2026 23:59 (quedan 3 días y 8 horas)`. Para otras búsquedas:
-
-```bash
-uv run mcp-moodle tasks --mode overdue
-uv run mcp-moodle tasks --mode all --refresh
-```
-
-### Herramientas disponibles
-
-En MCP, `list_assignments` hace la consulta limitada y **`list_all_assignments(complete_review=true)`** es la herramienta separada para contar o revisar pendientes en todas las materias visibles cuando se solicita explícitamente. Sin ese parámetro devuelve las próximas cinco pendientes, incluso si el agente elige por error esa herramienta para una pregunta general. La revisión completa usa únicamente los índices de tareas por materia: cuenta entregas pendientes sin abrir actividades ni leer anexos. Los índices no confirman cuándo se abre cada tarea; por eso los contadores de disponibilidad son `null` en la revisión completa.
-
-**`get_assignment(assignment_id=...)`** es la herramienta para profundizar en una tarea: devuelve instrucciones, fechas, estado y enlaces de anexos. Se utiliza cuando pides más información o dices «hagamos la primera tarea», con el ID del enlace de esa fila en la última tabla. No se vuelve a buscar en todas las materias.
-
-**`download_assignment_attachments(assignment_id=..., destination_directory=...)`** descarga los anexos con la misma automatización de Playwright y las cookies de la sesión de Moodle. Si no indicas carpeta, usa `~/Documentos` si existe o `~/Documents`. Devuelve las rutas locales para que el agente lea el material y continúe la tarea. No requiere `curl`, scripts externos ni exportar cookies. Si la sesión vence durante la lectura o descarga, intenta renovarla una vez; rechaza páginas HTML y archivos que se anuncian como PDF sin tener su firma. Conserva los archivos existentes usando otro nombre e informa las descargas parciales.
-
-Pedir al agente «descarga los anexos en Documentos y resuelve esta tarea» autoriza ese trabajo. El cliente puede exigir permisos para herramientas que escriben archivos; el MCP declara la descarga como escritura local y no cambia las políticas de aprobación del cliente. Reinicia el MCP después de actualizar para que el agente descubra la herramienta nueva.
-
-### Entregables: DOCX y PDF
-
-Al resolver una tarea documental, el agente entrega por defecto **solo DOCX y PDF**, con el mismo nombre base, aplicando **APA 7 y Times New Roman de 12 puntos** al desarrollo. Usa **`get_document_template()`** para obtener la portada ULEAM con logo, numeración y campos de Materia, Docente, Estudiantes, Carrera, Curso y Año. La portada institucional se conserva como adaptación a APA y el desarrollo empieza en la segunda página. Los datos personales se pueden conservar en un perfil local; la plantilla pública tiene campos vacíos. Las fuentes, conversiones y capturas de revisión se guardan como temporales. Consulta [la política de documentos y portada](docs/DOCUMENT_OUTPUT.md).
-
-### Detalles de ejecución
-
-La vista superficial ordena por cierre; `recent` requiere datos de apertura que no aparecen en los listados y devuelve una explicación para usar `upcoming`. El motor interno conserva la lectura detallada para usos explícitos de desarrollo, pero las herramientas de listado y la terminal usan `summary_only=True`.
-
-Para desarrollo avanzado, `uv sync` crea el entorno del proyecto y `uv run playwright install chromium` permite instalar Chromium de forma independiente.
-
-Ubuntu 24.04 tiene soporte oficial de Playwright. En Arch Linux y sus derivadas puede aparecer esta advertencia:
-
-```text
-BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64.
-```
-
-No es un error: indica que Playwright usa una compilación de Chromium para Ubuntu 24.04 como alternativa. En este equipo se comprobó que Chromium inicia correctamente. Si aparece solo esta advertencia y el comando termina sin errores, puedes continuar.
-
-El asistente guarda las credenciales en la configuración local del usuario. Si usas el modo de desarrollo heredado con `.env`, no compartas ni subas ese archivo: está incluido en `.gitignore`.
-
-## Ejecución directa con variables de entorno
-
-Para el modo de desarrollo heredado basado en `.env`, ejecuta desde la carpeta del proyecto:
-
-```bash
-uv run moodle-tasks
-```
-
-`uv run` ejecuta el programa dentro del entorno de Python del proyecto, sin tener que activarlo manualmente.
-
-El programa consulta Moodle una vez y avisa por la terminal. Puedes volver a ejecutarlo cuando enciendas la computadora. Para ver el navegador durante una prueba, cambia `MOODLE_HEADLESS=false` en `.env`.
-
-Referencias: [sistemas compatibles con Playwright](https://playwright.dev/python/docs/intro) y [ejecución de comandos con uv](https://docs.astral.sh/uv/concepts/projects/run/).
-
-## Integración con agentes mediante MCP
-
-El servidor `mcp-moodle serve` usa el SDK oficial de MCP para Python y expone herramientas de consulta para Codex, Claude, Antigravity, Copilot y otros clientes compatibles con `stdio`. Usa `mcp-moodle run` para configurarlo o consulta [la guía de conexión manual y herramientas](docs/MCP.md). El repositorio incluye configuración para Copilot en `.vscode/mcp.json` y un ejemplo para Claude Desktop.
-
-## CI e instaladores de esta entrega
-
-El [workflow multiplataforma](.github/workflows/tests.yml) construye el wheel, lo instala y ejecuta la suite completa en cinco entornos: Ubuntu 24.04, Arch Linux, Windows Server 2025, macOS 15 Apple Silicon y macOS 15 Intel. Las pruebas usan credenciales ficticias y páginas de prueba.
-
-GitHub Actions se usa solo para verificar el proyecto en varios sistemas. Para instalarlo, clona este repositorio y sigue los pasos anteriores.
+La portada contiene los campos de materia, docente, estudiantes, carrera, curso y ano. El desarrollo comienza en la pagina siguiente y aplica APA 7 con Times New Roman de 12 puntos. Consulta la [politica completa de entregables](docs/DOCUMENT_OUTPUT.md) para los campos, formato y revision final.
 
 ## Notas
 
