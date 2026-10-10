@@ -34,7 +34,7 @@ uv run mcp-moodle setup
 
 El asistente permite cambiar las credenciales o agregar otro agente usando la misma cuenta.
 
-## Linux
+## Debian, Ubuntu y derivadas
 
 1. Clona el repositorio:
 
@@ -51,16 +51,38 @@ El asistente permite cambiar las credenciales o agregar otro agente usando la mi
 3. Ejecuta el instalador:
 
    ```bash
-   bash ./INSTALAR-LINUX.sh
+   bash ./INSTALAR-DEBIAN.sh
    ```
 
-En Ubuntu y Debian el instalador muestra secciones y tiempos estimados con Rich. Pregunta antes de preparar las bibliotecas de Chromium; si aceptas, valida `sudo` una sola vez antes de instalar los paquetes. En Arch Linux y derivadas tambien valida `sudo` una sola vez antes de instalar `chromium`.
+El instalador muestra secciones y tiempos estimados con Rich. Pregunta antes de preparar las bibliotecas de Chromium; si aceptas, valida `sudo` una sola vez antes de instalar los paquetes.
 
 Para configurar otra cuenta o conectar mas agentes desde Debian, Ubuntu, Arch o sus derivadas, ejecuta dentro del repositorio:
 
 ```bash
 uv run mcp-moodle setup
 ```
+
+## Arch Linux y derivadas
+
+1. Clona el repositorio:
+
+   ```bash
+   git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+   ```
+
+2. Entra en la carpeta del repositorio:
+
+   ```bash
+   cd Moodle_Homework_assignment
+   ```
+
+3. Ejecuta el instalador de Arch:
+
+   ```bash
+   bash ./INSTALAR-ARCH.sh
+   ```
+
+El instalador valida `sudo` una sola vez antes de instalar `chromium` con `pacman`.
 
 ## Usar Moodle MCP
 

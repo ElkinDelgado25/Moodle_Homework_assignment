@@ -106,7 +106,7 @@ El asistente permite cambiar las credenciales o conectar otro agente.
 3. Ejecuta el instalador:
 
    ```bash
-   bash ./INSTALAR-LINUX.sh
+   bash ./INSTALAR-DEBIAN.sh
    ```
 
 El instalador muestra tres secciones con Rich y tiempos estimados. Pregunta antes de instalar las bibliotecas de Chromium y solicita la contrasena de `sudo` una sola vez si aceptas.
@@ -140,7 +140,7 @@ uv run mcp-moodle setup
 3. Ejecuta el instalador:
 
    ```bash
-   bash ./INSTALAR-LINUX.sh
+   bash ./INSTALAR-ARCH.sh
    ```
 
 El instalador prepara `uv`, instala el paquete `chromium` y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`.

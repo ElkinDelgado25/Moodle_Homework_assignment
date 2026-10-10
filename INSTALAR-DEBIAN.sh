@@ -3,6 +3,11 @@ set -euo pipefail
 
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+if [[ ! -f /etc/debian_version ]]; then
+  echo "Este instalador es solo para Debian, Ubuntu y sus derivadas." >&2
+  exit 1
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
   echo "Instalando uv para el usuario actual..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -23,4 +28,4 @@ if [[ ! -f "$project_dir/pyproject.toml" ]]; then
   exit 1
 fi
 
-exec uv --directory "$project_dir" run python scripts/install_linux.py
+exec uv --directory "$project_dir" run python scripts/install_linux.py --family debian
