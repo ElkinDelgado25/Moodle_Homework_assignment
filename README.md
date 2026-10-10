@@ -99,7 +99,7 @@ Luego ejecuta el instalador:
 bash ./INSTALAR-LINUX.sh
 ```
 
-En Ubuntu y Debian puede pedir la contrasena de `sudo` para instalar las bibliotecas que necesita Chromium.
+En Ubuntu y Debian prepara las bibliotecas de Chromium; en Arch Linux y derivadas instala el paquete `chromium`. Puede pedir la contrasena de `sudo`.
 
 Para configurar otra cuenta o conectar mas agentes:
 

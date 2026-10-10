@@ -26,6 +26,9 @@ fi
 if [[ -f /etc/debian_version ]]; then
   echo "Preparando las bibliotecas de Chromium para Debian o Ubuntu..."
   uv --directory "$project_dir" run playwright install --with-deps chromium
+elif [[ -f /etc/arch-release ]] && command -v pacman >/dev/null 2>&1; then
+  echo "Preparando Chromium para Arch Linux..."
+  sudo pacman -S --needed chromium
 fi
 
 echo "Preparando Moodle MCP desde el repositorio clonado..."

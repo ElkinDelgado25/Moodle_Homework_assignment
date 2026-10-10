@@ -54,7 +54,13 @@ El asistente permite cambiar las credenciales o agregar otro agente usando la mi
    bash ./INSTALAR-LINUX.sh
    ```
 
-En Ubuntu y Debian el instalador prepara las bibliotecas de Chromium. Puede pedir tu contrasena de `sudo` para instalar esos paquetes.
+En Ubuntu y Debian el instalador prepara las bibliotecas de Chromium. En Arch Linux y derivadas instala el paquete `chromium`. Puede pedir tu contrasena de `sudo` para instalar esos paquetes.
+
+Para configurar otra cuenta o conectar mas agentes desde Debian, Ubuntu, Arch o sus derivadas, ejecuta dentro del repositorio:
+
+```bash
+uv run mcp-moodle setup
+```
 
 ## Usar Moodle MCP
 
