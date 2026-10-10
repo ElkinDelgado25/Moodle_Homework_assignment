@@ -28,6 +28,7 @@ def main() -> None:
     with ZipFile("dist/mcp-moodle-installer-0.1.0.zip", "w", ZIP_DEFLATED) as archive:
         archive.write(wheel, wheel.name)
         archive.write("docs/INSTALL.md", "INSTRUCCIONES.md")
+        archive.write("scripts/install-windows.ps1", "INSTALAR-WINDOWS.ps1")
 
 
 if __name__ == "__main__":

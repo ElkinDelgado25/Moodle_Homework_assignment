@@ -4,7 +4,7 @@ El proyecto se instala como una herramienta de Python con `uv`. No requiere clon
 
 ## 1. Elegir el instalador de esta entrega
 
-Descarga el artifact de una ejecución correcta de [Build y pruebas multiplataforma](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) o utiliza el wheel compartido por el autor. Extrae el ZIP antes de instalar: contiene `moodle_homework_assignment-0.1.0-py3-none-any.whl` e `INSTRUCCIONES.md`.
+Descarga el artifact de una ejecución correcta de [Build y pruebas multiplataforma](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) o utiliza el wheel compartido por el autor. Extrae el ZIP antes de instalar: contiene el wheel, `INSTRUCCIONES.md` y `INSTALAR-WINDOWS.ps1`.
 
 | Sistema | Artifact verificado por CI |
 | --- | --- |
@@ -24,25 +24,13 @@ Los comandos para instalar `uv` provienen de su [guía oficial](https://docs.ast
 
 Usa Windows 11 o Windows Server 2019 o posterior. El CI ejecuta las pruebas en Windows Server 2025 x64.
 
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Abre una ventana nueva de PowerShell en la carpeta donde extrajiste el ZIP:
+Después de extraer el ZIP, abre PowerShell en esa carpeta y ejecuta:
 
 ```powershell
-uv --version
-uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
-uv tool update-shell
+powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
-Abre PowerShell de nuevo y ejecuta:
-
-```powershell
-mcp-moodle run
-```
-
-No necesitas instalar Python ni Chromium manualmente. Sigue las preguntas del asistente y reinicia el agente elegido.
+El instalador prepara `uv` si hace falta, localiza el wheel incluido, instala Python 3.11 y Moodle MCP, y abre el asistente. El asistente descarga Chromium y solicita la cuenta de Moodle y el agente que deseas conectar. No necesitas instalar Python, Chromium ni modificar el PATH manualmente. Reinicia el agente elegido al terminar.
 
 ### Linux — Debian y derivados (Debian-based)
 
@@ -296,10 +284,9 @@ En una ejecución correcta, abre la pestaña **Actions**, selecciona **Build y p
 Cada artifact contiene las mismas instrucciones para Windows, Linux y macOS; utiliza los pasos de tu sistema descritos al inicio. Por ejemplo, en Windows extrae el ZIP, abre PowerShell en esa carpeta y ejecuta:
 
 ```powershell
-uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
-uv tool update-shell
+powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
-Abre una terminal nueva y ejecuta `mcp-moodle setup` para introducir tu cuenta y elegir el agente.
+El instalador abre el asistente para introducir tu cuenta y elegir el agente.
 
 Para generar el instalador que puedes compartir, desde el checkout de desarrollo ejecuta `uv build --wheel`. El paquete aparece en `dist/` y contiene los comandos y el código, sin el `.env` local.

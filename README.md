@@ -57,18 +57,13 @@ Instala `uv` siguiendo el bloque de tu sistema y abre una terminal nueva. Los co
 
 ### Windows — PowerShell
 
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Con el wheel descargado y el ZIP extraído, abre una nueva ventana de PowerShell en esa carpeta:
+Con el ZIP extraído, abre PowerShell en esa carpeta y ejecuta el instalador incluido:
 
 ```powershell
-uv tool install --python 3.11 .\moodle_homework_assignment-0.1.0-py3-none-any.whl
-uv tool update-shell
+powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
-Abre PowerShell de nuevo y ejecuta `mcp-moodle run`.
+El instalador prepara `uv`, localiza el wheel incluido, instala Moodle MCP y abre el asistente. El asistente descarga Chromium, solicita la cuenta de Moodle y registra el agente elegido. Reinícialo al finalizar.
 
 ---
 
