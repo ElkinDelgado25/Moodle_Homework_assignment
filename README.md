@@ -71,7 +71,7 @@ Para instalar desde un clon de Git en Windows, sigue este flujo en vez de ejecut
 2. Para instalar las dependencias y configurar Moodle, ejecuta:
 
    ```powershell
-   uv run mcp-moodle setup
+   powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
    ```
 
 El paso 2 descarga lo necesario y abre el asistente para ingresar la cuenta y elegir el agente. Con el ZIP, basta ejecutar `INSTALAR-WINDOWS.ps1`: instala y abre ese mismo asistente automaticamente.
