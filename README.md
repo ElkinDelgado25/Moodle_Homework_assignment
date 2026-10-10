@@ -23,15 +23,15 @@
 Compatible con **Codex, Claude Code, Cursor, Google Antigravity y Copilot**. Usa Python, `uv` y Playwright. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
 
 <p align="center">
-  <a href="https://openai.com/codex" title="Codex"><img src="docs/assets/readme/agents/codex.svg" height="38" alt="Codex"></a>
+  <a href="https://openai.com/codex" title="Codex"><img src="docs/assets/readme/agents/codex-reference.png" width="38" height="38" style="border-radius: 50%;" alt="Codex"></a>
   &nbsp;&nbsp;
-  <a href="https://www.anthropic.com/claude-code" title="Claude Code"><img src="docs/assets/readme/agents/claude-code.svg" height="38" alt="Claude Code"></a>
+  <a href="https://www.anthropic.com/claude-code" title="Claude Code"><img src="docs/assets/readme/agents/claude-code.svg" width="38" height="38" style="border-radius: 50%;" alt="Claude Code"></a>
   &nbsp;&nbsp;
-  <a href="https://cursor.com/" title="Cursor"><img src="docs/assets/readme/agents/cursor.svg" height="38" alt="Cursor"></a>
+  <a href="https://cursor.com/" title="Cursor"><img src="docs/assets/readme/agents/cursor-reference.png" width="38" height="38" style="border-radius: 50%;" alt="Cursor"></a>
   &nbsp;&nbsp;
-  <a href="https://antigravity.google/" title="Google Antigravity"><img src="docs/assets/readme/agents/antigravity.svg" height="38" alt="Google Antigravity"></a>
+  <a href="https://antigravity.google/" title="Google Antigravity"><img src="docs/assets/readme/agents/antigravity-reference.png" width="38" height="38" style="border-radius: 50%;" alt="Google Antigravity"></a>
   &nbsp;&nbsp;
-  <a href="https://github.com/features/copilot" title="GitHub Copilot"><img src="docs/assets/readme/agents/copilot.svg" height="38" alt="GitHub Copilot"></a>
+  <a href="https://github.com/features/copilot" title="GitHub Copilot"><img src="docs/assets/readme/agents/copilot.svg" width="38" height="38" style="border-radius: 50%;" alt="GitHub Copilot"></a>
 </p>
 
 <p align="center"><sub>Codex &nbsp;·&nbsp; Claude Code &nbsp;·&nbsp; Cursor &nbsp;·&nbsp; Google Antigravity &nbsp;·&nbsp; Copilot</sub></p>
