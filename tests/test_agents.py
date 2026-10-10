@@ -42,12 +42,13 @@ class AgentTests(unittest.TestCase):
             (root / "codex").write_text('[mcp_servers.moodle]\ncommand="python"\n', encoding="utf-8")
             (root / "claude").write_text('{"mcpServers":{"moodle":{"command":"python"}}}', encoding="utf-8")
             (root / "antigravity").write_text('invalid json', encoding="utf-8")
-            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch("moodle_tasks.agents.shutil.which", side_effect=lambda name: "/bin/" + name if name in ("codex", "agy") else None), patch("pathlib.Path.home", return_value=root):
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch("moodle_tasks.agents.shutil.which", side_effect=lambda name: "/bin/" + name if name in ("codex", "agent", "agy") else None), patch("pathlib.Path.home", return_value=root):
                 result = detect_agents()
             self.assertEqual(result["codex"].availability, "Instalado")
             self.assertTrue(result["codex"].moodle_configured)
             self.assertEqual(result["claude"].availability, "Configuración encontrada")
             self.assertTrue(result["claude"].moodle_configured)
+            self.assertEqual(result["cursor"].availability, "Instalado")
             self.assertEqual(result["antigravity"].availability, "Instalado")
             self.assertFalse(result["antigravity"].moodle_configured)
             self.assertEqual(result["copilot"].availability, "No detectado")

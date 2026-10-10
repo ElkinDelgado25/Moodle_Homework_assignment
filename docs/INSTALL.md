@@ -106,6 +106,12 @@ Para Antigravity especificamente:
 uv run mcp-moodle setup --connect-only --agent antigravity
 ```
 
+Para Cursor:
+
+```powershell
+uv run mcp-moodle setup --connect-only --agent cursor
+```
+
 Reinicia el agente despues de configurarlo. En Antigravity puedes escribir `/mcp` para comprobar que el servidor `moodle` este conectado.
 
 ## Datos locales

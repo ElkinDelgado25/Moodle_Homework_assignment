@@ -12,7 +12,7 @@ import tomlkit
 from .storage import atomic_write
 
 
-AGENTS = {"codex": "Codex", "claude": "Claude Code",
+AGENTS = {"codex": "Codex", "claude": "Claude Code", "cursor": "Cursor",
           "antigravity": "Google Antigravity", "copilot": "Copilot en VS Code"}
 
 
@@ -43,7 +43,7 @@ def read_json_config(agent: str, path: Path) -> dict:
 
 def detect_agents() -> dict[str, AgentDetection]:
     """Inspeccionar comandos y configuración local sin ejecutar los agentes."""
-    commands = {"codex": ("codex",), "claude": ("claude",),
+    commands = {"codex": ("codex",), "claude": ("claude",), "cursor": ("agent", "cursor-agent"),
                 "antigravity": ("agy", "antigravity"), "copilot": ("code", "code-insiders")}
     detected = {}
     for agent, names in commands.items():
@@ -86,6 +86,8 @@ def agent_config_file(agent: str) -> Path:
         return Path(os.environ.get("CODEX_HOME", home / ".codex")) / "config.toml"
     if agent == "claude":
         return home / ".claude.json"
+    if agent == "cursor":
+        return home / ".cursor/mcp.json"
     if agent == "antigravity":
         return home / ".gemini/config/mcp_config.json"
     if agent == "copilot":

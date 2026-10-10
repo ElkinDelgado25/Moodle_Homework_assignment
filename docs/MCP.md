@@ -75,6 +75,16 @@ claude mcp add --transport stdio --scope user moodle -- uv --directory "$PWD" ru
 
 Inicia una nueva sesión y comprueba `/mcp`. [Documentación de Claude Code](https://code.claude.com/docs/en/mcp).
 
+## Cursor
+
+El repositorio incluye `.cursor/mcp.json`, por lo que Cursor CLI detecta Moodle al ejecutar `agent` desde esta carpeta. Para registrarlo tambien en la configuracion personal, ejecuta `uv run mcp-moodle setup` y selecciona **Cursor**. Comprueba el estado con:
+
+```bash
+agent mcp list
+```
+
+Cursor carga servidores MCP locales desde `.cursor/mcp.json` o `~/.cursor/mcp.json`. [Documentacion de Cursor](https://cursor.com/docs/cli/mcp).
+
 ## Copilot en VS Code
 
 El repositorio incluye `.vscode/mcp.json` con la ruta `${workspaceFolder}`. Abre el proyecto, usa `MCP: List Servers` en la paleta de comandos e inicia `moodle`. Utiliza Copilot en modo agente con las herramientas de Moodle habilitadas.

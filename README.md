@@ -193,7 +193,7 @@ Despues de instalar, usa estos comandos desde la carpeta del repositorio:
 | Revisar todas las materias | `uv run mcp-moodle tasks --mode all --refresh` |
 | Abrir de nuevo el panel de configuracion | `uv run mcp-moodle run` |
 
-Para integrar Moodle con Codex, Claude, Antigravity o Copilot, usa el asistente con `setup`. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
+Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
 
 ## Entregables
 

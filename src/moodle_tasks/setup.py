@@ -98,7 +98,7 @@ def ask_agent() -> str:
         choice = input("Selecciona una opción (1-4): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= len(choices):
             return choices[int(choice) - 1]
-        print("Selecciona un número entre 1 y 4.")
+        print(f"Selecciona un número entre 1 y {len(choices)}.")
 
 
 def ask_setup_action() -> str:

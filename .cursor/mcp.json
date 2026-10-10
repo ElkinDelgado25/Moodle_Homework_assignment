@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "moodle": {
+      "command": "uv",
+      "args": ["run", "mcp-moodle", "serve"]
+    }
+  }
+}
