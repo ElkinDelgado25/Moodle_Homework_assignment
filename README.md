@@ -65,6 +65,17 @@ powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 
 El instalador prepara `uv`, localiza el wheel incluido, instala Moodle MCP y abre el asistente. El asistente descarga Chromium, solicita la cuenta de Moodle y registra el agente elegido. Reinícialo al finalizar.
 
+Para instalar desde un clon de Git en Windows, sigue este flujo en vez de ejecutar `INSTALAR-WINDOWS.ps1` (ese instalador necesita el wheel que viene en el ZIP):
+
+1. Abre PowerShell dentro de `Moodle_Homework_assignment`.
+2. Para instalar las dependencias y configurar Moodle, ejecuta:
+
+   ```powershell
+   uv run mcp-moodle setup
+   ```
+
+El paso 2 descarga lo necesario y abre el asistente para ingresar la cuenta y elegir el agente. Con el ZIP, basta ejecutar `INSTALAR-WINDOWS.ps1`: instala y abre ese mismo asistente automaticamente.
+
 ---
 
 <a id="debian"></a>

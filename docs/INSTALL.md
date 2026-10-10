@@ -116,7 +116,7 @@ Abre una terminal nueva y ejecuta `mcp-moodle run`. Esta alternativa instala la 
 Si ya clonaste el repositorio, abre la terminal dentro de esa carpeta y ejecuta:
 
 ```bash
-uv run --python 3.11 mcp-moodle setup
+uv run mcp-moodle setup
 ```
 
 El asistente prepara las dependencias y Chromium; no necesitas crear un `.env`. Desde un clon utiliza `uv run mcp-moodle ...` para los comandos siguientes. Una instalación con `uv tool install` permite usar `mcp-moodle` desde cualquier carpeta.
