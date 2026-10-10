@@ -20,7 +20,21 @@
 | :--- | :--- | :--- |
 | Próximas cinco pendientes, materia y tiempo restante. | Descarga autenticada con la misma sesión de Moodle. | DOCX y PDF con portada ULEAM, APA 7 y Times New Roman. |
 
-Compatible con **Codex, Claude Code, Google Antigravity y Copilot**. Usa Python, `uv` y Playwright. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
+Compatible con **Codex, Claude Code, Cursor, Google Antigravity y Copilot**. Usa Python, `uv` y Playwright. Las instrucciones y los anexos se consultan cuando eliges una tarea para trabajar en ella.
+
+<p align="center">
+  <a href="https://openai.com/codex" title="Codex"><img src="docs/assets/readme/agents/codex.svg" height="38" alt="Codex"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.anthropic.com/claude-code" title="Claude Code"><img src="docs/assets/readme/agents/claude-code.svg" height="38" alt="Claude Code"></a>
+  &nbsp;&nbsp;
+  <a href="https://cursor.com/" title="Cursor"><img src="docs/assets/readme/agents/cursor.svg" height="38" alt="Cursor"></a>
+  &nbsp;&nbsp;
+  <a href="https://antigravity.google/" title="Google Antigravity"><img src="docs/assets/readme/agents/antigravity.svg" height="38" alt="Google Antigravity"></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/features/copilot" title="GitHub Copilot"><img src="docs/assets/readme/agents/copilot.svg" height="38" alt="GitHub Copilot"></a>
+</p>
+
+<p align="center"><sub>Codex &nbsp;·&nbsp; Claude Code &nbsp;·&nbsp; Cursor &nbsp;·&nbsp; Google Antigravity &nbsp;·&nbsp; Copilot</sub></p>
 
 ---
 
