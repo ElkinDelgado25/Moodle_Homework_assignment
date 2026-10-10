@@ -109,7 +109,7 @@ El asistente permite cambiar las credenciales o conectar otro agente.
    bash ./INSTALAR-LINUX.sh
    ```
 
-El instalador prepara `uv`, las bibliotecas de Chromium y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`.
+El instalador prepara `uv` y pregunta antes de instalar las bibliotecas de Chromium. Si aceptas, puede pedir la contrasena de `sudo`.
 
 Para configurar otra cuenta o conectar mas agentes:
 
