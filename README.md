@@ -84,6 +84,31 @@ El asistente permite cambiar las credenciales o conectar otro agente.
 
 ---
 
+### Linux
+
+Clona el repositorio y entra en su carpeta:
+
+```bash
+git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+cd Moodle_Homework_assignment
+```
+
+Luego ejecuta el instalador:
+
+```bash
+bash ./INSTALAR-LINUX.sh
+```
+
+En Ubuntu y Debian puede pedir la contrasena de `sudo` para instalar las bibliotecas que necesita Chromium.
+
+Para configurar otra cuenta o conectar mas agentes:
+
+```bash
+uv run mcp-moodle setup
+```
+
+---
+
 <a id="debian"></a>
 
 <img src="docs/assets/readme/debian-section.svg" width="1000" alt="Debian y derivados · Debian-based">

@@ -34,21 +34,27 @@ uv run mcp-moodle setup
 
 El asistente permite cambiar las credenciales o agregar otro agente usando la misma cuenta.
 
-## Linux y macOS
+## Linux
 
-Instala `uv` siguiendo su guia oficial y luego ejecuta:
+1. Clona el repositorio:
 
-```bash
-git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
-cd Moodle_Homework_assignment
-uv run mcp-moodle setup
-```
+   ```bash
+   git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+   ```
 
-En Debian o Ubuntu, Playwright puede requerir las bibliotecas de Chromium:
+2. Entra en la carpeta del repositorio:
 
-```bash
-uv run playwright install --with-deps chromium
-```
+   ```bash
+   cd Moodle_Homework_assignment
+   ```
+
+3. Ejecuta el instalador:
+
+   ```bash
+   bash ./INSTALAR-LINUX.sh
+   ```
+
+En Ubuntu y Debian el instalador prepara las bibliotecas de Chromium. Puede pedir tu contrasena de `sudo` para instalar esos paquetes.
 
 ## Usar Moodle MCP
 
@@ -60,7 +66,7 @@ uv run mcp-moodle status
 uv run mcp-moodle tasks
 ```
 
-Para conectar otro agente con la cuenta que ya configuraste:
+Para configurar otra cuenta o conectar mas agentes:
 
 ```powershell
 uv run mcp-moodle run --connect-only
