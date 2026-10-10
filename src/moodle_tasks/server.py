@@ -63,6 +63,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "con el id o la URL de Moodle de esa fila: lee entonces instrucciones y anexos solo de esa actividad. "
             "Si la descripción no tiene instrucciones escritas o solo muestra una URL, interpreta ese enlace como las instrucciones de la actividad. "
             "get_assignment abre y lee automáticamente las páginas web enlazadas en la descripción, aunque solo haya una URL. "
+            "Al recibir get_assignment, usa primero el campo instructions: reúne la descripción y el texto de los enlaces. "
             "Cuando links no esté vacío, revisa linked_resources antes de responder: usa ese contenido como material de la tarea y menciona su URL. "
             "Nunca digas que no hay instrucciones adicionales si links contiene uno o más enlaces; explica solamente los fallos que aparezcan en linked_resources. "
             "Tras una consulta exitosa de get_assignment, no explores archivos locales, código fuente ni credenciales para buscar instrucciones: usa los campos que ya devolvió la herramienta. "
@@ -248,8 +249,20 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 login(page, settings)
                 task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={resolved_id}", settings)
                 linked = read_linked_resources(browser, task.links, (settings.username, settings.password))
-                return {**asdict(task), **linked,
-                        "instruction_source": "linked_resources" if task.links else "moodle_description",
+                instructions = task.content
+                readable_resources = [resource for resource in linked["linked_resources"]
+                                      if resource.get("content")]
+                if readable_resources:
+                    linked_text = "\n\n".join(
+                        "Fuente: {url}\n{content}".format(
+                            url=resource.get("resolved_url", resource["url"]),
+                            content=resource["content"],
+                        )
+                        for resource in readable_resources
+                    )
+                    instructions = f"{task.content}\n\nInstrucciones de los enlaces:\n{linked_text}"
+                return {**asdict(task), **linked, "instructions": instructions,
+                        "instruction_source": "linked_resources" if readable_resources else "moodle_description",
                         "linked_instruction_count": len(task.links)}
             finally:
                 browser.close()
@@ -259,7 +272,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         assignment_id: Annotated[int | None, Field(ge=1, description="Identificador numérico de la tarea en Moodle.")] = None,
         url: Annotated[str | None, Field(min_length=1, description="URL de Moodle de la tarea, por ejemplo /mod/assign/view.php?id=362681.")] = None,
     ) -> dict[str, Any]:
-        """Lee UNA tarea por assignment_id o por su URL de Moodle. Incluye instrucciones, fechas, estado, anexos y hasta cinco páginas enlazadas; una descripción que solo contiene una URL se lee como instrucciones. instruction_source y linked_instruction_count indican si hay material web que debes usar; no explores archivos locales para buscarlo."""
+        """Lee UNA tarea por assignment_id o por su URL de Moodle. Usa primero instructions: reúne la descripción y el texto legible de hasta cinco páginas enlazadas. Una descripción que solo contiene una URL se lee como instrucciones. linked_resources conserva cada fuente y sus errores; no explores archivos locales para buscar material."""
         try:
             return await asyncio.to_thread(get_task, assignment_id, url)
         except Exception as error:

@@ -12,7 +12,7 @@ from .errors import redact_credentials
 
 MAX_LINKS = 5
 MAX_CONTENT = 30_000
-INTRO_SELECTORS = ".activity-description, .mod_introbox, #intro"
+INTRO_SELECTORS = ".activity-description, .mod_introbox, #intro, .box.generalbox, [data-region='activity-information']"
 
 
 def assignment_links(page: Page, content: str, attachments: list[dict]) -> list[dict[str, str]]:
