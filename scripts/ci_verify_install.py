@@ -1,9 +1,8 @@
-"""Instalar el wheel, probar la herramienta instalada y preparar el ZIP compartible."""
+"""Instalar el wheel y probar la herramienta instalada."""
 
 import os
 import subprocess
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
 
 
 def main() -> None:
@@ -25,10 +24,6 @@ def main() -> None:
     for arguments in (["--help"], ["setup", "--help"], ["serve", "--help"]):
         subprocess.run([str(command), *arguments], check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", "tests", "-v"], check=True)
-    with ZipFile("dist/mcp-moodle-installer-0.1.0.zip", "w", ZIP_DEFLATED) as archive:
-        archive.write(wheel, wheel.name)
-        archive.write("docs/INSTALL.md", "INSTRUCCIONES.md")
-        archive.write("scripts/install-windows.ps1", "INSTALAR-WINDOWS.ps1")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ Los requisitos del navegador se basan en la [documentación oficial de Playwrigh
 
 ## Elige tu sistema
 
-Descarga el instalador desde [GitHub Actions](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) y extrae el ZIP: contiene el wheel y las instrucciones. También puedes [instalar desde GitHub](docs/INSTALL.md#instalar-desde-github-o-desde-un-clon).
+La unica instalacion soportada consiste en clonar este repositorio con Git. Consulta [INSTALL.md](docs/INSTALL.md).
 
 <table>
   <tr>
@@ -57,7 +57,14 @@ Instala `uv` siguiendo el bloque de tu sistema y abre una terminal nueva. Los co
 
 ### Windows — PowerShell
 
-Con el ZIP extraído, abre PowerShell en esa carpeta y ejecuta el instalador incluido:
+Clona el repositorio y entra en su carpeta:
+
+```powershell
+git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+cd .\Moodle_Homework_assignment
+```
+
+Luego ejecuta el instalador incluido:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
@@ -69,8 +76,6 @@ Si PowerShell quedÃ³ en la carpeta padre despuÃ©s de clonar o extraer, entra
 # Repositorio clonado con Git
 cd .\Moodle_Homework_assignment
 
-# ZIP extraÃ­do: reemplaza el nombre por la carpeta que se creÃ³ al extraerlo
-cd .\mcp-moodle-installer-0.1.0
 ```
 
 Desde esa carpeta ejecuta `powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1`.
@@ -90,7 +95,7 @@ Para instalar desde un clon de Git en Windows, sigue este flujo. El instalador i
    powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
    ```
 
-El paso 2 descarga lo necesario y abre el asistente para ingresar la cuenta y elegir el agente. Con el ZIP, basta ejecutar `INSTALAR-WINDOWS.ps1`: instala y abre ese mismo asistente automaticamente.
+El paso 2 descarga lo necesario y abre el asistente para ingresar la cuenta y elegir el agente.
 
 ---
 
@@ -268,7 +273,7 @@ El servidor `mcp-moodle serve` usa el SDK oficial de MCP para Python y expone he
 
 El [workflow multiplataforma](.github/workflows/tests.yml) construye el wheel, lo instala y ejecuta la suite completa en cinco entornos: Ubuntu 24.04, Arch Linux, Windows Server 2025, macOS 15 Apple Silicon y macOS 15 Intel. Las pruebas usan credenciales ficticias y páginas de prueba.
 
-Después de una ejecución correcta, descarga desde [GitHub Actions](https://github.com/ElkinDelgado25/Moodle_Homework_assignment/actions/workflows/tests.yml) el artifact de tu plataforma: `mcp-moodle-ubuntu`, `mcp-moodle-arch`, `mcp-moodle-windows`, `mcp-moodle-macos-arm64` o `mcp-moodle-macos-intel`. Extrae el ZIP: contiene el wheel y `INSTRUCCIONES.md`. El código Python es compartido; Python, Chromium y las dependencias se instalan para tu sistema.
+GitHub Actions se usa solo para verificar el proyecto en varios sistemas. Para instalarlo, clona este repositorio y sigue los pasos anteriores.
 
 ## Notas
 

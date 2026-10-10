@@ -28,13 +28,6 @@ jobs:
         run: uv build --wheel
       - name: Instalar el paquete y probar CLI, Chromium y MCP
         run: uv run python scripts/ci_verify_install.py
-      - name: Guardar instalador verificado
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mcp-moodle-ubuntu
-          path: dist/mcp-moodle-installer-0.1.0.zip
-          if-no-files-found: error
-          retention-days: 14
 
   windows:
     name: Windows Server 2025 (x64)
@@ -62,13 +55,6 @@ jobs:
           UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
           UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
         run: uv run python scripts/ci_verify_install.py
-      - name: Guardar instalador verificado
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mcp-moodle-windows
-          path: dist/mcp-moodle-installer-0.1.0.zip
-          if-no-files-found: error
-          retention-days: 14
 
   arch:
     name: Arch Linux
@@ -91,13 +77,6 @@ jobs:
         run: uv build --wheel
       - name: Instalar el paquete y probar CLI, Chromium y MCP
         run: uv run python scripts/ci_verify_install.py
-      - name: Guardar instalador verificado
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mcp-moodle-arch
-          path: dist/mcp-moodle-installer-0.1.0.zip
-          if-no-files-found: error
-          retention-days: 14
 
   macos:
     name: macOS 15 (${{ matrix.architecture }})
@@ -135,10 +114,3 @@ jobs:
           UV_TOOL_DIR: ${{ runner.temp }}/mcp-moodle/tools
           UV_TOOL_BIN_DIR: ${{ runner.temp }}/mcp-moodle/bin
         run: uv run python scripts/ci_verify_install.py
-      - name: Guardar instalador verificado
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist/mcp-moodle-installer-0.1.0.zip
-          if-no-files-found: error
-          retention-days: 14
