@@ -62,6 +62,8 @@ Para configurar otra cuenta o conectar mas agentes desde Debian, Ubuntu, Arch o 
 uv run mcp-moodle setup
 ```
 
+> **Importante:** el comando correcto es `mcp-moodle`, no `moodle-mcp`. `moodle-mcp` inicia el servidor MCP y no acepta la opción `setup`.
+
 ## Arch Linux y derivadas
 
 1. Clona el repositorio:

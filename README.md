@@ -96,6 +96,8 @@ uv run mcp-moodle setup
 
 El asistente permite cambiar las credenciales o conectar otro agente.
 
+> **Importante:** el comando correcto es `mcp-moodle`, no `moodle-mcp`. `moodle-mcp` inicia el servidor MCP y no acepta la opción `setup`.
+
 ---
 
 
@@ -208,6 +210,8 @@ Despues de instalar, usa estos comandos desde la carpeta del repositorio:
 | Abrir de nuevo el panel de configuracion | `uv run mcp-moodle run` |
 
 Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
+
+> **Importante:** no sustituyas el orden del nombre. Para configurar usa `uv run mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`.
 
 ## Entregables
 

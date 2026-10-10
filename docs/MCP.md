@@ -15,7 +15,7 @@ uv run playwright install chromium
 
 Completa y guarda `.env`, como indica el README. El servidor lee ese archivo aunque el cliente se ejecute desde otra carpeta. También acepta variables de entorno, que tienen prioridad, o una ruta explícita mediante `--env-file /ruta/a/.env`.
 
-El comando del servidor es `uv run mcp-moodle serve`. Un cliente MCP lo inicia y mantiene conectado; al ejecutarlo directamente en una terminal, espera mensajes del protocolo por la entrada estándar. La salida estándar está reservada para MCP.
+El comando del servidor es `uv run mcp-moodle serve`. Un cliente MCP lo inicia y mantiene conectado; al ejecutarlo directamente en una terminal, espera mensajes del protocolo por la entrada estándar. La salida estándar está reservada para MCP. No confundas `mcp-moodle` con `moodle-mcp`: el segundo es el punto de entrada directo del servidor y no tiene el subcomando `setup`; para abrir el asistente usa `uv run mcp-moodle setup`.
 
 ## Herramientas disponibles
 
