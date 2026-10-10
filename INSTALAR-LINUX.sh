@@ -23,19 +23,4 @@ if [[ ! -f "$project_dir/pyproject.toml" ]]; then
   exit 1
 fi
 
-if [[ -f /etc/debian_version ]]; then
-  read -r -p "Instalar las dependencias de Chromium para Debian o Ubuntu? [y/N] " install_deps
-  if [[ "$install_deps" =~ ^[Yy]$ ]]; then
-    echo "Preparando las bibliotecas de Chromium para Debian o Ubuntu..."
-    uv --directory "$project_dir" run playwright install --with-deps chromium
-  else
-    echo "Se omitieron las dependencias del sistema. Puedes instalarlas mas tarde ejecutando:"
-    echo "uv run playwright install --with-deps chromium"
-  fi
-elif [[ -f /etc/arch-release ]] && command -v pacman >/dev/null 2>&1; then
-  echo "Preparando Chromium para Arch Linux..."
-  sudo pacman -S --needed chromium
-fi
-
-echo "Preparando Moodle MCP desde el repositorio clonado..."
-uv --directory "$project_dir" run mcp-moodle setup
+exec uv --directory "$project_dir" run python scripts/install_linux.py

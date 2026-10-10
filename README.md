@@ -109,7 +109,7 @@ El asistente permite cambiar las credenciales o conectar otro agente.
    bash ./INSTALAR-LINUX.sh
    ```
 
-El instalador prepara `uv` y pregunta antes de instalar las bibliotecas de Chromium. Si aceptas, puede pedir la contrasena de `sudo`.
+El instalador muestra tres secciones con Rich y tiempos estimados. Pregunta antes de instalar las bibliotecas de Chromium y solicita la contrasena de `sudo` una sola vez si aceptas.
 
 Para configurar otra cuenta o conectar mas agentes:
 
