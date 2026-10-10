@@ -70,32 +70,17 @@ Luego ejecuta el instalador incluido:
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
-Si PowerShell quedÃ³ en la carpeta padre despuÃ©s de clonar o extraer, entra primero a la carpeta correspondiente. Ejemplos:
+El instalador prepara `uv`, instala las dependencias, descarga Chromium y abre el asistente para configurar Moodle y conectar un agente.
+
+### Configurar otra cuenta o mas agentes
+
+Desde la carpeta del repositorio ejecuta:
 
 ```powershell
-# Repositorio clonado con Git
-cd .\Moodle_Homework_assignment
-
+uv run mcp-moodle setup
 ```
 
-Desde esa carpeta ejecuta `powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1`.
-
-El instalador prepara `uv`, localiza el wheel incluido, instala Moodle MCP y abre el asistente. El asistente descarga Chromium, solicita la cuenta de Moodle y registra el agente elegido. Reinícialo al finalizar.
-
-Para instalar desde un clon de Git en Windows, sigue este flujo. El instalador incluido detecta el repositorio clonado y ejecuta la configuracion con `uv`:
-
-1. Desde la carpeta padre, abre PowerShell y entra al repositorio:
-
-   ```powershell
-   cd .\Moodle_Homework_assignment
-   ```
-2. Para instalar las dependencias y configurar Moodle, ejecuta:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
-   ```
-
-El paso 2 descarga lo necesario y abre el asistente para ingresar la cuenta y elegir el agente.
+El asistente permite cambiar las credenciales o conectar otro agente.
 
 ---
 
