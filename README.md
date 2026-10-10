@@ -11,7 +11,7 @@
 <p align="center">
   <a href="#instalacion">Instalación</a> ·
   <a href="#opciones-extras">Opciones extras</a> ·
-  <a href="#consultar-tareas">Consultar tareas</a> ·
+  <a href="#entregables">Entregables</a> ·
   <a href="docs/MCP.md">Guía MCP</a> ·
   <a href="docs/DOCUMENT_OUTPUT.md">Documentos</a>
 </p>
