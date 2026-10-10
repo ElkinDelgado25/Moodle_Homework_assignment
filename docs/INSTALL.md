@@ -30,6 +30,13 @@ Después de extraer el ZIP, abre PowerShell en esa carpeta y ejecuta:
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
+Si acabas de extraer el ZIP y PowerShell estÃ¡ en su carpeta padre, entra primero en la carpeta extraÃ­da (sustituye el nombre si es distinto):
+
+```powershell
+cd .\mcp-moodle-installer-0.1.0
+powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
+```
+
 El instalador prepara `uv` si hace falta, localiza el wheel incluido, instala Python 3.11 y Moodle MCP, y abre el asistente. El asistente descarga Chromium y solicita la cuenta de Moodle y el agente que deseas conectar. No necesitas instalar Python, Chromium ni modificar el PATH manualmente. Reinicia el agente elegido al terminar.
 
 ### Linux — Debian y derivados (Debian-based)
@@ -113,9 +120,10 @@ uv tool update-shell
 
 Abre una terminal nueva y ejecuta `mcp-moodle run`. Esta alternativa instala la rama principal, que puede contener cambios posteriores al artifact que descargaste.
 
-Si ya clonaste el repositorio, abre la terminal dentro de esa carpeta y ejecuta:
+Si ya clonaste el repositorio, desde la carpeta padre ejecuta:
 
 ```bash
+cd .\Moodle_Homework_assignment
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 

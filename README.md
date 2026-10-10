@@ -63,11 +63,27 @@ Con el ZIP extraído, abre PowerShell en esa carpeta y ejecuta el instalador inc
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
+Si PowerShell quedÃ³ en la carpeta padre despuÃ©s de clonar o extraer, entra primero a la carpeta correspondiente. Ejemplos:
+
+```powershell
+# Repositorio clonado con Git
+cd .\Moodle_Homework_assignment
+
+# ZIP extraÃ­do: reemplaza el nombre por la carpeta que se creÃ³ al extraerlo
+cd .\mcp-moodle-installer-0.1.0
+```
+
+Desde esa carpeta ejecuta `powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1`.
+
 El instalador prepara `uv`, localiza el wheel incluido, instala Moodle MCP y abre el asistente. El asistente descarga Chromium, solicita la cuenta de Moodle y registra el agente elegido. Reinícialo al finalizar.
 
-Para instalar desde un clon de Git en Windows, sigue este flujo en vez de ejecutar `INSTALAR-WINDOWS.ps1` (ese instalador necesita el wheel que viene en el ZIP):
+Para instalar desde un clon de Git en Windows, sigue este flujo. El instalador incluido detecta el repositorio clonado y ejecuta la configuracion con `uv`:
 
-1. Abre PowerShell dentro de `Moodle_Homework_assignment`.
+1. Desde la carpeta padre, abre PowerShell y entra al repositorio:
+
+   ```powershell
+   cd .\Moodle_Homework_assignment
+   ```
 2. Para instalar las dependencias y configurar Moodle, ejecuta:
 
    ```powershell
