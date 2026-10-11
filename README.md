@@ -182,7 +182,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 En una ventana nueva de Terminal, desde la carpeta del wheel:
 
 ```bash
-uv tool install --python 3.11 ./moodle_homework_assignment-0.1.0-py3-none-any.whl
+uv tool install --python 3.11 ./moodle_homework_assignment-0.1.1-py3-none-any.whl
 uv tool update-shell
 ```
 
