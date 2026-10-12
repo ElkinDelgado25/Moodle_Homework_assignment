@@ -84,14 +84,12 @@ Luego ejecuta el instalador incluido:
 powershell -ExecutionPolicy Bypass -File .\INSTALAR-WINDOWS.ps1
 ```
 
-El instalador prepara `uv`, instala las dependencias, descarga Chromium y abre el asistente para configurar Moodle y conectar un agente.
+El instalador prepara `uv`, deja `mcp-moodle` en el PATH, descarga Chromium y abre el asistente para configurar Moodle y conectar un agente. Cierra las terminales que ya estaban abiertas y abre una nueva para usar el comando desde cualquier carpeta.
 
 ### Configurar otra cuenta o mas agentes
 
-Desde la carpeta del repositorio ejecuta:
-
 ```powershell
-uv run mcp-moodle setup
+mcp-moodle setup
 ```
 
 El asistente permite cambiar las credenciales o conectar otro agente.
@@ -125,12 +123,12 @@ El asistente permite cambiar las credenciales o conectar otro agente.
    bash ./INSTALAR-DEBIAN.sh
    ```
 
-El instalador muestra tres secciones con Rich y tiempos estimados. Pregunta antes de instalar las bibliotecas de Chromium y solicita la contrasena de `sudo` una sola vez si aceptas.
+El instalador muestra tres secciones con Rich y tiempos estimados. Deja `mcp-moodle` en el PATH, pregunta antes de instalar las bibliotecas de Chromium y solicita la contrasena de `sudo` una sola vez si aceptas. Abre una terminal nueva para usar el comando desde cualquier carpeta.
 
 Para configurar otra cuenta o conectar mas agentes:
 
 ```bash
-uv run mcp-moodle setup
+mcp-moodle setup
 ```
 
 ---
@@ -159,12 +157,12 @@ uv run mcp-moodle setup
    bash ./INSTALAR-ARCH.sh
    ```
 
-El instalador prepara `uv`, instala el paquete `chromium` y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`.
+El instalador prepara `uv`, deja `mcp-moodle` en el PATH, instala el paquete `chromium` y abre el asistente de Moodle. Puede pedir la contrasena de `sudo`. Abre una terminal nueva para usar el comando desde cualquier carpeta.
 
 Para configurar otra cuenta o conectar mas agentes:
 
 ```bash
-uv run mcp-moodle setup
+mcp-moodle setup
 ```
 
 ---
@@ -175,22 +173,33 @@ uv run mcp-moodle setup
 
 ### macOS — Intel y Apple Silicon
 
+1. Clona el repositorio:
+
+   ```bash
+   git clone https://github.com/ElkinDelgado25/Moodle_Homework_assignment.git
+   ```
+
+2. Entra en la carpeta del repositorio:
+
+   ```bash
+   cd Moodle_Homework_assignment
+   ```
+
+3. Ejecuta el instalador:
+
+   ```bash
+   bash ./INSTALAR-MACOS.sh
+   ```
+
+El instalador prepara `uv`, deja `mcp-moodle` en el PATH y abre el asistente. Usa una terminal nativa de tu Mac; `uv` y Playwright descargan Python y Chromium para su arquitectura. El asistente guarda la cuenta en `~/Library/Application Support/moodle-homework-assignment/`. Abre una terminal nueva para usar el comando desde cualquier carpeta.
+
+Para configurar otra cuenta o conectar mas agentes:
+
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+mcp-moodle setup
 ```
 
-En una ventana nueva de Terminal, desde la carpeta del wheel:
-
-```bash
-uv tool install --python 3.11 ./moodle_homework_assignment-0.1.1-py3-none-any.whl
-uv tool update-shell
-```
-
-Abre Terminal de nuevo y ejecuta `mcp-moodle run`. Usa una terminal nativa de tu Mac; `uv` y Playwright descargan Python y Chromium para su arquitectura. El asistente guarda la cuenta en `~/Library/Application Support/moodle-homework-assignment/`.
-
-El asistente pide tu cuenta, intenta validarla, prepara Chromium y te permite elegir el agente. Sigue [los pasos completos de instalación](docs/INSTALL.md), incluida la alternativa desde GitHub, la actualización y los instaladores disponibles en Actions.
-
-`mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`.
+`mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`. Sigue [los pasos completos de instalación](docs/INSTALL.md).
 
 ---
 
@@ -198,20 +207,20 @@ El asistente pide tu cuenta, intenta validarla, prepara Chromium y te permite el
 
 ## Opciones extras
 
-Despues de instalar, usa estos comandos desde la carpeta del repositorio:
+Despues de instalar, abre una terminal nueva y usa estos comandos desde cualquier carpeta:
 
 | Opcion | Comando |
 | --- | --- |
-| Ver el estado de la cuenta | `uv run mcp-moodle status` |
-| Abrir el asistente y conectar otra cuenta o agente | `uv run mcp-moodle setup` |
-| Consultar las proximas tareas pendientes | `uv run mcp-moodle tasks` |
-| Consultar tareas vencidas | `uv run mcp-moodle tasks --mode overdue` |
-| Revisar todas las materias | `uv run mcp-moodle tasks --mode all --refresh` |
-| Abrir de nuevo el panel de configuracion | `uv run mcp-moodle run` |
+| Ver el estado de la cuenta | `mcp-moodle status` |
+| Abrir el asistente y conectar otra cuenta o agente | `mcp-moodle setup` |
+| Consultar las proximas tareas pendientes | `mcp-moodle tasks` |
+| Consultar tareas vencidas | `mcp-moodle tasks --mode overdue` |
+| Revisar todas las materias | `mcp-moodle tasks --mode all --refresh` |
+| Abrir de nuevo el panel de configuracion | `mcp-moodle run` |
 
 Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
 
-> **Importante:** no sustituyas el orden del nombre. Para configurar usa `uv run mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`.
+> **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Si actualizas el repositorio, vuelve a ejecutar el instalador de tu sistema para actualizar el comando del PATH.
 
 ## Entregables
 
