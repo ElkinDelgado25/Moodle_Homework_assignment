@@ -18,6 +18,7 @@ from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
 from .ui import ConnectionState, show_agent_menu, show_dashboard, show_setup_menu
+from .updates import offer_update_from_setup
 
 
 DEFAULT_URL = "https://aulavirtualmoodle.uleam.edu.ec"
@@ -118,6 +119,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--agent-config", type=Path, help="Configuración alternativa del agente, por ejemplo un perfil de VS Code")
     parser.add_argument("--connect-only", action="store_true", help="Conectar otro agente usando la cuenta ya guardada")
     args = parser.parse_args(argv)
+    if offer_update_from_setup():
+        return
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
     username = None
     config = None

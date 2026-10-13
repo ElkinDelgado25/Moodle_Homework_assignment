@@ -212,6 +212,7 @@ Despues de instalar, abre una terminal nueva y usa estos comandos desde cualquie
 | Opcion | Comando |
 | --- | --- |
 | Ver el estado de la cuenta | `mcp-moodle status` |
+| Buscar e instalar una release estable | `mcp-moodle update` |
 | Abrir el asistente y conectar otra cuenta o agente | `mcp-moodle setup` |
 | Consultar las proximas tareas pendientes | `mcp-moodle tasks` |
 | Consultar tareas vencidas | `mcp-moodle tasks --mode overdue` |
@@ -220,7 +221,7 @@ Despues de instalar, abre una terminal nueva y usa estos comandos desde cualquie
 
 Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
 
-> **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Si actualizas el repositorio, vuelve a ejecutar el instalador de tu sistema para actualizar el comando del PATH.
+> **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Actualiza con `mcp-moodle update`; las instrucciones están en [INSTALL.md](docs/INSTALL.md).
 
 ## Entregables
 

@@ -136,8 +136,24 @@ mcp-moodle setup --connect-only --agent cursor
 
 Reinicia el agente despues de configurarlo. En Antigravity puedes escribir `/mcp` para comprobar que el servidor `moodle` este conectado.
 
+## Actualizar Moodle MCP
+
+Ejecuta desde cualquier carpeta:
+
+```bash
+mcp-moodle update
+```
+
+El comando consulta la release estable más reciente, muestra la versión instalada y la nueva, y pide confirmación antes de actualizar. Instala el código exacto de la etiqueta de esa release, sincroniza las dependencias fijadas en `uv.lock` y reinstala el comando `mcp-moodle`. Al terminar, reinicia el cliente MCP.
+
+Si el clon tiene cambios locales o la etiqueta de release no pertenece a la misma línea de historial, la actualización se detiene y conserva el clon. Guarda o confirma tus cambios y vuelve a intentarlo. Las credenciales y configuraciones de agentes permanecen en las carpetas personales del usuario.
+
+`mcp-moodle setup` también ofrece la actualización cuando encuentra una release nueva. `mcp-moodle status` muestra un aviso con la versión, el enlace a GitHub Releases y el comando. Ambos guardan la última comprobación durante 24 horas; configura `MOODLE_UPDATE_CHECK_HOURS` para cambiar el intervalo o usa `0` para revisar cada vez. Si GitHub no responde, `setup` y `status` continúan normalmente. El comando `update` sí necesita acceso a GitHub para confirmar y descargar la release.
+
+Si una versión antigua no reconoce `mcp-moodle update`, vuelve a ejecutar el instalador de tu sistema para actualizar el comando del PATH.
+
 ## Datos locales
 
 Las credenciales se guardan solo en la configuracion local del usuario, no en el repositorio ni en la configuracion MCP del agente. En Windows se guardan en `%APPDATA%\moodle-homework-assignment\credentials.env`.
 
-Si Moodle no responde, ejecuta `mcp-moodle status` mas tarde para comprobar la cuenta otra vez. Si actualizas el repositorio, vuelve a ejecutar el instalador de tu sistema para actualizar el comando del PATH.
+Si Moodle no responde, ejecuta `mcp-moodle status` mas tarde para comprobar la cuenta otra vez.

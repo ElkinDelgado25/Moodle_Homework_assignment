@@ -3,7 +3,7 @@
 import argparse
 
 from . import main as tasks
-from . import server, setup, status
+from . import server, setup, status, updates
 from .ui import show_dashboard
 
 
@@ -15,6 +15,7 @@ def main(argv: list[str] | None = None) -> None:
     commands.add_parser("serve", add_help=False, help="Iniciar el servidor MCP para un cliente, sin preguntas")
     commands.add_parser("tasks", add_help=False, help="Consultar tareas directamente en la terminal")
     commands.add_parser("status", add_help=False, help="Ver cuenta y comprobar el estado de conexión")
+    commands.add_parser("update", add_help=False, help="Actualizar Moodle MCP a la última release estable")
     args, options = parser.parse_known_args(argv)
     if args.command in ("run", "setup"):
         setup.main(options)
@@ -22,6 +23,8 @@ def main(argv: list[str] | None = None) -> None:
         server.main(options)
     elif args.command == "status":
         status.main(options)
+    elif args.command == "update":
+        updates.main(options)
     elif args.command == "tasks":
         if options:
             tasks.main(options)

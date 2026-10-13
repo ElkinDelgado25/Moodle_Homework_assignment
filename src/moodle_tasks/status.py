@@ -7,6 +7,7 @@ from .errors import redact_credentials
 from .main import config_values, load_config
 from .setup import verify_credentials
 from .ui import ConnectionState, show_dashboard
+from .updates import check_for_updates, show_update_notice
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -14,6 +15,7 @@ def main(argv: list[str] | None = None) -> None:
     # config_values/load_config resuelven la ruta personal solo si no se indicó una.
     parser.add_argument("--env-file", type=Path)
     args = parser.parse_args(argv)
+    show_update_notice(check_for_updates())
     values = config_values(args.env_file)
     username = values.get("MOODLE_USERNAME")
     if any(not (values.get(key) or "").strip() for key in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")):
