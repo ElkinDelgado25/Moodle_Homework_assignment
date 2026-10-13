@@ -43,6 +43,7 @@ def is_pending(task: Assignment) -> bool:
 
 
 ENV_FILE = default_env_file()
+NO_DESCRIPTION = "No se encontró una descripción visible."
 
 
 def config_values(env_file: Path | None = None) -> dict[str, str | None]:
@@ -229,11 +230,9 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     else:
         open_page(page, url)
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
-    content = first_text(
-        page,
-        ".activity-description, .mod_introbox, #intro, .box.generalbox, "
-        "[data-region='activity-information']",
-    ) or "No se encontró una descripción visible."
+    from .linked_content import assignment_description, assignment_links
+
+    content = assignment_description(page) or NO_DESCRIPTION
     due_date = first_text(
         page,
         ".activity-dates, .assign-dates, [data-region='activity-information'] .description",
@@ -263,11 +262,12 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     no_upload = bool(re.search(r"no deben subir|no (?:se )?requiere (?:subir|entrega)|do not (?:submit|upload)", content, re.I))
     attachments = page.locator(
         "#region-main a[href*='/mod_assign/introattachment/'], #intro a[href*='pluginfile.php'], "
-        ".activity-description a[href*='pluginfile.php'], .mod_introbox a[href*='pluginfile.php']"
+        ".activity-description a[href*='pluginfile.php'], .mod_introbox a[href*='pluginfile.php'], "
+        "[data-region='activity-description'] a[href*='pluginfile.php'], "
+        "[data-region='activity-information'] .description a[href*='pluginfile.php'], "
+        ".box.generalbox a[href*='pluginfile.php']"
     ).evaluate_all("aa => aa.map(a => ({name: (a.innerText || a.getAttribute('title') || '').trim(), url: a.href}))")
     course = first_text(page, ".breadcrumb a[href*='/course/view.php']")
-    from .linked_content import assignment_links
-
     links = assignment_links(page, content, attachments)
     return Assignment(title, page.url, content, closing.group(1) if closing else due_date, status, submitted,
                       course=course, attachments=attachments, links=links,

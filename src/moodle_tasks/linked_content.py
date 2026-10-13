@@ -12,7 +12,67 @@ from .errors import redact_credentials
 
 MAX_LINKS = 5
 MAX_CONTENT = 30_000
-INTRO_SELECTORS = ".activity-description, .mod_introbox, #intro, .box.generalbox, [data-region='activity-information']"
+DESCRIPTION_SELECTORS = (
+    "#intro",
+    ".activity-description",
+    ".mod_introbox",
+    "[data-region='activity-description']",
+    "[data-region='activity-information'] .description",
+    ".box.generalbox",
+    "[data-region='activity-information']",
+)
+INTRO_SELECTORS = ", ".join(DESCRIPTION_SELECTORS)
+DATE_FIELD = re.compile(r"\b(?:Apertura|Opened|Opens|Cierre|Due(?: date)?|Fecha de entrega)\s*:\s*", re.I)
+DATE_VALUE = re.compile(
+    r"(?:(?:[A-Za-zÁ-ÿ]+),?\s*)?\d{1,2}\s+(?:de\s+)?[A-Za-zÁ-ÿ]+\s+(?:de\s+)?"
+    r"\d{4},?\s+\d{1,2}:\d{2}(?:\s*[ap]m)?",
+    re.I,
+)
+
+
+def clean_block_text(value: str | None) -> str:
+    """Normaliza espacios sin perder los párrafos y listas de la consigna."""
+    lines = [re.sub(r"[\t\f\v ]+", " ", line).strip() for line in (value or "").replace("\xa0", " ").splitlines()]
+    cleaned = []
+    blank = False
+    for line in lines:
+        if line:
+            cleaned.append(line)
+            blank = False
+        elif cleaned and not blank:
+            cleaned.append("")
+            blank = True
+    return "\n".join(cleaned).strip()
+
+
+def is_date_summary(value: str) -> bool:
+    """Evita presentar el resumen de apertura y cierre como si fuera la consigna."""
+    fields = list(DATE_FIELD.finditer(value))
+    if not fields or value[:fields[0].start()].strip(" ,;:-\n"):
+        return False
+    for index, field in enumerate(fields):
+        end = fields[index + 1].start() if index + 1 < len(fields) else len(value)
+        date_value = value[field.end():end].strip(" ,;:-\n")
+        if not DATE_VALUE.fullmatch(date_value):
+            return False
+    return True
+
+
+def assignment_description(page: Page) -> str:
+    """Lee el bloque de descripción de Moodle, sin confundirlo con sus fechas."""
+    for selector in DESCRIPTION_SELECTORS:
+        matches = page.locator(selector)
+        texts = []
+        for index in range(matches.count()):
+            try:
+                text = clean_block_text(matches.nth(index).inner_text())
+            except PlaywrightTimeoutError:
+                continue
+            if text and not is_date_summary(text) and text not in texts:
+                texts.append(text)
+        if texts:
+            return "\n\n".join(texts)
+    return ""
 
 
 def assignment_links(page: Page, content: str, attachments: list[dict]) -> list[dict[str, str]]:

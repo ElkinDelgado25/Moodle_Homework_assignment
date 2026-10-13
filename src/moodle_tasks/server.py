@@ -16,7 +16,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 from playwright.sync_api import sync_playwright
 
-from .main import Assignment, ENV_FILE, collect_assignments, config_values, is_pending, load_config, login, read_assignment
+from .main import Assignment, ENV_FILE, NO_DESCRIPTION, collect_assignments, config_values, is_pending, load_config, login, read_assignment
 from .errors import MoodleHTTPError, redact_credentials
 from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
@@ -66,6 +66,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Al recibir get_assignment, usa primero el campo instructions: reúne la descripción y el texto de los enlaces. "
             "Cuando links no esté vacío, revisa linked_resources antes de responder: usa ese contenido como material de la tarea y menciona su URL. "
             "Nunca digas que no hay instrucciones adicionales si links contiene uno o más enlaces; explica solamente los fallos que aparezcan en linked_resources. "
+            "Si description_found=false y no hay instrucciones legibles en linked_resources, explica que Moodle no expuso la descripción; no concluyas que la actividad carece de consigna. "
             "Tras una consulta exitosa de get_assignment, no explores archivos locales, código fuente ni credenciales para buscar instrucciones: usa los campos que ya devolvió la herramienta. "
             "Si linked_content_incomplete=true, explica qué enlaces fallaron, se truncaron o quedaron fuera del límite. "
             "No confundas la posición de una fila con el id de Moodle ni repitas el listado completo. "
@@ -261,8 +262,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                         for resource in readable_resources
                     )
                     instructions = f"{task.content}\n\nInstrucciones de los enlaces:\n{linked_text}"
+                description_found = task.content != NO_DESCRIPTION
                 return {**asdict(task), **linked, "instructions": instructions,
-                        "instruction_source": "linked_resources" if readable_resources else "moodle_description",
+                        "description_found": description_found,
+                        "instruction_source": "linked_resources" if readable_resources else "moodle_description" if description_found else "none",
                         "linked_instruction_count": len(task.links)}
             finally:
                 browser.close()
@@ -272,7 +275,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         assignment_id: Annotated[int | None, Field(ge=1, description="Identificador numérico de la tarea en Moodle.")] = None,
         url: Annotated[str | None, Field(min_length=1, description="URL de Moodle de la tarea, por ejemplo /mod/assign/view.php?id=362681.")] = None,
     ) -> dict[str, Any]:
-        """Lee UNA tarea por assignment_id o por su URL de Moodle. Usa primero instructions: reúne la descripción y el texto legible de hasta cinco páginas enlazadas. Una descripción que solo contiene una URL se lee como instrucciones. linked_resources conserva cada fuente y sus errores; no explores archivos locales para buscar material."""
+        """Lee UNA tarea por assignment_id o por su URL de Moodle. Usa primero instructions: reúne la descripción y el texto legible de hasta cinco páginas enlazadas. description_found=false significa que Moodle no expuso una descripción visible; no concluyas que la tarea carece de consigna. Una descripción que solo contiene una URL se lee como instrucciones. linked_resources conserva cada fuente y sus errores; no explores archivos locales para buscar material."""
         try:
             return await asyncio.to_thread(get_task, assignment_id, url)
         except Exception as error:
