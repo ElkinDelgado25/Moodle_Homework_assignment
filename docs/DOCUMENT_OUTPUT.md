@@ -39,4 +39,6 @@ La plantilla y el logo están incluidos en `src/moodle_tasks/assets/`. Para reco
 
 El MCP proporciona la plantilla y las instrucciones de entrega. El agente del cliente crea el contenido y convierte los archivos con sus herramientas de documentos; esta herramienta no genera respuestas académicas ni convierte archivos por sí sola. Antes de entregar, el agente debe renderizar y revisar todas las páginas del DOCX y el PDF.
 
+Después de presentar los enlaces locales del DOCX y PDF, el agente pregunta si el usuario quiere subir ambos archivos a la misma tarea de Moodle, salvo que ya lo hubiera pedido. Una petición explícita o un «sí» autoriza `upload_assignment_files`. La herramienta comprueba que los archivos existan, que la tarea acepte entregas y que no haya otros archivos ya adjuntos. Si Moodle ya muestra archivos, no los reemplaza; el usuario debe pedir el reemplazo expresamente. La subida guarda los archivos en la entrega, pero no los envía para calificación. El agente comunica los archivos confirmados y cualquier error parcial.
+
 Después de actualizar el paquete, reinicia el MCP en el cliente para que descubra `get_document_template()` y cargue las instrucciones nuevas.

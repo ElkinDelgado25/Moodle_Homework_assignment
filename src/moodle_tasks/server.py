@@ -16,11 +16,22 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 from playwright.sync_api import sync_playwright
 
-from .main import Assignment, ENV_FILE, NO_DESCRIPTION, collect_assignments, config_values, is_pending, load_config, login, read_assignment
+from .main import (
+    Assignment,
+    ENV_FILE,
+    NO_DESCRIPTION,
+    collect_assignments,
+    config_values,
+    is_pending,
+    load_config,
+    login,
+    read_assignment,
+)
 from .errors import MoodleHTTPError, redact_credentials
 from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
 from .storage import user_config_dir
+from .uploads import upload_files
 
 
 def assignment_id_from_reference(assignment_id: int | None, url: str | None, base_url: str) -> int:
@@ -81,6 +92,11 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "No entregues ODT, HTML, Markdown, imágenes de revisión ni scripts como formatos adicionales, salvo petición explícita del usuario. "
             "Guarda conversiones, fuentes e imágenes de revisión en una carpeta temporal fuera de la carpeta de entrega. "
             "Comprueba visualmente el DOCX y el PDF antes de entregarlos y presenta solo los dos enlaces finales. "
+            "Al terminar y presentar los dos entregables de una tarea de Moodle, pregunta si el usuario quiere subirlos, salvo que ya lo hubiera pedido expresamente. "
+            "Una petición explícita de subirlos o un sí a esa pregunta autoriza upload_assignment_files; después no vuelvas a pedir autorización. "
+            "Llama la herramienta con el mismo assignment_id y las rutas locales del DOCX y PDF. Si hay archivos anteriores, detente y explica que no se reemplazaron; "
+            "usa replace_existing=true solo si el usuario pide reemplazarlos explícitamente. "
+            "La herramienta adjunta archivos y guarda cambios, pero nunca envía la tarea para calificación. Informa de cualquier resultado parcial sin afirmar que la entrega está completa. "
             "Antes de crear esos documentos usa get_document_template para obtener la portada editable ULEAM. "
             "Aplica APA 7 al desarrollo: Times New Roman de 12 puntos, márgenes de 2,54 cm, interlineado doble, "
             "texto alineado a la izquierda, sangría inicial de 1,27 cm y sin espacio extra entre párrafos. "
@@ -109,6 +125,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     )
     download_annotations = ToolAnnotations(
         read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=True
+    )
+    upload_annotations = ToolAnnotations(
+        read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True
     )
 
     def config():
@@ -312,6 +331,32 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         """Descarga los anexos de UNA tarea con sesión autenticada, sin curl ni credenciales en el resultado. Usar cuando el usuario pide descargar material o resolver la tarea con sus anexos. Renueva la sesión una vez; rechaza HTML y PDF inválido. Devuelve rutas locales, sin sobrescribir archivos existentes, y errores de descargas parciales. Escribe archivos locales y no modifica entregas en Moodle."""
         try:
             return await asyncio.to_thread(download_task, assignment_id, destination_directory)
+        except Exception as error:
+            raise ToolError(safe_error(error)) from None
+
+    def upload_task(assignment_id: int | None, url: str | None, file_paths: list[str], replace_existing: bool) -> dict[str, Any]:
+        settings = config()
+        resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                page = browser.new_page()
+                page.set_default_timeout(15_000)
+                return upload_files(page, settings, resolved_id, file_paths, replace_existing=replace_existing)
+            finally:
+                browser.close()
+
+    @server.tool(annotations=upload_annotations, structured_output=True)
+    async def upload_assignment_files(
+        file_paths: Annotated[list[str], Field(min_length=1, max_length=10,
+                                               description="Rutas locales de los archivos finales, por ejemplo el DOCX y el PDF.")],
+        assignment_id: Annotated[int | None, Field(ge=1, description="Identificador numérico de la tarea en Moodle.")] = None,
+        url: Annotated[str | None, Field(min_length=1, description="URL de Moodle de la tarea; úsala en lugar de assignment_id.")] = None,
+        replace_existing: bool = False,
+    ) -> dict[str, Any]:
+        """Adjunta archivos locales a una tarea concreta con la sesión autenticada de Moodle. Llamar solo después de que el usuario pida explícitamente subirlos. Prevalida todos los archivos; detecta actividades cerradas y entregas existentes; no reemplaza archivos salvo que replace_existing=true se haya autorizado expresamente. Guarda los archivos sin enviar la tarea para calificación y devuelve estado por archivo, confirmación y errores parciales."""
+        try:
+            return await asyncio.to_thread(upload_task, assignment_id, url, file_paths, replace_existing)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

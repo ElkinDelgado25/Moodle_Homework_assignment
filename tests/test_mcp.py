@@ -58,13 +58,17 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
-                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "get_document_template"
+                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "upload_assignment_files", "get_document_template"
                 })
-                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name != "download_assignment_attachments"))
+                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name not in ("download_assignment_attachments", "upload_assignment_files")))
                 download = next(tool for tool in tools.tools if tool.name == "download_assignment_attachments")
                 self.assertFalse(download.annotations.read_only_hint)
                 self.assertFalse(download.annotations.destructive_hint)
                 self.assertFalse(download.annotations.idempotent_hint)
+                upload = next(tool for tool in tools.tools if tool.name == "upload_assignment_files")
+                self.assertFalse(upload.annotations.read_only_hint)
+                self.assertTrue(upload.annotations.destructive_hint)
+                self.assertFalse(upload.annotations.idempotent_hint)
                 result = await client.call_tool("configuration_status")
                 self.assertFalse(result.is_error)
                 self.assertEqual(result.structured_content, {"configured": True, "missing_variables": []})
@@ -73,6 +77,8 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(invalid.is_error)
                 invalid_download = await client.call_tool("download_assignment_attachments", {"assignment_id": 0})
                 self.assertTrue(invalid_download.is_error)
+                invalid_upload = await client.call_tool("upload_assignment_files", {"assignment_id": 1, "file_paths": []})
+                self.assertTrue(invalid_upload.is_error)
 
     async def test_document_template_is_packaged_and_has_no_unfilled_personal_defaults(self):
         from zipfile import ZipFile
