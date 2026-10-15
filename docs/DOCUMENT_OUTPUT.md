@@ -1,5 +1,9 @@
 # Entregables de tareas
 
+Cuando el usuario pide «hagamos la primera», «resuelve esta tarea» o continuar una actividad elegida, el agente consulta `get_assignment` y sigue su campo `assignment_workflow` hasta producir los entregables. La respuesta incluye `assignment_id`, las instrucciones de Moodle y sus enlaces, y `document_template` con la portada y el formato. No hace falta pedir por separado que consulte el MCP, use la plantilla o genere el PDF. Si el usuario solo solicita información, esta consulta no inicia la creación de archivos.
+
+Antes de redactar, el agente descarga y lee los anexos de esa misma actividad e identifica los requisitos, rúbrica y evidencias solicitadas. El contenido debe resolver esos requisitos: un resumen genérico, un TXT con una URL o una operación de Git no completan el trabajo. Si se exige una aplicación, código u otro producto, también debe prepararlo según la consigna y documentar el trabajo real, sin inventar capturas ni resultados. Los formatos explícitos de la consigna y del usuario tienen prioridad sobre los predeterminados.
+
 Al resolver una tarea documental, el agente debe entregar exactamente dos archivos finales con el mismo nombre base:
 
 - `.docx`, editable en Word o LibreOffice.
@@ -21,6 +25,8 @@ Ambos se guardan en la carpeta solicitada. HTML, ODT, Markdown, scripts y captur
 
 El agente copia la plantilla, reemplaza `{{subject}}`, `{{teacher}}`, `{{student_1}}`, `{{student_2}}`, `{{degree}}`, `{{class_group}}` y `{{year}}`, y adapta la cantidad de estudiantes cuando haga falta. Añade un salto de página después de la portada para comenzar el desarrollo. Los datos actuales de Moodle y las indicaciones del usuario tienen prioridad; no deben inventarse datos faltantes ni reutilizarse un docente de otra materia.
 
+`get_assignment` incluye esos mismos datos en `document_template`, por lo que no requiere otra llamada para obtenerlos. Si el perfil local es inválido, conserva las instrucciones de la actividad y devuelve `document_template=null` con el motivo en `document_template_error`. El agente puede avanzar en el contenido y debe resolver ese error antes de usar la plantilla. Los datos faltantes de portada no impiden preparar el desarrollo; solo debe preguntar por información necesaria que no esté disponible.
+
 ## Formato APA 7
 
 El desarrollo usa Times New Roman de 12 puntos, papel carta, márgenes de 2,54 cm, interlineado doble, alineación izquierda, sangría inicial de 1,27 cm y cero espacio adicional entre párrafos. Los encabezados de primer nivel van centrados y en negrita; los de segundo nivel, a la izquierda y en negrita. Se numeran todas las páginas desde la portada, arriba a la derecha, sin encabezado abreviado ni bordes de página.
@@ -37,7 +43,7 @@ La plantilla y el logo están incluidos en `src/moodle_tasks/assets/`. Para reco
 
 ## Alcance
 
-El MCP proporciona la plantilla y las instrucciones de entrega. El agente del cliente crea el contenido y convierte los archivos con sus herramientas de documentos; esta herramienta no genera respuestas académicas ni convierte archivos por sí sola. Antes de entregar, el agente debe renderizar y revisar todas las páginas del DOCX y el PDF.
+El MCP proporciona la plantilla y las instrucciones de entrega. El agente del cliente crea el contenido y convierte los archivos con sus herramientas de documentos; esta herramienta no genera respuestas académicas ni convierte archivos por sí sola. Las instrucciones guían al cliente, pero no garantizan que todos los modelos las cumplan. Antes de entregar, el agente debe contrastar el contenido con cada requisito de la consigna, renderizar y revisar todas las páginas del DOCX y el PDF. Si falta material esencial o falla la conversión, comunica el bloqueo o el archivo faltante y no declara terminada la tarea.
 
 Después de presentar los enlaces locales del DOCX y PDF, el agente pregunta si el usuario quiere subir ambos archivos a la misma tarea de Moodle, salvo que ya lo hubiera pedido. Una petición explícita o un «sí» autoriza `upload_assignment_files`. La herramienta comprueba que los archivos existan, que la tarea acepte entregas y que no haya otros archivos ya adjuntos. Si Moodle ya muestra archivos, no los reemplaza; el usuario debe pedir el reemplazo expresamente. La subida guarda los archivos en la entrega, pero no los envía para calificación. El agente comunica los archivos confirmados y cualquier error parcial.
 

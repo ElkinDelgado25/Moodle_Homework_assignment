@@ -225,7 +225,7 @@ Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el as
 
 ## Entregables
 
-Para crear un trabajo, el agente usa `get_document_template()`. La portada ULEAM y el logo estan incluidos en el repositorio en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png).
+Al pedir resolver una tarea, el agente usa `get_assignment()`, que incluye la consigna, la plantilla y los pasos para preparar los entregables sin recordatorios adicionales. Debe leer los anexos y resolver los requisitos de esa actividad antes de presentar los archivos. La plantilla también se puede consultar con `get_document_template()`. La portada ULEAM y el logo estan incluidos en el repositorio en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png).
 
 El resultado documental predeterminado contiene dos archivos con el mismo nombre:
 
