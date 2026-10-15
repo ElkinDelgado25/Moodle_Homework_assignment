@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -10,12 +11,22 @@ def main() -> None:
     if len(wheels) != 1:
         raise RuntimeError("Se esperaba exactamente un wheel recién construido en dist/.")
     wheel = wheels[0]
-    subprocess.run(["uv", "tool", "install", "--force", "--python", "3.11", str(wheel.resolve())], check=True)
+    with tempfile.TemporaryDirectory(prefix="moodle-ci-") as directory:
+        requirements = Path(directory) / "requirements.txt"
+        subprocess.run([
+            "uv", "export", "--locked", "--no-dev", "--no-emit-project", "--no-hashes",
+            "--format", "requirements.txt", "--output-file", str(requirements),
+        ], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([
+            "uv", "tool", "install", "--force", "--python", "3.11",
+            "--constraints", str(requirements), str(wheel.resolve()),
+        ], check=True)
     tool_root = Path(subprocess.check_output(["uv", "tool", "dir"], text=True).strip())
     bin_root = Path(subprocess.check_output(["uv", "tool", "dir", "--bin"], text=True).strip())
     environment = tool_root / "moodle-homework-assignment"
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     command = bin_root / ("mcp-moodle.exe" if os.name == "nt" else "mcp-moodle")
+    subprocess.run([str(python), "-m", "playwright", "install", "chromium"], check=True)
     subprocess.run([
         str(python), "-c",
         "import moodle_tasks; from pathlib import Path; "
