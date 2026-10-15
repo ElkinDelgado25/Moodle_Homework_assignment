@@ -27,6 +27,44 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 assignment_id_from_reference(None, url, base)
 
+    async def test_assignment_includes_template_and_workflow_without_writing_files(self):
+        from unittest.mock import MagicMock
+        task = Assignment("Práctica", "https://moodle.test/mod/assign/view.php?id=9",
+                          "Desarrollar la aplicación y presentar un informe.", "", "", False)
+        settings = Config("https://moodle.test", "test", "test", True)
+        linked = {"linked_resources": [], "linked_content_incomplete": False}
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "moodle_tasks.server.user_config_dir", return_value=Path(directory)
+        ), patch("moodle_tasks.server.sync_playwright", return_value=MagicMock()), patch(
+            "moodle_tasks.server.load_config", return_value=settings
+        ), patch("moodle_tasks.server.login"), patch(
+            "moodle_tasks.server.read_assignment", return_value=task
+        ), patch("moodle_tasks.server.read_linked_resources", return_value=linked), patch(
+            "moodle_tasks.server.download_attachment"
+        ) as download, patch("moodle_tasks.server.upload_files") as upload:
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_assignment", {"url": task.url})
+                self.assertFalse(result.is_error)
+                data = result.structured_content
+                self.assertEqual(data["assignment_id"], 9)
+                self.assertEqual(data["instructions"], task.content)
+                template = await client.call_tool("get_document_template")
+                self.assertEqual(data["document_template"], template.structured_content)
+                self.assertIsNone(data["document_template_error"])
+                self.assertTrue(data["assignment_workflow"])
+                self.assertEqual(list(Path(directory).iterdir()), [])
+                download.assert_not_called()
+                upload.assert_not_called()
+
+                # El perfil defectuoso no debe impedir consultar las instrucciones.
+                (Path(directory) / "document_profile.json").write_text('{"student_1": 123}')
+                result = await client.call_tool("get_assignment", {"assignment_id": 9})
+                self.assertFalse(result.is_error)
+                data = result.structured_content
+                self.assertEqual(data["instructions"], task.content)
+                self.assertIsNone(data["document_template"])
+                self.assertIn("perfil local", data["document_template_error"])
+
     async def test_server_failure_is_a_clear_tool_error_for_task_queries(self):
         failure = MoodleHTTPError(502, "https://moodle.test/login/index.php")
         config = Config("https://moodle.test", "test", "test", True)
