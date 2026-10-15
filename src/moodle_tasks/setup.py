@@ -12,13 +12,13 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 from rich.console import Console
 from rich.text import Text
 
-from .agents import AGENTS, detect_agents, register_agent
+from .agents import AGENTS, detect_agents, synchronize_agents
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
 from .ui import ConnectionState, show_agent_menu, show_dashboard, show_setup_menu
-from .updates import offer_update_from_setup
+from .updates import continue_with_updated_setup, update_from_setup
 
 
 DEFAULT_URL = "https://aulavirtualmoodle.uleam.edu.ec"
@@ -111,6 +111,22 @@ def ask_setup_action() -> str:
         print("Selecciona un número entre 1 y 4.")
 
 
+def sync_agent_configurations(env_file: Path, *, selected_agent: str | None = None,
+                              selected_config: Path | None = None) -> None:
+    result = synchronize_agents(env_file, selected_agent=selected_agent, selected_config=selected_config)
+    for agent, paths in result.paths.items():
+        for path in paths:
+            print(f"MCP sincronizado en {AGENTS[agent]}: {path}")
+    for agent, error in result.errors.items():
+        print(f"No se sincronizó {AGENTS[agent]}: {error}", file=sys.stderr)
+    if result.paths:
+        print("Reinicia o recarga los clientes MCP abiertos para cargar la versión instalada.")
+    elif not result.errors:
+        print("No se detectaron agentes instalados ni conexiones de Moodle para sincronizar.")
+    if result.errors:
+        raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", help="Dirección de Moodle; por defecto la guardada o ULEAM")
@@ -118,16 +134,31 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--config-dir", type=Path, help="Carpeta personal alternativa para las credenciales")
     parser.add_argument("--agent-config", type=Path, help="Configuración alternativa del agente, por ejemplo un perfil de VS Code")
     parser.add_argument("--connect-only", action="store_true", help="Conectar otro agente usando la cuenta ya guardada")
-    args = parser.parse_args(argv)
-    if offer_update_from_setup():
-        return
+    parser.add_argument("--skip-update", action="store_true", help="Configurar sin buscar una release nueva")
+    parser.add_argument("--sync-only", action="store_true", help="Sincronizar todos los agentes detectados sin preguntas de cuenta")
+    parser.add_argument("--sync-after-update", action="store_true", help=argparse.SUPPRESS)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(arguments)
     env_file = (args.config_dir or user_config_dir()).resolve() / "credentials.env"
     username = None
     config = None
     values = {}
     try:
+        if not args.skip_update and update_from_setup():
+            continue_with_updated_setup(arguments)
+            return
         values = config_values(env_file)
         username = values.get("MOODLE_USERNAME")
+        if args.sync_after_update:
+            prepare_browser(env_file.parent)
+            if env_file.is_file() and not args.sync_only:
+                sync_agent_configurations(env_file, selected_agent=args.agent, selected_config=args.agent_config)
+        if args.sync_only:
+            if not env_file.is_file():
+                print("No hay una cuenta guardada. Ejecuta mcp-moodle setup para configurarla.")
+                return
+            sync_agent_configurations(env_file, selected_agent=args.agent, selected_config=args.agent_config)
+            return
         url = (args.url or values.get("MOODLE_URL") or DEFAULT_URL).rstrip("/")
         parsed = urlsplit(url)
         if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -135,7 +166,8 @@ def main(argv: list[str] | None = None) -> None:
         connect_only = args.connect_only
         edit_only = False
         if not connect_only:
-            prepare_browser(env_file.parent)
+            if not args.sync_after_update:
+                prepare_browser(env_file.parent)
             show_dashboard(username, refresh=True)
             show_agent_menu(AGENTS, detect_agents(), title="Agentes en este equipo")
             if env_file.is_file() and all((values.get(key) or "").strip() for key in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")):
@@ -162,17 +194,17 @@ def main(argv: list[str] | None = None) -> None:
                 print("También puedes comprobar el acceso más tarde con: mcp-moodle status")
             if edit_only:
                 print("Credenciales actualizadas. Los agentes configurados con esta cuenta usarán los nuevos datos.")
+                sync_agent_configurations(env_file)
                 return
         elif not env_file.is_file():
             raise ValueError("Todavía no hay una cuenta guardada. Ejecuta mcp-moodle run primero.")
         else:
             show_dashboard(username, refresh=True)
         agent = args.agent or ask_agent()
-        path = register_agent(agent, env_file, args.agent_config)
+        sync_agent_configurations(env_file, selected_agent=agent, selected_config=args.agent_config)
         state = (ConnectionState.CONNECTED if verified else ConnectionState.PROBLEMS) if not connect_only else ConnectionState.NOT_STARTED
         show_dashboard(username, state, agent=AGENTS[agent], refresh=True)
         print(f"\nMCP registrado en {AGENTS[agent]} para tu usuario.")
-        print(f"Configuración del agente: {path}")
         print(f"Credenciales guardadas localmente en: {env_file}")
         if not connect_only and not verified:
             print("La validación de la cuenta está pendiente; la próxima consulta intentará iniciar sesión.")

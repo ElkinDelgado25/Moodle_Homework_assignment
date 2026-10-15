@@ -213,13 +213,16 @@ Despues de instalar, abre una terminal nueva y usa estos comandos desde cualquie
 | --- | --- |
 | Ver el estado de la cuenta | `mcp-moodle status` |
 | Buscar e instalar una release estable | `mcp-moodle update` |
-| Abrir el asistente y conectar otra cuenta o agente | `mcp-moodle setup` |
+| Actualizar a la última release, configurar la cuenta y sincronizar agentes | `mcp-moodle setup` |
+| Actualizar y sincronizar agentes sin preguntas de cuenta | `mcp-moodle setup --sync-only` |
 | Consultar las proximas tareas pendientes | `mcp-moodle tasks` |
 | Consultar tareas vencidas | `mcp-moodle tasks --mode overdue` |
 | Revisar todas las materias | `mcp-moodle tasks --mode all --refresh` |
 | Abrir de nuevo el panel de configuracion | `mcp-moodle run` |
 
 Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
+
+`setup` instala automáticamente una release estable más nueva y continúa con el código actualizado. Al conectar un agente, sincroniza también los agentes instalados y las conexiones existentes de Moodle, conservando la cuenta de cada conexión y las otras entradas MCP. Usa `--skip-update` para configurar sin buscar releases. Recarga el MCP en los clientes abiertos al terminar.
 
 > **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Actualiza con `mcp-moodle update`; las instrucciones están en [INSTALL.md](docs/INSTALL.md).
 

@@ -20,6 +20,13 @@ AGENTS = {"codex": "Codex", "claude": "Claude Code", "cursor": "Cursor",
 class AgentDetection:
     availability: str
     moodle_configured: bool = False
+    installed: bool = False
+
+
+@dataclass
+class AgentSyncResult:
+    paths: dict[str, list[Path]]
+    errors: dict[str, str]
 
 
 def read_json_config(agent: str, path: Path) -> dict:
@@ -63,6 +70,7 @@ def detect_agents() -> dict[str, AgentDetection]:
                 availability = "VS Code instalado; Copilot sin confirmar"
             elif copilot and not installed:
                 availability = "Extensión Copilot encontrada; VS Code sin confirmar"
+            installed = copilot
         configured = False
         try:
             path = agent_config_file(agent)
@@ -76,7 +84,7 @@ def detect_agents() -> dict[str, AgentDetection]:
         except (OSError, RuntimeError, ValueError, tomlkit.exceptions.ParseError):
             # Un archivo ilegible o inválido no impide detectar los demás clientes.
             pass
-        detected[agent] = AgentDetection(availability, configured)
+        detected[agent] = AgentDetection(availability, configured, installed)
     return detected
 
 
@@ -122,3 +130,56 @@ def register_agent(agent: str, env_file: Path, config_file: Path | None = None) 
         content = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
     atomic_write(path, content)
     return path
+
+
+def _existing_account(agent: str, fallback: Path) -> Path:
+    """Conservar la cuenta explícita de un agente ya conectado al sincronizarlo."""
+    path = agent_config_file(agent)
+    document = (tomlkit.parse(path.read_text(encoding="utf-8")) if agent == "codex"
+                else read_json_config(agent, path))
+    key = "mcp_servers" if agent == "codex" else "servers" if agent == "copilot" else "mcpServers"
+    arguments = document.get(key, {}).get("moodle", {}).get("args", [])
+    if isinstance(arguments, list):
+        for index, argument in enumerate(arguments):
+            if argument == "--env-file" and index + 1 < len(arguments):
+                value = arguments[index + 1]
+            elif isinstance(argument, str) and argument.startswith("--env-file="):
+                value = argument.split("=", 1)[1]
+            else:
+                continue
+            if isinstance(value, str) and value and Path(value).is_absolute():
+                return Path(value)
+    return fallback
+
+
+def synchronize_agents(env_file: Path, *, selected_agent: str | None = None,
+                       selected_config: Path | None = None) -> AgentSyncResult:
+    """Registrar instalados y conexiones existentes, aislando los fallos de cada cliente."""
+    detected = detect_agents()
+    targets = {agent for agent, state in detected.items() if state.installed or state.moodle_configured}
+    if selected_agent and selected_config is None:
+        targets.add(selected_agent)
+    result = AgentSyncResult({}, {})
+    for agent in AGENTS:
+        if agent not in targets:
+            continue
+        try:
+            account = env_file
+            if (agent != selected_agent or selected_config is not None) and detected[agent].moodle_configured:
+                account = _existing_account(agent, env_file)
+            # Un perfil alternativo no sustituye la configuración global del mismo agente.
+            if agent == selected_agent and selected_config == agent_config_file(agent):
+                account = env_file
+            result.paths[agent] = [register_agent(agent, account)]
+        except (OSError, RuntimeError, ValueError, TypeError, AttributeError, tomlkit.exceptions.ParseError):
+            # No devolver el contenido de configuraciones que puedan contener secretos.
+            result.errors[agent] = "No se pudo sincronizar su configuración; se conservó el archivo original."
+    if selected_agent and selected_config is not None:
+        try:
+            path = register_agent(selected_agent, env_file, selected_config)
+            paths = result.paths.setdefault(selected_agent, [])
+            if path not in paths:
+                paths.append(path)
+        except (OSError, RuntimeError, ValueError, TypeError, AttributeError, tomlkit.exceptions.ParseError):
+            result.errors[selected_agent] = "No se pudo sincronizar el perfil solicitado; se conservó el archivo original."
+    return result

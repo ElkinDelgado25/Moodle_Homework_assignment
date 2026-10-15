@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from moodle_tasks.agents import AGENTS, AgentDetection
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import load_config
 from moodle_tasks.setup import main, valid_username
@@ -15,6 +16,54 @@ from moodle_tasks.storage import save_credentials
 
 
 class SetupTests(unittest.TestCase):
+    def setUp(self):
+        update = patch("moodle_tasks.setup.update_from_setup", return_value=False)
+        update.start()
+        self.addCleanup(update.stop)
+        detection = patch("moodle_tasks.agents.detect_agents", return_value={
+            agent: AgentDetection("No detectado") for agent in AGENTS
+        })
+        detection.start()
+        self.addCleanup(detection.stop)
+
+    def test_updated_setup_continues_with_original_options_before_reading_account(self):
+        arguments = ["--agent", "cursor", "--config-dir", "/tmp/account with spaces"]
+        with patch("moodle_tasks.setup.update_from_setup", return_value=True), patch(
+            "moodle_tasks.setup.continue_with_updated_setup"
+        ) as continuation, patch("moodle_tasks.setup.ask_account") as account, patch(
+            "moodle_tasks.setup.config_values"
+        ) as values:
+            main(arguments)
+        continuation.assert_called_once_with(arguments)
+        values.assert_not_called()
+        account.assert_not_called()
+
+    def test_sync_only_uses_saved_account_without_questions_and_can_skip_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            save_credentials(root / "credentials.env", "https://moodle.test", "saved", "secret")
+            with patch("moodle_tasks.setup.update_from_setup") as update, patch(
+                "moodle_tasks.setup.sync_agent_configurations"
+            ) as sync, patch("moodle_tasks.setup.prepare_browser") as browser, patch("builtins.input") as ask:
+                main(["--skip-update", "--sync-only", "--config-dir", str(root)])
+            update.assert_not_called()
+            sync.assert_called_once_with(root / "credentials.env", selected_agent=None, selected_config=None)
+            browser.assert_not_called()
+            ask.assert_not_called()
+
+    def test_after_update_syncs_before_saved_account_menu_even_when_user_exits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            save_credentials(root / "credentials.env", "https://moodle.test", "saved", "secret")
+            events = []
+            with patch("moodle_tasks.setup.prepare_browser", side_effect=lambda *_: events.append("browser")), patch(
+                "moodle_tasks.setup.sync_agent_configurations", side_effect=lambda *_a, **_k: events.append("sync")
+            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "3"), patch(
+                "moodle_tasks.setup.show_dashboard"
+            ), patch("moodle_tasks.setup.show_agent_menu"), redirect_stdout(io.StringIO()):
+                main(["--skip-update", "--sync-after-update", "--config-dir", str(root)])
+            self.assertEqual(events, ["browser", "sync", "menu"])
+
     def test_validate_saved_account_preserves_credentials_and_agents(self):
         failures = (
             None,
@@ -33,7 +82,7 @@ class SetupTests(unittest.TestCase):
                 agent_path.write_text('{"existing": true}')
                 agent_before = agent_path.read_bytes()
                 output = io.StringIO()
-                with patch("moodle_tasks.setup.prepare_browser"), patch("builtins.input", return_value="4"), patch.dict(os.environ, {}, clear=True), patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.ask_agent") as agent, patch("moodle_tasks.setup.register_agent") as register, patch("moodle_tasks.status.verify_credentials", side_effect=failure) as verify, redirect_stdout(output):
+                with patch("moodle_tasks.setup.prepare_browser"), patch("builtins.input", return_value="4"), patch.dict(os.environ, {}, clear=True), patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.ask_agent") as agent, patch("moodle_tasks.setup.synchronize_agents") as register, patch("moodle_tasks.status.verify_credentials", side_effect=failure) as verify, redirect_stdout(output):
                     arguments = ["--config-dir", str(path.parent), "--agent-config", str(agent_path)]
                     if failure:
                         with self.assertRaises(SystemExit) as caught:
@@ -61,7 +110,7 @@ class SetupTests(unittest.TestCase):
             path = root / "account/credentials.env"
             save_credentials(path, "https://moodle.test", "saved", "saved-password")
             before = path.read_bytes()
-            with patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.register_agent") as register:
+            with patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.synchronize_agents") as register:
                 output = self.run_wizard(root, ["3"], [])
             account.assert_not_called()
             register.assert_not_called()

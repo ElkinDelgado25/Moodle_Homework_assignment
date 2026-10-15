@@ -369,7 +369,8 @@ def _apply_release(release: Release, console: Console) -> None:
                 "la exportación de dependencias fijadas",
             )
             _run_step(
-                ["uv", "tool", "install", "--python", "3.11", "--constraints", str(requirements), str(root)],
+                ["uv", "tool", "install", "--python", "3.11", "--force",
+                 "--reinstall-package", PROJECT_NAME, "--constraints", str(requirements), str(root)],
                 root,
                 "la reinstalación del comando mcp-moodle",
             )
@@ -381,7 +382,6 @@ def _apply_release(release: Release, console: Console) -> None:
         raise
 
     console.print(f"[green]Moodle MCP quedó actualizado a {release.version}.[/green]")
-    console.print("Reinicia el cliente MCP para cargar la versión nueva.")
 
 
 def update_latest(*, expected: Release | None = None, already_confirmed: bool = False,
@@ -410,22 +410,38 @@ def update_latest(*, expected: Release | None = None, already_confirmed: bool = 
     return True
 
 
-def offer_update_from_setup(console: Console | None = None) -> bool:
-    """Ofrece la actualización al comienzo del asistente; nunca la ejecuta sola."""
+def update_from_setup(console: Console | None = None) -> bool:
+    """Buscar e instalar la release estable al abrir setup, sin otra confirmación."""
     console = console or Console()
-    if not sys.stdin.isatty():
-        return False
-    status = check_for_updates()
-    show_update_notice(status, console)
-    if not status.update_available or status.release is None:
-        return False
-    if not Confirm.ask(f"¿Quieres actualizar ahora a la versión {status.release.version}?", default=False):
-        return False
     try:
-        return update_latest(expected=status.release, already_confirmed=True, console=console)
+        return update_latest(already_confirmed=True, console=console)
     except UpdateError as error:
         console.print(f"[yellow]No se actualizó: {error} La configuración continuará.[/yellow]")
         return False
+
+
+def continue_with_updated_setup(arguments: list[str]) -> None:
+    """Continuar en el intérprete recién instalado, también desde un checkout de desarrollo."""
+    try:
+        result = subprocess.run(["uv", "tool", "dir"], capture_output=True, text=True,
+                                encoding="utf-8", errors="replace")
+    except OSError:
+        raise UpdateError("No se encontró uv para continuar con la instalación actualizada.") from None
+    if result.returncode or not result.stdout.strip():
+        raise UpdateError("No se pudo localizar la instalación actualizada de Moodle MCP.")
+    python = Path(result.stdout.strip()) / PROJECT_NAME / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    if not python.is_file():
+        raise UpdateError("No se encontró el intérprete actualizado. Vuelve a ejecutar mcp-moodle setup.")
+    try:
+        # argv es una lista, sin shell; conserva rutas con espacios y opciones del usuario.
+        completed = subprocess.run([str(python), "-m", "moodle_tasks.setup", "--skip-update",
+                                    "--sync-after-update", *arguments])
+    except OSError:
+        raise UpdateError("No se pudo continuar el asistente. Vuelve a ejecutar mcp-moodle setup.") from None
+    if completed.returncode:
+        raise SystemExit(completed.returncode)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -433,7 +449,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.parse_args(argv)
     console = Console()
     try:
-        update_latest(console=console)
+        release = fetch_latest_release()
+        if UpdateStatus(installed_version(), release).update_available:
+            if update_latest(expected=release, console=console):
+                continue_with_updated_setup(["--sync-only"])
+        else:
+            from .setup import main as setup_main
+
+            console.print(f"Moodle MCP ya está en la última release estable ({release.version}).")
+            setup_main(["--skip-update", "--sync-only"])
     except UpdateError as error:
         console.print(f"[red]No se pudo actualizar Moodle MCP: {error}[/red]", stderr=True)
         raise SystemExit(1) from None

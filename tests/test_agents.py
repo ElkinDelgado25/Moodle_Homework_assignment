@@ -5,10 +5,55 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from moodle_tasks.agents import AGENTS, detect_agents, register_agent
+from moodle_tasks.agents import AGENTS, AgentDetection, detect_agents, register_agent, synchronize_agents
 
 
 class AgentTests(unittest.TestCase):
+    def test_sync_updates_installed_and_existing_agents_and_isolates_invalid_configs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old_account = root / "other-account/credentials.env"
+            (root / "codex").write_text(
+                '[mcp_servers.other]\ncommand="other"\n[mcp_servers.moodle]\ncommand="old-python"\n'
+                f'args=["serve", "--env-file", {json.dumps(str(old_account))}]\n'
+            )
+            broken = '{"private-setting":"secret-value",'
+            (root / "claude").write_text(broken)
+            detected = {agent: AgentDetection("No detectado") for agent in AGENTS}
+            detected.update(codex=AgentDetection("Configuración encontrada", True),
+                            claude=AgentDetection("Instalado", installed=True),
+                            cursor=AgentDetection("Instalado", installed=True))
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch(
+                "moodle_tasks.agents.detect_agents", return_value=detected
+            ):
+                result = synchronize_agents(root / "credentials.env")
+            self.assertEqual(set(result.paths), {"codex", "cursor"})
+            self.assertEqual(set(result.errors), {"claude"})
+            self.assertNotIn("secret-value", str(result))
+            self.assertEqual((root / "claude").read_text(), broken)
+            codex = tomllib.loads((root / "codex").read_text())["mcp_servers"]
+            self.assertIn("other", codex)
+            self.assertEqual(codex["moodle"]["args"][-1], str(old_account))
+            cursor = json.loads((root / "cursor").read_text())["mcpServers"]["moodle"]
+            self.assertEqual(cursor["args"][-1], str(root / "credentials.env"))
+            self.assertFalse((root / "copilot").exists())
+            self.assertFalse((root / "antigravity").exists())
+
+    def test_sync_selected_profile_also_refreshes_global_config_and_other_agents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            detected = {agent: AgentDetection("No detectado") for agent in AGENTS}
+            detected["codex"] = AgentDetection("Instalado", installed=True)
+            detected["cursor"] = AgentDetection("Instalado", installed=True)
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch(
+                "moodle_tasks.agents.detect_agents", return_value=detected
+            ):
+                result = synchronize_agents(root / "credentials.env", selected_agent="codex",
+                                            selected_config=root / "custom-profile.toml")
+            self.assertEqual(result.paths["codex"], [root / "codex", root / "custom-profile.toml"])
+            self.assertIn("cursor", result.paths)
+            self.assertFalse(result.errors)
+
     def test_empty_json_configurations_are_initialized_and_windows_bom_is_accepted(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

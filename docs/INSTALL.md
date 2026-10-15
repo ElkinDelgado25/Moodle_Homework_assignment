@@ -30,7 +30,7 @@ El instalador prepara `uv` si hace falta, deja `mcp-moodle` en el PATH, descarga
 mcp-moodle setup
 ```
 
-El asistente permite cambiar las credenciales o agregar otro agente usando la misma cuenta.
+El asistente busca la última release estable, la instala automáticamente si es más nueva y continúa la configuración con el código actualizado. Al conectar un agente sincroniza también los demás agentes detectados.
 
 ## Debian, Ubuntu y derivadas
 
@@ -144,11 +144,26 @@ Ejecuta desde cualquier carpeta:
 mcp-moodle update
 ```
 
-El comando consulta la release estable más reciente, muestra la versión instalada y la nueva, y pide confirmación antes de actualizar. Instala el código exacto de la etiqueta de esa release, sincroniza las dependencias fijadas en `uv.lock` y reinstala el comando `mcp-moodle`. Al terminar, reinicia el cliente MCP.
+El comando consulta la release estable más reciente, muestra la versión instalada y la nueva, y pide confirmación antes de actualizar. Instala el código exacto de la etiqueta de esa release, sincroniza las dependencias fijadas en `uv.lock` y reinstala el comando `mcp-moodle`. Después prepara Chromium y vuelve a registrar Moodle en todos los agentes instalados o que ya tengan una conexión de Moodle. Si ya está en la última versión, sincroniza sus configuraciones igualmente.
 
 Si el clon tiene cambios locales o la etiqueta de release no pertenece a la misma línea de historial, la actualización se detiene y conserva el clon. Guarda o confirma tus cambios y vuelve a intentarlo. Las credenciales y configuraciones de agentes permanecen en las carpetas personales del usuario.
 
-`mcp-moodle setup` también ofrece la actualización cuando encuentra una release nueva. `mcp-moodle status` muestra un aviso con la versión, el enlace a GitHub Releases y el comando. Ambos guardan la última comprobación durante 24 horas; configura `MOODLE_UPDATE_CHECK_HOURS` para cambiar el intervalo o usa `0` para revisar cada vez. Si GitHub no responde, `setup` y `status` continúan normalmente. El comando `update` sí necesita acceso a GitHub para confirmar y descargar la release.
+`mcp-moodle setup` y `mcp-moodle run` buscan la última release cada vez que se ejecutan y la instalan sin una confirmación adicional. Si actualizan, continúan el asistente con el intérprete recién instalado, preparan Chromium y sincronizan las conexiones antes de mostrar el menú de la cuenta guardada. También funciona al indicar un agente concreto:
+
+```bash
+mcp-moodle setup --connect-only --agent codex
+```
+
+Se registra el agente elegido y se sincronizan Codex, Claude Code, Cursor, Antigravity y Copilot cuando se detectan instalados o ya conectados a Moodle. Una instalación de VS Code por sí sola no confirma que tenga Copilot. Cada agente ya conectado conserva la ruta de su cuenta; los agentes nuevos usan la cuenta de este setup. `--agent-config` actualiza el perfil solicitado además de las configuraciones globales detectadas. Se conservan las demás entradas MCP y ajustes del cliente. Un archivo inválido no se sobrescribe: se continúa con los otros agentes, se informa el fallo y el comando termina con código 1. Esta sincronización actualiza configuraciones; los clientes abiertos requieren recargar su MCP o reiniciarse para usar el proceso nuevo.
+
+Para sincronizar sin preguntas de cuenta, o configurar sin consultar releases:
+
+```bash
+mcp-moodle setup --sync-only
+mcp-moodle setup --skip-update
+```
+
+Si GitHub no responde o el clon no puede actualizarse sin perder cambios locales, `setup` explica el motivo y continúa con la versión disponible. `mcp-moodle status` muestra un aviso y guarda su comprobación durante 24 horas; `MOODLE_UPDATE_CHECK_HOURS` modifica ese intervalo o `0` lo desactiva. Este caché no retrasa la búsqueda de releases de `setup`. El comando `update` sí necesita acceso a GitHub para confirmar y descargar la release.
 
 Si una versión antigua no reconoce `mcp-moodle update`, vuelve a ejecutar el instalador de tu sistema para actualizar el comando del PATH.
 
