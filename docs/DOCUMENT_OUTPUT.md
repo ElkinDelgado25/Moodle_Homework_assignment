@@ -31,7 +31,17 @@ El agente copia la plantilla, reemplaza `{{subject}}`, `{{teacher}}`, `{{student
 
 El desarrollo usa Times New Roman de 12 puntos, papel carta, márgenes de 2,54 cm, interlineado doble, alineación izquierda, sangría inicial de 1,27 cm y cero espacio adicional entre párrafos. Los encabezados de primer nivel van centrados y en negrita; los de segundo nivel, a la izquierda y en negrita. Se numeran todas las páginas desde la portada, arriba a la derecha, sin encabezado abreviado ni bordes de página.
 
-Las citas usan autor y fecha. Las referencias verificadas se ordenan alfabéticamente, con interlineado doble y sangría francesa de 1,27 cm. Cada fuente citada debe corresponder a una referencia y viceversa. No se inventan autores, fechas, enlaces ni fuentes. Las tablas llevan número, título en cursiva y notas cuando corresponda; se evitan líneas verticales y cuadrículas decorativas. El interior de tablas puede usar interlineado sencillo para mejorar la legibilidad.
+En las entregas de prácticas con repositorio se omiten las citas autor-fecha y la sección de referencias bibliográficas, salvo petición explícita de la consigna o del usuario. El formato APA de página y tipografía no obliga a añadir bibliografía. Un tutorial usado como consigna no se convierte automáticamente en una referencia del informe.
+
+Cuando el trabajo requiera bibliografía, las citas usan autor y fecha. Las referencias verificadas se ordenan alfabéticamente, con interlineado doble y sangría francesa de 1,27 cm. Cada fuente citada debe corresponder a una referencia y viceversa. No se inventan autores, fechas, enlaces ni fuentes. Las tablas llevan número, título en cursiva y notas cuando corresponda; se evitan líneas verticales y cuadrículas decorativas. El interior de tablas puede usar interlineado sencillo para mejorar la legibilidad.
+
+## Enlace del repositorio en prácticas
+
+El agente consulta los remotos Git del proyecto trabajado y confirma en GitHub el propietario, nombre y URL web canónica, mediante la página del repositorio o la API (por ejemplo, `gh repo view --json url,nameWithOwner`). No construye enlaces a partir del nombre de la carpeta ni reutiliza repositorios de otras tareas. Si hay varios remotos, distingue el proyecto del estudiante del repositorio original del tutorial. Una consulta `git fetch` no verifica el hipervínculo del documento ni demuestra que el trabajo local esté publicado.
+
+En DOCX y PDF, el texto visible y el destino del hipervínculo deben ser exactamente la URL web confirmada, conservando guiones, guiones bajos y demás caracteres. No se insertan espacios, saltos manuales, puntuación ni caracteres invisibles dentro del enlace. Después de exportar, el agente comprueba también el destino del enlace en ambos archivos y que el repositorio corresponde a la práctica; la revisión visual por sí sola no comprueba el destino.
+
+Si no puede confirmar la URL o necesita acceso, comunica la limitación y solicita el enlace exacto cuando sea necesario. Un 404 sin autenticar no demuestra que el repositorio no exista. Las incidencias de Git o de preparación se informan en la conversación y se incluyen en el documento únicamente si la consigna lo requiere.
 
 La portada conserva el logo y los bloques institucionales que pidió el usuario. Es una adaptación institucional y no la portada estudiantil estándar de APA. La base de formato se apoya en la [guía de APA para trabajos estudiantiles](https://www.apa.org/ed/precollege/psn/2020/09/apa-style-student-papers).
 

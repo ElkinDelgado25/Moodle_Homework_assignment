@@ -34,6 +34,29 @@ from .storage import user_config_dir
 from .uploads import upload_files
 
 
+DOCUMENT_CONTENT_POLICY = (
+    "Para una entrega de práctica con repositorio, redacta el desarrollo y el enlace del proyecto; "
+    "omite las citas autor-fecha y la sección de referencias bibliográficas, salvo que la consigna "
+    "o el usuario las soliciten expresamente. El formato APA de página y tipografía no obliga a "
+    "añadir bibliografía a estas prácticas. El tutorial del docente es material de entrada y no "
+    "se convierte automáticamente en una referencia ni en el repositorio del estudiante. "
+    "Obtén la URL del repositorio del proyecto realmente trabajado: consulta su remoto Git y "
+    "confirma en GitHub el propietario, nombre y URL web canónica mediante su página o API "
+    "(por ejemplo, gh repo view --json url,nameWithOwner). Nunca deduzcas la URL del nombre "
+    "de una carpeta, del título de la tarea ni del repositorio de otra actividad. "
+    "Si hay varios remotos, distingue el proyecto del estudiante del repositorio original del tutorial. "
+    "Copia exactamente la URL web confirmada de GitHub, respetando guiones, guiones bajos y demás "
+    "caracteres; usa esa misma URL como texto visible y destino de un hipervínculo clicable en DOCX "
+    "y PDF. No añadas espacios, saltos manuales, puntuación ni caracteres invisibles dentro del enlace. "
+    "Comprueba después de exportar que ambos enlaces apuntan a esa URL y que el repositorio corresponde "
+    "a la práctica. Un git fetch exitoso no verifica el enlace del documento ni que los cambios estén publicados. "
+    "Si no puedes confirmar el repositorio o requiere acceso, comunica la limitación y pide el enlace "
+    "exacto si hace falta; no inventes una URL ni declares que no existe solo por recibir un 404 sin autenticar. "
+    "Las incidencias de Git, sincronización o preparación se comunican en la conversación; "
+    "solo inclúyelas en el documento si son parte de la consigna."
+)
+
+
 ASSIGNMENT_WORKFLOW = (
     "Si el usuario pide hacer, resolver, preparar o continuar esta tarea, ejecuta el trabajo completo "
     "hasta crear los entregables; no esperes que repita que uses Moodle, la plantilla o que generes el PDF. "
@@ -46,6 +69,7 @@ ASSIGNMENT_WORKFLOW = (
     "genérico, un TXT con una URL o una descripción de lo que habría que hacer. "
     "Si exige código, repositorio u otro producto, prepara también ese producto según la consigna; "
     "el informe documenta el trabajo real. No inventes resultados, capturas, ejecuciones ni fuentes.",
+    DOCUMENT_CONTENT_POLICY,
     "Para el informe usa document_template de esta respuesta: copia la portada, completa únicamente "
     "datos confirmados, desarrolla el contenido desde la segunda página y aplica su formato. "
     "No necesitas otra llamada a get_document_template si document_template está disponible. "
@@ -139,7 +163,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "Aplica APA 7 al desarrollo: Times New Roman de 12 puntos, márgenes de 2,54 cm, interlineado doble, "
             "texto alineado a la izquierda, sangría inicial de 1,27 cm y sin espacio extra entre párrafos. "
             "Numera todas las páginas arriba a la derecha, desde la portada. No añadas bordes de página ni adornos. "
-            "Usa encabezados APA, citas autor-fecha y referencias verificadas en orden alfabético con sangría francesa de 1,27 cm; no inventes fuentes. "
+            "Usa encabezados APA. En trabajos que requieran bibliografía, usa citas autor-fecha y referencias verificadas "
+            "en orden alfabético con sangría francesa de 1,27 cm; no inventes fuentes. "
+            f"{DOCUMENT_CONTENT_POLICY} "
             "Conserva la portada institucional solicitada como adaptación a APA, su logo arriba a la izquierda, tipografía Times New Roman negra, "
             "textos centrados y distribución de Materia, Docente, Estudiantes, Carrera, Curso y Año. "
             "Completa los campos con los datos de la tarea y los que haya proporcionado el usuario; "
@@ -207,7 +233,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 "fields": fields,
                 "local_defaults": defaults,
                 "field_syntax": "{{field}}",
-                "instructions": "Mantén la portada y su encabezado. Usa local_defaults solo cuando correspondan a la materia y año de la tarea; los datos actuales de Moodle y del usuario tienen prioridad. Completa solo datos confirmados; adapta la lista de estudiantes a la tarea. Añade un salto de página y el desarrollo. Exporta el PDF desde el DOCX. Guarda solo esos dos entregables en la carpeta solicitada; usa una carpeta temporal para fuentes y revisión."}
+                "instructions": "Mantén la portada y su encabezado. Usa local_defaults solo cuando correspondan a la materia y año de la tarea; los datos actuales de Moodle y del usuario tienen prioridad. Completa solo datos confirmados; adapta la lista de estudiantes a la tarea. Añade un salto de página y el desarrollo. Exporta el PDF desde el DOCX. Guarda solo esos dos entregables en la carpeta solicitada; usa una carpeta temporal para fuentes y revisión. " + DOCUMENT_CONTENT_POLICY}
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False,
                                            idempotent_hint=True, open_world_hint=False), structured_output=True)
