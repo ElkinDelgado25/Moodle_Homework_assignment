@@ -15,6 +15,7 @@ from rich.text import Text
 from .agents import AGENTS, detect_agents, ordered_agents, synchronize_agents
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .main import Config, config_values, login
+from .profile import record_verified_profile
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
 from .ui import ConnectionState, show_agent_menu, show_dashboard, show_setup_menu
@@ -48,15 +49,23 @@ def prepare_browser(log_dir: Path | None = None) -> None:
     console.print(Text("✓ Chromium listo.", style="green"))
 
 
-def verify_credentials(config: Config) -> None:
+def verify_credentials(config: Config) -> dict[str, object]:
+    """Comprueba el acceso y guarda el nombre y las materias que Moodle muestra."""
+    identity: dict[str, object] = {"student_1": "", "courses": []}
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page()
             page.set_default_timeout(15_000)
             login(page, config)
+            try:
+                identity = record_verified_profile(page, config)
+            except Exception:
+                # El acceso ya está comprobado; un fallo al leer el perfil no lo anula.
+                identity = {"student_1": "", "courses": []}
         finally:
             browser.close()
+    return identity
 
 
 def ask_account(url: str) -> tuple[Config, bool]:
@@ -72,7 +81,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
         config = Config(url, username, password, True)
         try:
             with Console().status("Comprobando el acceso a Moodle...", spinner="dots", spinner_style="#ff6555"):
-                verify_credentials(config)
+                identity = verify_credentials(config) or {}
         except MoodleAuthenticationError:
             show_dashboard(username, ConnectionState.PROBLEMS, refresh=True)
             print("Moodle no aceptó el usuario o la contraseña. Vuelve a introducirlos.")
@@ -88,6 +97,11 @@ def ask_account(url: str) -> tuple[Config, bool]:
         except Exception as error:
             raise RuntimeError(redact_credentials(error, (username, password))) from None
         print("Cuenta verificada correctamente.")
+        if identity.get("student_1"):
+            print(f"Nombre en Moodle: {identity['student_1']}")
+        courses = identity.get("courses") or []
+        if courses:
+            print("Materias visibles: " + ", ".join(str(course) for course in courses))
         return config, True
     raise ValueError("No se pudo configurar la cuenta después de tres intentos. Ejecuta mcp-moodle run para intentarlo otra vez.")
 

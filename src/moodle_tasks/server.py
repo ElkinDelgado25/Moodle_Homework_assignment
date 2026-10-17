@@ -28,8 +28,11 @@ from .main import (
     read_assignment,
 )
 from .errors import MoodleHTTPError, redact_credentials
+from .delivery import finish_delivery as copy_and_open_delivery
+from .delivery import prepare_workspace
 from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
+from .profile import load_profile
 from .storage import user_config_dir
 from .uploads import upload_files
 
@@ -77,8 +80,15 @@ ASSIGNMENT_WORKFLOW = (
     "necesaria que no figure en Moodle, los anexos o la conversación. Si falta material esencial, "
     "explica el bloqueo concreto sin inventar una solución ni afirmar que está terminada.",
     "Crea por defecto el DOCX y exporta su PDF con el mismo nombre base, salvo formato explícito "
-    "distinto del usuario o de la consigna. Revisa visualmente todas las páginas y contrasta el "
-    "contenido con cada requisito antes de presentar los enlaces reales a los archivos. "
+    "distinto del usuario o de la consigna. Llama prepare_delivery_workspace y trabaja ahí: "
+    "esa carpeta no depende de tildes ni de espacios del destino final. "
+    "Exporta el PDF desde el DOCX pasando la ruta completa como un solo argumento; no la partas por espacios. "
+    "Si el trabajo lleva bibliografía, las referencias empiezan en una hoja aparte, con sangría francesa, "
+    "cursivas y DOI; no inventes fuentes. Las indicaciones concretas de la tarea las da el usuario o la consigna; "
+    "no las completes con datos de otra actividad. "
+    "Al terminar llama finish_delivery con el DOCX, el PDF y la carpeta pedida: copia los dos archivos "
+    "y abre el PDF en el navegador predeterminado. "
+    "Revisa visualmente todas las páginas y contrasta el contenido con cada requisito antes de presentar los enlaces reales. "
     "Un TXT, una promesa, git fetch o un cambio de código por sí solos no completan una tarea "
     "que requiere documentos. Si falla la creación o conversión, informa qué archivo falta.",
     "Conserva el assignment_id durante todo el trabajo. Crear los archivos no autoriza subirlos "
@@ -168,8 +178,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             f"{DOCUMENT_CONTENT_POLICY} "
             "Conserva la portada institucional solicitada como adaptación a APA, su logo arriba a la izquierda, tipografía Times New Roman negra, "
             "textos centrados y distribución de Materia, Docente, Estudiantes, Carrera, Curso y Año. "
-            "Completa los campos con los datos de la tarea y los que haya proporcionado el usuario; "
-            "no inventes docentes, estudiantes ni otros datos faltantes. Empieza el desarrollo en la página siguiente. "
+            "El nombre del estudiante y la lista de materias salen de la verificación de la cuenta en la instalación; "
+            "usa la materia que corresponda a esta tarea. Docente, curso y año los aporta el usuario o la consigna; no los inventes. "
+            "Si hay bibliografía, las referencias van en una hoja aparte. "
+            "Prepara el DOCX en prepare_delivery_workspace, exporta el PDF con la ruta completa en un solo argumento "
+            "y llama finish_delivery para copiar ambos archivos y abrir el PDF en el navegador predeterminado. "
+            "Empieza el desarrollo en la página siguiente. "
             "Si incomplete=true, comunica qué anexos fallaron; no afirmes que todos se descargaron. "
             "Usa mode=overdue únicamente si el usuario pide expresamente tareas vencidas. "
             "Distingue tareas disponibles de actividades que aún no se abren. Una tarea ya calificada "
@@ -211,17 +225,11 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     def document_template() -> dict[str, Any]:
         assets = Path(__file__).resolve().parent / "assets"
-        profile_path = user_config_dir() / "document_profile.json"
         fields = ["subject", "teacher", "student_1", "student_2", "degree", "class_group", "year"]
-        defaults = {}
-        if profile_path.is_file():
-            try:
-                profile = json.loads(profile_path.read_text(encoding="utf-8"))
-                if not isinstance(profile, dict) or any(not isinstance(value, str) for value in profile.values()):
-                    raise ValueError("Se esperaba un objeto JSON con valores de texto.")
-                defaults = {key: value for key, value in profile.items() if key in fields}
-            except (ValueError, OSError):
-                raise ToolError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato antes de generar el documento.") from None
+        try:
+            defaults = load_profile(user_config_dir())
+        except (ValueError, OSError, json.JSONDecodeError):
+            raise ToolError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato antes de generar el documento.") from None
         return {"template_path": str(assets / "academic-cover.docx"),
                 "logo_path": str(assets / "uleam-logo.png"),
                 "output_formats": ["docx", "pdf"],
@@ -229,11 +237,21 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                                "margins_cm": 2.54, "line_spacing": 2, "first_line_indent_cm": 1.27,
                                "alignment": "left", "paragraph_spacing_pt": 0,
                                "references_hanging_indent_cm": 1.27,
+                               "references_page": "Las referencias, cuando el trabajo las requiere, empiezan en una hoja aparte.",
                                "cover": "Portada institucional ULEAM solicitada; adaptación de la portada APA estudiantil."},
                 "fields": fields,
                 "local_defaults": defaults,
                 "field_syntax": "{{field}}",
-                "instructions": "Mantén la portada y su encabezado. Usa local_defaults solo cuando correspondan a la materia y año de la tarea; los datos actuales de Moodle y del usuario tienen prioridad. Completa solo datos confirmados; adapta la lista de estudiantes a la tarea. Añade un salto de página y el desarrollo. Exporta el PDF desde el DOCX. Guarda solo esos dos entregables en la carpeta solicitada; usa una carpeta temporal para fuentes y revisión. " + DOCUMENT_CONTENT_POLICY}
+                "instructions": (
+                    "Mantén la portada y su encabezado. student_1 y courses se leyeron al verificar la cuenta; "
+                    "usa la materia de courses que corresponda a esta tarea. "
+                    "Docente, curso, año y el resto de la consigna los da el usuario o la actividad; no los inventes ni copies de otra tarea. "
+                    "Añade un salto de página y el desarrollo. Si hay bibliografía, las referencias empiezan en otra hoja, "
+                    "con sangría francesa, cursivas y DOI. "
+                    "Crea el DOCX en prepare_delivery_workspace, exporta el PDF con la ruta completa como un solo argumento "
+                    "y llama finish_delivery para copiar los dos archivos y abrir el PDF en el navegador predeterminado. "
+                    + DOCUMENT_CONTENT_POLICY
+                )}
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False,
                                            idempotent_hint=True, open_world_hint=False), structured_output=True)
@@ -435,6 +453,27 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         """Adjunta archivos locales a una tarea concreta con la sesión autenticada de Moodle. Llamar solo después de que el usuario pida explícitamente subirlos. Prevalida todos los archivos; detecta actividades cerradas y entregas existentes; no reemplaza archivos salvo que replace_existing=true se haya autorizado expresamente. Guarda los archivos sin enviar la tarea para calificación y devuelve estado por archivo, confirmación y errores parciales."""
         try:
             return await asyncio.to_thread(upload_task, assignment_id, url, file_paths, replace_existing)
+        except Exception as error:
+            raise ToolError(safe_error(error)) from None
+
+    local_annotations = ToolAnnotations(
+        read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
+    )
+
+    @server.tool(annotations=local_annotations, structured_output=True)
+    def prepare_delivery_workspace() -> dict[str, str]:
+        """Crea una carpeta temporal para redactar el DOCX y exportar el PDF. Úsala antes de Word: su ruta no depende de tildes ni espacios del destino final."""
+        return {"directory": str(prepare_workspace())}
+
+    @server.tool(annotations=local_annotations, structured_output=True)
+    def finish_delivery(
+        docx_path: Annotated[str, Field(min_length=1, description="Ruta del DOCX ya creado.")],
+        pdf_path: Annotated[str, Field(min_length=1, description="Ruta del PDF exportado desde ese DOCX.")],
+        destination_directory: Annotated[str, Field(min_length=1, description="Carpeta final pedida por el usuario.")],
+    ) -> dict[str, Any]:
+        """Copia el DOCX y el PDF a la carpeta pedida y abre el PDF en el navegador predeterminado, con la ruta completa como un solo archivo. Llamar al terminar el documento, antes de preguntar si se sube a Moodle."""
+        try:
+            return copy_and_open_delivery(docx_path, pdf_path, destination_directory)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

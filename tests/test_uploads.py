@@ -80,12 +80,14 @@ class AssignmentUploadTests(unittest.TestCase):
         if current_files is None:
             current_files = self.state["existing_files"]
         existing = "".join(f'<div class="fp-file"><input type="checkbox" data-togglegroup="files" data-toggle="slave" data-fullname="{name}"><div class="fp-filename">{name}</div></div>' for name in current_files)
+        add_control = '<div class="fp-btn-add"><a role="button" id="add-link">Agregar</a></div>' if self.state.get("inner_add") else '<button type="button" class="fp-btn-add">Agregar</button>'
+        save_control = self.state.get("save_control") or '<button type="submit">Guardar cambios</button>'
         manager = f'''<div class="filemanager fm-updating" data-maxfiles="2" data-maxbytes="1000000">
-          <button type="button" class="fp-vb-details">Detalles</button><button type="button" class="fp-btn-add">Agregar</button><button type="button" class="fp-btn-delete">Eliminar</button>
+          <button type="button" class="fp-vb-details">Detalles</button>{add_control}<button type="button" class="fp-btn-delete">Eliminar</button>
           <div class="fp-content">{existing}</div></div>''' if self.state["has_filemanager"] else ""
         return f'''<!doctype html><html><body><main id="region-main"><h1>Tarea de ejemplo</h1>
           <form id="editform" method="post" action="/save">{manager}
-          <button type="submit">Guardar cambios</button></form>
+          {save_control}<button type="button" id="grade" onclick="fetch('/grade')">Enviar tarea</button></form>
           <script>
           const form = document.querySelector('#editform');
           form.addEventListener('submit', () => {{
@@ -101,7 +103,8 @@ class AssignmentUploadTests(unittest.TestCase):
               if (!fm.querySelector('.fp-file')) fm.classList.add('fm-nofiles', 'fm-noitems');
             }}, 50);
             fm.querySelector('.fp-vb-details').onclick = (event) => event.currentTarget.classList.add('checked');
-            fm.querySelector('.fp-btn-add').onclick = () => {{
+            const add = fm.querySelector('.fp-btn-add a, .fp-btn-add');
+            add.onclick = () => {{
               const dialog = document.createElement('div'); dialog.id = 'file-dialog'; dialog.setAttribute('role', 'dialog');
               dialog.innerHTML = '<button type="button" id="repo">Subir un archivo</button>'; document.body.appendChild(dialog);
               dialog.querySelector('#repo').onclick = () => {{
@@ -215,6 +218,17 @@ class AssignmentUploadTests(unittest.TestCase):
             result = upload_files(self.page, self.config, 1, [str(docx)])
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(self.state["saved_files"], None)
+
+    def test_inner_add_control_and_submitbutton_save_without_sending_for_grading(self):
+        self.state["inner_add"] = True
+        self.state["save_control"] = '<input type="submit" id="id_submitbutton" name="submitbutton" value="Guardar cambios&nbsp;">'
+        with tempfile.TemporaryDirectory() as directory:
+            docx, pdf = self.make_files(directory)
+            result = upload_files(self.page, self.config, 1, [str(docx), str(pdf)])
+        self.assertEqual(result["status"], "uploaded")
+        self.assertEqual(result["uploaded_files"], ["entrega.docx", "entrega.pdf"])
+        self.assertNotIn(("GET", "/grade"), self.state["requests"])
+        self.assertFalse(result["sent_for_grading"])
 
     def test_explicit_no_upload_instruction_blocks_changes(self):
         original_view_html = self.view_html

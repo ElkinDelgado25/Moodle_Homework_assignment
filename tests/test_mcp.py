@@ -96,9 +96,9 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
-                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "upload_assignment_files", "get_document_template"
+                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "upload_assignment_files", "get_document_template", "prepare_delivery_workspace", "finish_delivery"
                 })
-                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name not in ("download_assignment_attachments", "upload_assignment_files")))
+                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name not in ("download_assignment_attachments", "upload_assignment_files", "prepare_delivery_workspace", "finish_delivery")))
                 download = next(tool for tool in tools.tools if tool.name == "download_assignment_attachments")
                 self.assertFalse(download.annotations.read_only_hint)
                 self.assertFalse(download.annotations.destructive_hint)

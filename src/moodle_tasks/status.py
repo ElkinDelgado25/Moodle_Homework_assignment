@@ -23,9 +23,16 @@ def main(argv: list[str] | None = None) -> None:
         return
     config = load_config(args.env_file)
     try:
-        verify_credentials(config)
+        identity = verify_credentials(config)
     except Exception as error:
         detail = redact_credentials(error, (config.username, config.password))
         show_dashboard(username, ConnectionState.PROBLEMS, detail=detail)
         raise SystemExit(1) from None
-    show_dashboard(username, ConnectionState.CONNECTED, detail="Acceso a Moodle verificado en esta consulta.")
+    detail = "Acceso a Moodle verificado en esta consulta."
+    if isinstance(identity, dict):
+        if identity.get("student_1"):
+            detail += f" Nombre: {identity['student_1']}."
+        courses = identity.get("courses") or []
+        if courses:
+            detail += f" Materias: {len(courses)}."
+    show_dashboard(username, ConnectionState.CONNECTED, detail=detail)

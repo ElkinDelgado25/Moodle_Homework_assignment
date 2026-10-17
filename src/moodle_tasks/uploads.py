@@ -31,6 +31,10 @@ CLOSED = re.compile(
 )
 ACTION = re.compile(r"^(?:add|edit) submission$|^(?:agregar|a[nñ]adir|editar) entrega$", re.IGNORECASE)
 SAVE = re.compile(r"^(?:save changes|guardar cambios)$", re.IGNORECASE)
+GRADING = re.compile(
+    r"enviar (?:la )?tarea|enviar para calific|submit assignment|submit for grading",
+    re.IGNORECASE,
+)
 UPLOAD_REPOSITORY = re.compile(r"^(?:upload a file|subir un archivo|subir archivo)$", re.IGNORECASE)
 UPLOAD_FILE = re.compile(r"^(?:upload this file|subir este archivo)$", re.IGNORECASE)
 SELECT_FILE = re.compile(r"^(?:select this file|seleccionar este archivo|seleccionar archivo)$", re.IGNORECASE)
@@ -42,8 +46,20 @@ POLL_ATTEMPTS = 240  # up to 60 seconds for Moodle's asynchronous file picker an
 def _control_text(control: Locator) -> str:
     tag = control.evaluate("element => element.tagName.toLowerCase()")
     if tag == "input":
-        return control.get_attribute("value") or control.get_attribute("aria-label") or ""
-    return control.inner_text()
+        raw = control.get_attribute("value") or control.get_attribute("aria-label") or ""
+    else:
+        raw = control.inner_text() or control.get_attribute("aria-label") or ""
+    return " ".join(raw.replace("\xa0", " ").split())
+
+
+def _is_save_control(control: Locator) -> bool:
+    text = _control_text(control)
+    if not text or GRADING.search(text):
+        return False
+    name = (control.get_attribute("id") or "") + " " + (control.get_attribute("name") or "")
+    if "submitbutton" in name and not GRADING.search(text):
+        return True
+    return bool(SAVE.fullmatch(text))
 
 
 def _click_control(root: Locator | Page, pattern: re.Pattern[str], selectors: str = "a, button, input[type='submit']") -> bool:
@@ -136,7 +152,9 @@ def _wait_for_filemanager_ready(page: Page, filemanager: Locator) -> None:
         classes = (filemanager.get_attribute("class") or "").split()
         loaded_empty = "fm-nofiles" in classes or "fm-noitems" in classes
         loaded_with_files = bool(_file_names(filemanager))
-        if "fm-updating" not in classes and (loaded_empty or loaded_with_files):
+        # Tras quitar los archivos previos, el área puede quedar vacía sin la clase fm-nofiles.
+        ready = loaded_empty or loaded_with_files or _add_control(filemanager) is not None
+        if "fm-updating" not in classes and ready:
             return
         page.wait_for_timeout(250)
     raise RuntimeError("Moodle no terminó de cargar el área de entrega.")
@@ -170,11 +188,34 @@ def _submit_upload_form(page: Page) -> bool:
     return _find_dialog_action(page, UPLOAD_FILE)
 
 
+def _add_control(filemanager: Locator) -> Locator | None:
+    selectors = ".fp-btn-add a, .fp-btn-add button, a.fp-btn-add, button.fp-btn-add, [data-action='add']"
+    controls = filemanager.locator(selectors)
+    for index in range(controls.count()):
+        control = controls.nth(index)
+        try:
+            if control.is_visible():
+                return control
+        except Exception:
+            continue
+    container = filemanager.locator(".fp-btn-add")
+    if container.count():
+        return container.first
+    return None
+
+
 def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
-    add = filemanager.locator(".fp-btn-add, [data-action='add']")
-    if not add.count() or not add.first.is_visible():
+    _wait_for_filemanager_ready(page, filemanager)
+    if page.locator("[role='dialog']:visible, .filepicker:visible, .moodle-dialogue:visible").count():
+        _dismiss_filepicker(page)
+    add = _add_control(filemanager)
+    if add is None:
         raise RuntimeError("Moodle no muestra el control para agregar archivos.")
-    add.first.click()
+    try:
+        add.scroll_into_view_if_needed(timeout=2_000)
+    except Exception:
+        pass
+    add.click()
 
     # El selector de Moodle puede abrir directamente el repositorio de subida o mostrar
     # primero la lista de repositorios disponibles.
@@ -301,18 +342,19 @@ def _submission_file_names(page: Page) -> tuple[str, str]:
 
 
 def _save_control(page: Page, filemanager: Locator) -> Locator | None:
+    roots = [page.locator("#id_submitbutton, [name='submitbutton']")]
     forms = page.locator("form").filter(has=filemanager)
-    if not forms.count():
-        return None
-    form = forms.first
-    controls = form.locator("button, input[type='submit']")
-    for index in range(controls.count()):
-        control = controls.nth(index)
-        try:
-            if control.is_visible() and SAVE.fullmatch(_control_text(control).strip()):
-                return control
-        except Exception:
-            continue
+    if forms.count():
+        roots.append(forms.first.locator("button, input[type='submit']"))
+    roots.append(page.locator("#region-main button, #region-main input[type='submit'], button, input[type='submit']"))
+    for controls in roots:
+        for index in range(controls.count()):
+            control = controls.nth(index)
+            try:
+                if control.is_visible() and _is_save_control(control):
+                    return control
+            except Exception:
+                continue
     return None
 
 

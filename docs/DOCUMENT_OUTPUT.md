@@ -23,7 +23,7 @@ Ambos se guardan en la carpeta solicitada. HTML, ODT, Markdown, scripts y captur
 6. Curso.
 7. Año.
 
-El agente copia la plantilla, reemplaza `{{subject}}`, `{{teacher}}`, `{{student_1}}`, `{{student_2}}`, `{{degree}}`, `{{class_group}}` y `{{year}}`, y adapta la cantidad de estudiantes cuando haga falta. Añade un salto de página después de la portada para comenzar el desarrollo. Los datos actuales de Moodle y las indicaciones del usuario tienen prioridad; no deben inventarse datos faltantes ni reutilizarse un docente de otra materia.
+El agente copia la plantilla, reemplaza `{{subject}}`, `{{teacher}}`, `{{student_1}}`, `{{student_2}}`, `{{degree}}`, `{{class_group}}` y `{{year}}`, y adapta la cantidad de estudiantes cuando haga falta. Añade un salto de página después de la portada para comenzar el desarrollo. Al verificar la cuenta durante la instalación, Moodle guarda el nombre visible y las materias de Mis cursos. Esos datos se usan en la portada; docente, curso y año los indica el usuario o la consigna de esa tarea. No se inventan datos faltantes ni se reutiliza un docente de otra materia.
 
 `get_assignment` incluye esos mismos datos en `document_template`, por lo que no requiere otra llamada para obtenerlos. Si el perfil local es inválido, conserva las instrucciones de la actividad y devuelve `document_template=null` con el motivo en `document_template_error`. El agente puede avanzar en el contenido y debe resolver ese error antes de usar la plantilla. Los datos faltantes de portada no impiden preparar el desarrollo; solo debe preguntar por información necesaria que no esté disponible.
 
@@ -33,7 +33,7 @@ El desarrollo usa Times New Roman de 12 puntos, papel carta, márgenes de 2,54 c
 
 En las entregas de prácticas con repositorio se omiten las citas autor-fecha y la sección de referencias bibliográficas, salvo petición explícita de la consigna o del usuario. El formato APA de página y tipografía no obliga a añadir bibliografía. Un tutorial usado como consigna no se convierte automáticamente en una referencia del informe.
 
-Cuando el trabajo requiera bibliografía, las citas usan autor y fecha. Las referencias verificadas se ordenan alfabéticamente, con interlineado doble y sangría francesa de 1,27 cm. Cada fuente citada debe corresponder a una referencia y viceversa. No se inventan autores, fechas, enlaces ni fuentes. Las tablas llevan número, título en cursiva y notas cuando corresponda; se evitan líneas verticales y cuadrículas decorativas. El interior de tablas puede usar interlineado sencillo para mejorar la legibilidad.
+Cuando el trabajo requiera bibliografía, las citas usan autor y fecha. Las referencias empiezan en una hoja aparte, ordenadas alfabéticamente, con interlineado doble, sangría francesa de 1,27 cm, cursivas y DOI cuando exista. Cada fuente citada debe corresponder a una referencia y viceversa. No se inventan autores, fechas, enlaces ni fuentes. Las tablas llevan número, título en cursiva y notas cuando corresponda; se evitan líneas verticales y cuadrículas decorativas. El interior de tablas puede usar interlineado sencillo para mejorar la legibilidad.
 
 ## Enlace del repositorio en prácticas
 
@@ -52,6 +52,8 @@ Los nombres, docentes, materias y semestres concretos pertenecen al perfil local
 La plantilla y el logo están incluidos en `src/moodle_tasks/assets/`. Para reconstruir la plantilla en desarrollo, ejecuta `scripts/build_document_template.py` en un entorno con `python-docx`. Esta dependencia no se necesita para consultar la plantilla por MCP.
 
 ## Alcance
+
+El agente crea el DOCX en la carpeta de `prepare_delivery_workspace()`, exporta el PDF pasando la ruta completa como un solo argumento y llama `finish_delivery()` para copiar ambos archivos a la carpeta pedida y abrir el PDF en el navegador predeterminado. Así una ruta con espacios o tildes no se parte en varias ventanas ni impide que Word encuentre el archivo.
 
 El MCP proporciona la plantilla y las instrucciones de entrega. El agente del cliente crea el contenido y convierte los archivos con sus herramientas de documentos; esta herramienta no genera respuestas académicas ni convierte archivos por sí sola. Las instrucciones guían al cliente, pero no garantizan que todos los modelos las cumplan. Antes de entregar, el agente debe contrastar el contenido con cada requisito de la consigna, renderizar y revisar todas las páginas del DOCX y el PDF. Si falta material esencial o falla la conversión, comunica el bloqueo o el archivo faltante y no declara terminada la tarea.
 
