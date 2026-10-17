@@ -1,6 +1,6 @@
 [project]
 name = "moodle-homework-assignment"
-version = "0.3.1"
+version = "0.3.2"
 description = "Consulta tareas pendientes de Moodle con Playwright."
 readme = "README.md"
 requires-python = ">=3.11"
