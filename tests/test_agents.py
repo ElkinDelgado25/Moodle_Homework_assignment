@@ -43,9 +43,9 @@ class AgentTests(unittest.TestCase):
             self.assertEqual((root / "claude").read_text(), broken)
             codex = tomllib.loads((root / "codex").read_text())["mcp_servers"]
             self.assertIn("other", codex)
-            self.assertEqual(codex["moodle"]["args"][-1], str(old_account))
+            self.assertEqual(Path(codex["moodle"]["args"][-1]).resolve(), old_account.resolve())
             cursor = json.loads((root / "cursor").read_text())["mcpServers"]["moodle"]
-            self.assertEqual(cursor["args"][-1], str(root / "credentials.env"))
+            self.assertEqual(Path(cursor["args"][-1]).resolve(), (root / "credentials.env").resolve())
             self.assertFalse((root / "copilot").exists())
             self.assertFalse((root / "antigravity").exists())
 

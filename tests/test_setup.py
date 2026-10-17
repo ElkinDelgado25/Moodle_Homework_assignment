@@ -62,7 +62,7 @@ class SetupTests(unittest.TestCase):
             ) as sync, patch("moodle_tasks.setup.prepare_browser") as browser, patch("builtins.input") as ask:
                 main(["--skip-update", "--sync-only", "--config-dir", str(root)])
             update.assert_not_called()
-            sync.assert_called_once_with(root / "credentials.env", selected_agent=None, selected_config=None)
+            sync.assert_called_once_with(root.resolve() / "credentials.env", selected_agent=None, selected_config=None)
             browser.assert_not_called()
             ask.assert_not_called()
 
