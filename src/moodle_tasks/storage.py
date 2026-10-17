@@ -5,6 +5,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from dotenv import dotenv_values
+
 
 def user_config_dir() -> Path:
     if sys.platform == "win32":
@@ -45,4 +47,8 @@ def save_credentials(path: Path, url: str, username: str, password: str) -> None
 
     values = {"MOODLE_URL": url, "MOODLE_USERNAME": username,
               "MOODLE_PASSWORD": password, "MOODLE_HEADLESS": "true"}
+    if path.is_file():
+        existing_sentry_dsn = dotenv_values(path).get("SENTRY_DSN")
+        if existing_sentry_dsn:
+            values["SENTRY_DSN"] = existing_sentry_dsn
     atomic_write(path, "".join(f"{name}={quoted(value)}\n" for name, value in values.items()))

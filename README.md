@@ -226,6 +226,16 @@ Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el as
 
 > **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Actualiza con `mcp-moodle update`; las instrucciones están en [INSTALL.md](docs/INSTALL.md).
 
+### Monitoreo opcional con Sentry
+
+Sentry recibe informes de errores para que puedas encontrarlos y corregirlos. La integración está apagada si `SENTRY_DSN` está vacía. Para activarla, añade la DSN de tu proyecto en `credentials.env` (en Windows: `%APPDATA%\\moodle-homework-assignment\\credentials.env`; en macOS: `~/Library/Application Support/moodle-homework-assignment/credentials.env`; en Linux: `~/.config/moodle-homework-assignment/credentials.env`):
+
+```env
+SENTRY_DSN=https://tu-clave@o0.ingest.sentry.io/0
+```
+
+Al iniciar el siguiente proceso se enviarán excepciones a ese proyecto. La integración no envía datos personales por defecto, variables locales, solicitudes, identidad, breadcrumbs ni contextos; solo captura errores, sin trazas de rendimiento. La DSN es una clave pública de ingesta: no la publiques junto con tokens privados de administración.
+
 ## Entregables
 
 Al pedir resolver una tarea, el agente usa `get_assignment()`, que incluye la consigna, la plantilla y los pasos para preparar los entregables sin recordatorios adicionales. Debe leer los anexos y resolver los requisitos de esa actividad antes de presentar los archivos. La plantilla también se puede consultar con `get_document_template()`. La portada ULEAM y el logo estan incluidos en el repositorio en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png).

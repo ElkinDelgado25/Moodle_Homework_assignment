@@ -336,6 +336,9 @@ def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_coun
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .monitoring import initialize_sentry
+
+    initialize_sentry(config_values())
     import argparse
     from .search import MODES
 

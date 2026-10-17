@@ -520,6 +520,9 @@ def pending_table(tasks: list[Assignment], *, now: datetime | None = None) -> st
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .monitoring import initialize_sentry
+
+    initialize_sentry(config_values())
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=ENV_FILE, help="Ruta al .env con la configuración de Moodle")
     args = parser.parse_args(argv)

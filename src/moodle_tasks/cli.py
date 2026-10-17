@@ -4,10 +4,12 @@ import argparse
 
 from . import main as tasks
 from . import server, setup, status, updates
+from .monitoring import initialize_sentry
 from .ui import show_dashboard
 
 
 def main(argv: list[str] | None = None) -> None:
+    initialize_sentry(tasks.config_values())
     parser = argparse.ArgumentParser(prog="mcp-moodle", description=__doc__)
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("run", add_help=False, help="Configurar cuenta y agente con preguntas en la terminal")
