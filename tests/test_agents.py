@@ -5,10 +5,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from moodle_tasks.agents import AGENTS, AgentDetection, detect_agents, register_agent, synchronize_agents
+from moodle_tasks.agents import AGENTS, AgentDetection, detect_agents, ordered_agents, register_agent, synchronize_agents
 
 
 class AgentTests(unittest.TestCase):
+    def test_menu_lists_agents_alphabetically_with_cursor_before_antigravity(self):
+        labels = list(ordered_agents().values())
+        self.assertEqual(labels, sorted(labels, key=str.casefold))
+        self.assertEqual(
+            list(ordered_agents()),
+            ["claude", "codex", "copilot", "cursor", "antigravity"],
+        )
+        self.assertLess(labels.index("Cursor"), labels.index("Google Antigravity"))
+        self.assertEqual(len(ordered_agents()), len(AGENTS))
+
     def test_sync_updates_installed_and_existing_agents_and_isolates_invalid_configs(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

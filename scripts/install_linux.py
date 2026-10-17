@@ -22,7 +22,7 @@ def run(*command: str) -> None:
 
 def tool_install_command(project_dir: Path) -> list[str]:
     """Instala una copia aislada y sustituye una instalacion anterior del mismo equipo."""
-    return ["uv", "tool", "install", "--force", "--python", "3.11", str(project_dir)]
+    return ["uv", "tool", "install", "-q", "--force", "--python", "3.11", str(project_dir)]
 
 
 def tool_python() -> str:

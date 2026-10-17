@@ -28,4 +28,4 @@ if [[ ! -f "$project_dir/pyproject.toml" ]]; then
   exit 1
 fi
 
-exec uv --directory "$project_dir" run python scripts/install_linux.py --family macos
+exec uv -q --directory "$project_dir" run python scripts/install_linux.py --family macos

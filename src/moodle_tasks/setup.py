@@ -12,7 +12,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 from rich.console import Console
 from rich.text import Text
 
-from .agents import AGENTS, detect_agents, synchronize_agents
+from .agents import AGENTS, detect_agents, ordered_agents, synchronize_agents
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .main import Config, config_values, login
 from .storage import atomic_write, save_credentials, user_config_dir
@@ -93,10 +93,10 @@ def ask_account(url: str) -> tuple[Config, bool]:
 
 
 def ask_agent() -> str:
-    choices = list(AGENTS)
-    show_agent_menu(AGENTS, detect_agents())
+    choices = list(ordered_agents())
+    show_agent_menu(ordered_agents(), detect_agents())
     while True:
-        choice = input("Selecciona una opción (1-4): ").strip()
+        choice = input(f"Selecciona una opción (1-{len(choices)}): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= len(choices):
             return choices[int(choice) - 1]
         print(f"Selecciona un número entre 1 y {len(choices)}.")
@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> None:
             if not args.sync_after_update:
                 prepare_browser(env_file.parent)
             show_dashboard(username, refresh=True)
-            show_agent_menu(AGENTS, detect_agents(), title="Agentes en este equipo")
+            show_agent_menu(ordered_agents(), detect_agents(), title="Agentes en este equipo")
             if env_file.is_file() and all((values.get(key) or "").strip() for key in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")):
                 choice = ask_setup_action()
                 if choice == "3":

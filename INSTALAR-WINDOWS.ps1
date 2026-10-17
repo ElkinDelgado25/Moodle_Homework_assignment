@@ -30,7 +30,7 @@ if (-not (Test-Path (Join-Path $PSScriptRoot 'pyproject.toml'))) {
 
 Write-Host 'Preparando Moodle MCP desde el repositorio clonado...'
 Write-Host 'El comando mcp-moodle quedara en el PATH y se abrira el asistente.'
-& $uv.Source --directory $PSScriptRoot run python scripts/install_linux.py --family windows
+& $uv.Source -q --directory $PSScriptRoot run python scripts/install_linux.py --family windows
 if ($LASTEXITCODE -ne 0) {
     throw 'No se pudo instalar Moodle MCP. Revisa el mensaje anterior e intentalo de nuevo.'
 }

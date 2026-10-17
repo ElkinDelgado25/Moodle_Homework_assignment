@@ -16,6 +16,11 @@ AGENTS = {"codex": "Codex", "claude": "Claude Code", "cursor": "Cursor",
           "antigravity": "Google Antigravity", "copilot": "Copilot en VS Code"}
 
 
+def ordered_agents() -> dict[str, str]:
+    """Mismo orden alfabético en el menú y en el número que elige el usuario."""
+    return dict(sorted(AGENTS.items(), key=lambda item: item[1].casefold()))
+
+
 @dataclass(frozen=True)
 class AgentDetection:
     availability: str

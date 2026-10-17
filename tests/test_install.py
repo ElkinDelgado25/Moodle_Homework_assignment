@@ -19,7 +19,7 @@ class InstallCommandTests(unittest.TestCase):
         project = Path("/tmp/moodle")
         self.assertEqual(
             module.tool_install_command(project),
-            ["uv", "tool", "install", "--force", "--python", "3.11", str(project)],
+            ["uv", "tool", "install", "-q", "--force", "--python", "3.11", str(project)],
         )
 
     def test_every_family_puts_the_command_on_path_before_setup(self):

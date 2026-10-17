@@ -11,7 +11,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from moodle_tasks.agents import AGENTS, AgentDetection
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import load_config
-from moodle_tasks.setup import main, valid_username
+from moodle_tasks.setup import ask_agent, main, valid_username
 from moodle_tasks.storage import save_credentials
 
 
@@ -25,6 +25,21 @@ class SetupTests(unittest.TestCase):
         })
         detection.start()
         self.addCleanup(detection.stop)
+
+    def test_option_four_selects_cursor_and_the_prompt_includes_every_agent(self):
+        prompts = []
+
+        def fake_input(prompt):
+            prompts.append(prompt)
+            return "4"
+
+        with patch("moodle_tasks.setup.show_agent_menu") as menu, patch(
+            "moodle_tasks.setup.detect_agents", return_value={}
+        ), patch("builtins.input", side_effect=fake_input):
+            selected = ask_agent()
+        self.assertEqual(selected, "cursor")
+        self.assertEqual(prompts, [f"Selecciona una opción (1-{len(AGENTS)}): "])
+        self.assertEqual(list(menu.call_args.args[0]), ["claude", "codex", "copilot", "cursor", "antigravity"])
 
     def test_updated_setup_continues_with_original_options_before_reading_account(self):
         arguments = ["--agent", "cursor", "--config-dir", "/tmp/account with spaces"]
