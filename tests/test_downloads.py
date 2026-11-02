@@ -125,3 +125,42 @@ class DownloadTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+
+class AttachmentNameTests(unittest.TestCase):
+    def test_bidi_controls_and_long_names(self):
+        from moodle_tasks.downloads import attachment_name
+        self.assertEqual(attachment_name("https://m.test/pluginfile.php/1/factura\u202efdp.exe"), "facturafdp.exe")
+        long_name = attachment_name("https://m.test/pluginfile.php/1/" + "á" * 300 + ".pdf")
+        self.assertLessEqual(len(long_name.encode("utf-8")), 200)
+        self.assertTrue(long_name.endswith(".pdf"))
+        self.assertEqual(attachment_name("https://m.test/pluginfile.php/1/.bashrc"), "bashrc")
+        self.assertEqual(attachment_name("https://m.test/pluginfile.php/1/%2e%2e%2fsecreto.txt"), "_secreto.txt")
+        name = attachment_name("https://m.test/pluginfile.php/1/Gu%C3%ADa%20final.pdf")
+        self.assertEqual(name, attachment_name("https://m.test/pluginfile.php/1/" + name))
+
+
+class LinkedBudgetTests(unittest.TestCase):
+    def test_total_text_budget_is_shared_between_links(self):
+        from unittest.mock import patch
+        from moodle_tasks import linked_content
+
+        def fake_read(browser, link, max_chars=linked_content.MAX_CONTENT):
+            return dict(link, content="x" * min(20_000, max_chars), truncated=max_chars < 20_000)
+
+        links = [{"name": "", "url": f"https://example.com/{index}"} for index in range(4)]
+        with patch("moodle_tasks.linked_content.read_link", side_effect=fake_read):
+            result = linked_content.read_linked_resources(None, links)
+        sizes = [len(item.get("content", "")) for item in result["linked_resources"]]
+        self.assertEqual(sum(sizes), linked_content.MAX_CONTENT)
+        self.assertTrue(result["linked_content_incomplete"])
+        self.assertIn("límite total", result["linked_resources"][-1]["error"])
+
+    def test_moodle_file_links_point_to_the_download_tool(self):
+        from moodle_tasks import linked_content
+        from moodle_tasks.main import Config
+        config = Config("https://moodle.test", "u", "p", True)
+        result = linked_content.read_linked_resources(None, [{"name": "", "url": "https://moodle.test/mod/resource/view.php?id=3"}],
+                                                      config=config)
+        self.assertEqual(result["linked_resources"][0]["kind"], "file")
+        self.assertIn("download_assignment_attachments", result["linked_resources"][0]["error"])

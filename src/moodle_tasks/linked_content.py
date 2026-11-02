@@ -11,7 +11,21 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 from .errors import redact_credentials
 
 MAX_LINKS = 5
-MAX_CONTENT = 30_000
+MAX_CONTENT = 30_000          # total para todos los enlaces de una tarea
+MAX_BODY_BYTES = 2 * 1024 * 1024
+# Cualquier actividad o curso del mismo Moodle se lee con la sesión, salvo los archivos.
+MOODLE_READABLE = re.compile(r"^/(?:mod/[a-z0-9_]+/|course/view\.php)")
+MOODLE_FILE = re.compile(r"^/mod/(?:resource|folder)/|/pluginfile\.php/")
+EXTRACT_TEXT = """(body) => {
+    const root = body.querySelector('article, main, [role="main"], #region-main') || body;
+    root.querySelectorAll('script, style, nav, header, footer, aside, noscript').forEach(el => el.remove());
+    return root.innerText || root.textContent || '';
+}"""
+
+
+def _normalize_page_text(text: str) -> str:
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n\n", text).strip()
 DESCRIPTION_SELECTORS = (
     "#intro",
     ".activity-description",
@@ -80,7 +94,7 @@ def assignment_links(page: Page, content: str, attachments: list[dict]) -> list[
         "aa => aa.map(a => ({name: (a.innerText || a.title || '').trim(), url: a.href}))"
     )
     candidates.extend({"name": "", "url": match.rstrip(".,;!?)")}
-                      for match in re.findall(r"https?://[^\s<>\"']+", content))
+                      for match in re.findall(r"https?://[^\s<>\"']+", content, re.IGNORECASE))
     seen = {urldefrag(item["url"])[0] for item in attachments}
     seen.add(urldefrag(page.url)[0])
     links = []
@@ -110,8 +124,8 @@ def validate_public_url(url: str) -> None:
         raise ValueError("El enlace apunta a una dirección local o privada.")
 
 
-def read_link(browser, link: dict[str, str]) -> dict:
-    result = dict(link, content="", truncated=False)
+def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT) -> dict:
+    result = dict(link, kind="page", content="", truncated=False)
     validate_public_url(link["url"])
     # Sin cookies de Moodle ni ejecución de scripts de los sitios enlazados.
     context = browser.new_context(java_script_enabled=False, service_workers="block")
@@ -144,6 +158,8 @@ def read_link(browser, link: dict[str, str]) -> dict:
                         current = urljoin(current, location)
                         continue
                     resolved_url = current
+                    if len(response.body()) > MAX_BODY_BYTES:
+                        raise ValueError("La página enlazada es demasiado grande para leerla (más de 2 MB).")
                     route.fulfill(response=response)
                     return
             except Exception as error:
@@ -154,9 +170,11 @@ def read_link(browser, link: dict[str, str]) -> dict:
         context.route("**/*", route_document)
         try:
             response = page.goto(link["url"], wait_until="domcontentloaded", timeout=15_000)
-        except Exception:
+        except Exception as error:
             if blocked:
                 raise ValueError(blocked[0]) from None
+            if "Download is starting" in str(error):
+                raise ValueError("El enlace descarga un archivo, no es una página; ábrelo o descárgalo aparte.") from None
             raise
         if response is None or response.status >= 400:
             raise ValueError(f"No se pudo leer el enlace (HTTP {response.status if response else 'sin respuesta'}).")
@@ -164,27 +182,59 @@ def read_link(browser, link: dict[str, str]) -> dict:
             raise ValueError("El enlace no contiene una página de texto compatible; puede requerir descargar un archivo.")
         if page.locator("input[type='password']").count() or "/login/" in urlsplit(resolved_url).path:
             raise ValueError("El enlace requiere iniciar sesión; no se pudieron leer las instrucciones.")
-        text = page.locator("body").evaluate("""(body) => {
-            const root = body.querySelector('article, main, [role="main"]') || body;
-            root.querySelectorAll('script, style, nav, header, footer, aside, noscript').forEach(el => el.remove());
-            return root.innerText || root.textContent || '';
-        }""")
-        text = re.sub(r"[ \t]+", " ", text)
-        text = re.sub(r"\n\s*\n+", "\n\n", text).strip()
+        text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
         if not text:
             raise ValueError("La página no contiene instrucciones legibles sin ejecutar JavaScript.")
-        result.update(resolved_url=resolved_url, title=page.title(), content=text[:MAX_CONTENT],
-                      truncated=len(text) > MAX_CONTENT)
+        result.update(resolved_url=resolved_url, title=page.title(), content=text[:max_chars],
+                      truncated=len(text) > max_chars)
         return result
     finally:
         context.close()
 
 
-def read_linked_resources(browser, links: list[dict[str, str]], credentials: tuple[str, ...] = ()) -> dict:
+def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int = MAX_CONTENT) -> dict:
+    """Página del mismo Moodle leída con la sesión iniciada (las anónimas piden login)."""
+    from .main import open_authenticated_page
+
+    result = dict(link, kind="page", content="", truncated=False)
+    page = session_page.context.new_page()
+    try:
+        page.set_default_timeout(15_000)
+        open_authenticated_page(page, link["url"], config)
+        text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
+        if not text:
+            raise ValueError("La página de Moodle no tiene texto legible.")
+        result.update(resolved_url=page.url, title=page.title(), content=text[:max_chars],
+                      truncated=len(text) > max_chars)
+        return result
+    finally:
+        page.close()
+
+
+def read_linked_resources(browser, links: list[dict[str, str]], credentials: tuple[str, ...] = (), *,
+                          session_page=None, config=None) -> dict:
+    from .urls import moodle_path
+
     resources = []
+    remaining = MAX_CONTENT
     for link in links[:MAX_LINKS]:
+        if remaining <= 0:
+            resources.append(dict(link, error="Se alcanzó el límite total de texto de los enlaces.", truncated=True))
+            continue
+        path = moodle_path(link["url"], config.base_url) if config is not None else None
         try:
-            resources.append(read_link(browser, link))
+            if path is not None and MOODLE_FILE.search(path):
+                downloadable = path.startswith("/mod/resource/") or "/pluginfile.php/" in path
+                resources.append(dict(link, kind="file", error=(
+                    "Es un archivo de Moodle; descárgalo con download_assignment_attachments." if downloadable
+                    else "Es una carpeta de Moodle; ábrela en Moodle para ver sus archivos.")))
+                continue
+            if path is not None and session_page is not None and MOODLE_READABLE.match(path):
+                resource = read_moodle_link(session_page, config, link, remaining)
+            else:
+                resource = read_link(browser, link, remaining)
+            remaining -= len(resource.get("content", ""))
+            resources.append(resource)
         except PlaywrightTimeoutError:
             resources.append(dict(link, error="Se agotó el tiempo de lectura del enlace."))
         except Exception as error:

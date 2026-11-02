@@ -13,6 +13,7 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .main import Assignment, Config, is_pending, open_page, read_assignment, submission_state
 from .storage import atomic_write, user_config_dir
+from .urls import assignment_view_id, moodle_path, parse_id
 
 
 MODES = ("upcoming", "recent", "overdue", "all")
@@ -46,15 +47,9 @@ def parse_moodle_date(text: str) -> str | None:
 
 
 def assignment_url(url: str, base_url: str) -> str | None:
-    parsed = urlsplit(url)
-    base = urlsplit(base_url)
-    identifier = parse_qs(parsed.query).get("id", [""])[0]
-    if (parsed.scheme, parsed.netloc) != (base.scheme, base.netloc):
-        return None
-    if parsed.path != "/mod/assign/view.php" or not identifier.isdigit():
-        return None
+    identifier = assignment_view_id(url, base_url)
     # Evita seguir botones de editar, borrar o entregar una actividad.
-    return f"{base_url}/mod/assign/view.php?id={identifier}"
+    return f"{base_url}/mod/assign/view.php?id={identifier}" if identifier else None
 
 
 def dashboard_candidates(page: Page, config: Config, stats: dict):
@@ -62,14 +57,24 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
     stats["dashboard_pages_read"] += 1
     region = page.locator(".block_timeline, [data-block='timeline']").first
     if not region.count():
+        stats["timeline_status"] = "missing"
         return
+    items = region.locator("[data-region='event-list-item']")
+    empty = region.locator("[data-region='no-events-empty-message'], [data-region='empty-message'], .empty-placeholder-image-lg")
     try:
-        region.locator("[data-region='event-list-item']").first.wait_for(state="attached", timeout=10_000)
+        # Espera lo que aparezca primero: actividades o el mensaje de lista vacía.
+        items.first.or_(empty.first).wait_for(state="attached", timeout=10_000)
     except PlaywrightTimeoutError:
+        stats["timeline_status"] = "timeout"
         return
+    if not items.count():
+        stats["timeline_status"] = "empty"
+        return
+    stats["timeline_status"] = "ok"
     stats["dashboard_filter"] = " ".join(region.locator("button").all_text_contents()).strip()
     stats["dashboard_filter"] = " ".join(stats["dashboard_filter"].split())
     if re.search(r"Ordenar por cursos|Sort by courses", stats["dashboard_filter"], re.I):
+        stats["timeline_status"] = "sorted_by_course"
         return
     seen = set()
     for _ in range(100):
@@ -117,9 +122,10 @@ def index_candidates(page: Page, config: Config, stats: dict, errors: list[str])
             "aa => aa.map(a => ({url:a.href, title:a.innerText.trim()}))")
         for link in links:
             parsed = urlsplit(link["url"])
-            course_id = parse_qs(parsed.query).get("id", [""])[0]
-            if parsed.netloc == urlsplit(config.base_url).netloc and course_id.isdigit():
-                courses.setdefault(course_id, link["title"])
+            values = parse_qs(parsed.query).get("id", [])
+            course_id = parse_id(values[0]) if len(values) == 1 else None
+            if course_id and moodle_path(link["url"], config.base_url) == "/course/view.php":
+                courses.setdefault(str(course_id), link["title"])
         more = page.get_by_role("button", name=re.compile(r"Mostrar más cursos|Show more courses", re.I))
         next_page = page.locator(".block_myoverview").get_by_role("link", name=re.compile(r"^Next$|^Siguiente$|Página siguiente", re.I))
         control = more.first if more.count() and more.first.is_visible() and not more.first.is_disabled() else next_page.first
@@ -198,6 +204,7 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             return
         seen.add(url)
         stats["candidates_checked"] += 1
+        unconfirmed = False
         if only_pending and not candidate_pending(candidate):
             return
         fingerprint = candidate.get("row")
@@ -218,10 +225,12 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                 due_text = candidate.get("deadline") or (cells[2] if len(cells) >= 3 else "")
                 due_at = parse_moodle_date(due_text)
                 available = candidate.get("available")
-                if mode in ("upcoming", "recent") and available is not True:
-                    if available is None:
-                        errors.append(f"El índice no confirma si está abierta: {candidate['title']}.")
+                if mode == "recent" and available is not True:
                     return
+                if mode == "upcoming" and available is False:
+                    return
+                # Una fila de un índice de curso (available=None) se acepta con disponibilidad sin confirmar.
+                unconfirmed = mode == "upcoming" and available is None
                 status = cells[-2] if len(cells) >= 5 else "Disponible para entregar" if available else "Estado desconocido"
                 task = Assignment(candidate["title"], url, "", due_text, status,
                                   submission_state(status) if cells else False if available else None,
@@ -246,6 +255,8 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             if mode == "recent" and (opening is None or opening > now or due is not None and due < now):
                 return
             tasks.append(task)
+            if unconfirmed:
+                stats["availability_unconfirmed"] = stats.get("availability_unconfirmed", 0) + 1
         except Exception as error:
             errors.append(f"No se pudo leer {url}: {error}")
 
@@ -262,7 +273,8 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             errors.append(f"La consulta de la línea de tiempo quedó incompleta: {error}")
         finally:
             timeline.close()
-    if mode != "upcoming" or not tasks or errors:
+    timeline_ok = stats.get("timeline_status") in ("ok", "empty")
+    if mode != "upcoming" or errors or (not tasks and not timeline_ok):
         stats["source"] = "course_indexes" if not tasks else "dashboard_and_course_indexes"
         for candidate in index_candidates(page, config, stats, errors):
             inspect(candidate)
