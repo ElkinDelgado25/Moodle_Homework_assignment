@@ -59,9 +59,13 @@ def inspect_docx(path: Path) -> dict:
                 for node in style.iter(W + "rFonts"):
                     if node.get(W + "ascii"):
                         fonts.add(node.get(W + "ascii"))
-                    if style_id in ("Normal", "Title") or style_id.startswith("Heading"):
-                        if any(node.get(W + attribute) for attribute in THEME_ATTRIBUTES):
-                            theme_styles.append(style_id)
+                    if any(node.get(W + attribute) for attribute in THEME_ATTRIBUTES):
+                        theme_styles.append(style_id)
+            defaults = styles.find(W + "docDefaults")
+            if defaults is not None:
+                for node in defaults.iter(W + "rFonts"):
+                    if any(node.get(W + attribute) for attribute in THEME_ATTRIBUTES):
+                        theme_styles.append("docDefaults")
     return {
         "placeholders": placeholders,
         "hyperlinks": sorted(set(links)),

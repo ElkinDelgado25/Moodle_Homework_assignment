@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import re
+import shutil
 from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
@@ -28,8 +29,12 @@ from .main import (
     read_assignment,
 )
 from .errors import MoodleHTTPError, redact_credentials
+from .delivery import copy_pair, open_file, prepare_workspace
 from .delivery import finish_delivery as copy_and_open_delivery
-from .delivery import prepare_workspace
+from .document import MissingCoverFields, build_delivery, cover_values
+from .document_model import COVER_FIELDS, CoverFields, DeliveryDocument
+from .paths import resolve_destination_directory
+from .verification import DocumentCheckError, check_delivery_pair
 from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
 from .profile import load_profile
@@ -225,7 +230,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     def document_template() -> dict[str, Any]:
         assets = Path(__file__).resolve().parent / "assets"
-        fields = ["subject", "teacher", "student_1", "student_2", "degree", "class_group", "year"]
+        fields = ["title", *COVER_FIELDS]
         try:
             defaults = load_profile(user_config_dir())
         except (ValueError, OSError, json.JSONDecodeError):
@@ -464,10 +469,53 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
     )
 
+    def build_task(document: DeliveryDocument, cover: CoverFields, destination_directory: str | None,
+                   file_name: str | None, open_pdf: bool, pdf_engine: str) -> dict[str, Any]:
+        warnings: list[str] = []
+        try:
+            profile = load_profile(user_config_dir())
+        except (ValueError, OSError, json.JSONDecodeError):
+            profile = {}
+            warnings.append("No se pudo leer document_profile.json; se usaron solo los datos indicados.")
+        try:
+            values = cover_values(cover, profile)
+        except MissingCoverFields as error:
+            return {"status": "missing_cover_fields", "missing_cover_fields": error.fields,
+                    "docx_path": None, "pdf_path": None,
+                    "message": "Pide al usuario estos datos de portada (no los inventes) y vuelve a llamar la herramienta."}
+        courses = profile.get("courses") or []
+        if courses and values["subject"].casefold() not in {course.casefold() for course in courses}:
+            warnings.append("La materia no coincide con ninguna de las materias verificadas del perfil.")
+        destination = resolve_destination_directory(destination_directory or str(documents_directory()))
+        workspace = prepare_workspace()
+        try:
+            built = build_delivery(document, values, workspace, file_name or document.title, pdf_engine)
+            checks = check_delivery_pair(built["docx"], built["pdf"])
+            if not checks["ok"]:
+                raise DocumentCheckError("El documento generado no pasó la verificación: " + " ".join(checks["errors"]))
+            final_docx, final_pdf = copy_pair(built["docx"], built["pdf"], destination)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+        opened = open_file(final_pdf) if open_pdf else False
+        return {"status": "ok", "docx_path": str(final_docx), "pdf_path": str(final_pdf),
+                "pages": checks["pages"], "pdf_engine": built["engine"], "opened": opened,
+                "hyperlinks": checks["hyperlinks"], "tables": built["tables"], "figures": built["figures"],
+                "warnings": built["warnings"] + checks["warnings"] + warnings}
+
     @server.tool(annotations=local_annotations, structured_output=True)
-    def prepare_delivery_workspace() -> dict[str, str]:
-        """Crea una carpeta temporal para redactar el DOCX y exportar el PDF. Úsala antes de Word: su ruta no depende de tildes ni espacios del destino final."""
-        return {"directory": str(prepare_workspace())}
+    async def build_delivery_document(
+        document: DeliveryDocument,
+        cover: CoverFields,
+        destination_directory: Annotated[str | None, Field(min_length=1, max_length=4096, description="Carpeta final absoluta; por defecto ~/Documentos o ~/Documents.")] = None,
+        file_name: Annotated[str | None, Field(min_length=1, max_length=150, description="Nombre base sin extensión; por defecto el título.")] = None,
+        open_pdf: bool = True,
+        pdf_engine: Literal["auto", "builtin", "libreoffice"] = "auto",
+    ) -> dict[str, Any]:
+        """Genera el entregable: DOCX editable (Word/WPS) y su PDF con portada ULEAM y APA 7 (Times New Roman 12, doble espacio, sangría, numeración, título en la página 2, tablas y figuras numeradas, referencias en hoja aparte). Tú redactas el contenido real en document; no escribas la portada ni el formato. Verifica el resultado, no sobrescribe archivos y abre el PDF. Si devuelve missing_cover_fields, pide esos datos al usuario. Política: práctica con repositorio = sin citas ni referencias salvo que se pidan; el enlace de GitHub debe ser la URL confirmada (gh repo view --json url) escrita tal cual; no inventes resultados ni fuentes."""
+        try:
+            return await asyncio.to_thread(build_task, document, cover, destination_directory, file_name, open_pdf, pdf_engine)
+        except Exception as error:
+            raise ToolError(safe_error(error)) from None
 
     @server.tool(annotations=local_annotations, structured_output=True)
     def finish_delivery(

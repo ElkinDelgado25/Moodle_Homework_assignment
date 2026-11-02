@@ -41,10 +41,13 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(stored["year"], "Octubre-2026")
             self.assertEqual(load_profile(root)["courses"], ["Ciberseguridad", "Metodología"])
 
-    def test_invalid_profile_values_are_rejected(self):
+    def test_invalid_profile_values_are_dropped_one_by_one(self):
+        self.assertEqual(public_profile({"year": 2026, "student_1": ["x"], "teacher": True}), {"year": "2026"})
+        self.assertEqual(public_profile({"courses": ["Ciberseguridad", 5, "", None, "Ciberseguridad"]})["courses"],
+                         ["Ciberseguridad", "5"])
+        self.assertEqual(public_profile({"student_1": "  Ana\n\x00Pérez \u202e "})["student_1"], "Ana Pérez")
+        self.assertEqual(len(public_profile({"teacher": "x" * 10_000})["teacher"]), 200)
         with self.assertRaises(ValueError):
-            public_profile({"student_1": 123})
-        with self.assertRaises(ValueError):
-            public_profile({"courses": ["Ciberseguridad", 5]})
+            public_profile(["no", "es", "objeto"])
         self.assertEqual(public_profile({"student_1": "Ana", "password": "oculto"})["student_1"], "Ana")
         self.assertNotIn("password", public_profile({"student_1": "Ana", "password": "oculto"}))

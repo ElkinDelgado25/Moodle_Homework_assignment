@@ -57,7 +57,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 upload.assert_not_called()
 
                 # El perfil defectuoso no debe impedir consultar las instrucciones.
-                (Path(directory) / "document_profile.json").write_text('{"student_1": 123}')
+                (Path(directory) / "document_profile.json").write_text('["no es un objeto"]')
                 result = await client.call_tool("get_assignment", {"assignment_id": 9})
                 self.assertFalse(result.is_error)
                 data = result.structured_content
@@ -96,9 +96,9 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(params, mode="legacy") as client:
                 tools = await client.list_tools()
                 self.assertEqual({tool.name for tool in tools.tools}, {
-                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "upload_assignment_files", "get_document_template", "prepare_delivery_workspace", "finish_delivery"
+                    "configuration_status", "check_moodle_connection", "list_assignments", "list_all_assignments", "get_assignment", "download_assignment_attachments", "upload_assignment_files", "get_document_template", "build_delivery_document", "finish_delivery"
                 })
-                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name not in ("download_assignment_attachments", "upload_assignment_files", "prepare_delivery_workspace", "finish_delivery")))
+                self.assertTrue(all(tool.annotations.read_only_hint for tool in tools.tools if tool.name not in ("download_assignment_attachments", "upload_assignment_files", "build_delivery_document", "finish_delivery")))
                 download = next(tool for tool in tools.tools if tool.name == "download_assignment_attachments")
                 self.assertFalse(download.annotations.read_only_hint)
                 self.assertFalse(download.annotations.destructive_hint)
@@ -156,7 +156,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.call_tool("get_document_template")
                 self.assertEqual(result.structured_content["local_defaults"], {"student_1": "Test Student"})
                 self.assertNotIn("excluded-test-value", str(result))
-                profile.write_text('{"student_1": 123}')
+                profile.write_text('["no es un objeto"]')
                 invalid = await client.call_tool("get_document_template")
                 self.assertTrue(invalid.is_error)
                 self.assertIn("perfil local", str(invalid))

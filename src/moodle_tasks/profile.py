@@ -18,23 +18,35 @@ def profile_file(directory: Path | None = None) -> Path:
     return (directory or user_config_dir()) / "document_profile.json"
 
 
+CONTROL = re.compile("[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]")
+
+
+def _profile_text(value: object) -> str | None:
+    """Texto limpio de una línea; los números (p. ej. el año) se aceptan como texto."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        value = str(value)
+    if not isinstance(value, str):
+        return None
+    value = " ".join(CONTROL.sub(" ", value).split())
+    return value[:200] if value else None
+
+
 def public_profile(data: object) -> dict:
-    """Conserva los campos de portada y la lista de materias; ignora el resto."""
+    """Conserva los campos de portada válidos y la lista de materias; descarta solo lo inválido."""
     if not isinstance(data, dict):
         raise ValueError("Se esperaba un objeto JSON con valores de texto.")
     result: dict = {}
     for key in TEXT_FIELDS:
-        if key not in data:
-            continue
-        value = data[key]
-        if not isinstance(value, str):
-            raise ValueError("Se esperaba un objeto JSON con valores de texto.")
-        result[key] = value
-    if "courses" in data:
-        courses = data["courses"]
-        if (not isinstance(courses, list) or any(not isinstance(item, str) or not item.strip() for item in courses)):
-            raise ValueError("Se esperaba un objeto JSON con valores de texto.")
-        result["courses"] = courses
+        value = _profile_text(data.get(key))
+        if value:
+            result[key] = value
+    courses = data.get("courses")
+    if isinstance(courses, list):
+        cleaned = [text for text in (_profile_text(item) for item in courses) if text]
+        if cleaned:
+            result["courses"] = list(dict.fromkeys(cleaned))
     return result
 
 
