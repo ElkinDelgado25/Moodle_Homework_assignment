@@ -18,7 +18,7 @@ from moodle_tasks.document_model import CoverFields, DeliveryDocument, parse_inl
 from moodle_tasks.verification import check_delivery_pair, inspect_docx
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-TEMPLATE = Path(__file__).resolve().parents[1] / "src/moodle_tasks/assets/academic-cover.docx"
+from moodle_tasks.document import TEMPLATE  # noqa: E402 - el asset del paquete instalado
 COVER = CoverFields(subject="Desarrollo Móvil", teacher="Ing. Ana & <Asoc>", degree="Software",
                     class_group="Quinto \"A\"", year=2026)
 PROFILE = {"student_1": "Elkin Delgado"}

@@ -58,6 +58,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertFalse(result["opened"])
         self.assertEqual(self.opened, [])
 
+    @unittest.skipIf(os.name == "nt", "Crear enlaces simbólicos requiere privilegios en Windows")
     def test_symlink_in_destination_is_not_followed(self):
         self.destination.mkdir()
         victim = self.root / "victima.txt"

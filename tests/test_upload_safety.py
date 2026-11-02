@@ -50,6 +50,7 @@ class UploadSafetyTests(unittest.TestCase):
         other.write_text("{}")
         self.assertIn("configuración", self.rejected(str(other)))
 
+    @unittest.skipIf(os.name == "nt", "Crear enlaces simbólicos requiere privilegios en Windows")
     def test_symlink_to_credentials_is_rejected_by_its_target(self):
         link = self.work / "entrega.txt"
         link.symlink_to(self.credentials)

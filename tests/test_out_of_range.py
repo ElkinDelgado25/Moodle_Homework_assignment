@@ -75,7 +75,10 @@ class OutOfRangeTests(unittest.TestCase):
             secret.write_text("MOODLE_PASSWORD=x")
             (root / "ok").mkdir()
             good = helpers.make_pdf(root / "ok" / "entrega.pdf")
-            (root / "ok" / "enlace.pdf").symlink_to(secret)
+            try:
+                (root / "ok" / "enlace.pdf").symlink_to(secret)
+            except OSError:
+                pass  # Windows sin privilegios para crear enlaces simbólicos
             fragments = ["..", ".", "config", "credentials.env", "ok", "entrega.pdf", "enlace.pdf", ".ssh", "~",
                          "/etc/passwd", "/proc/self/environ", "/dev/zero", "\x00", "a" * 300, "ñ😀", "\u202e"]
             with patch("moodle_tasks.paths.user_config_dir", return_value=config), \

@@ -228,14 +228,12 @@ Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el as
 
 ## Entregables
 
-Al pedir resolver una tarea, el agente usa `get_assignment()`, que incluye la consigna, la plantilla y los pasos para preparar los entregables sin recordatorios adicionales. Debe leer los anexos y resolver los requisitos de esa actividad antes de presentar los archivos. La plantilla también se puede consultar con `get_document_template()`. La portada ULEAM y el logo estan incluidos en el repositorio en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png).
+Al pedir resolver una tarea, el agente lee la consigna con `get_assignment()`, descarga los anexos y redacta el contenido. El entregable lo genera el servidor con `build_delivery_document()`: arma la portada ULEAM, aplica APA 7 y crea dos archivos con el mismo nombre:
 
-El resultado documental predeterminado contiene dos archivos con el mismo nombre:
+- Un DOCX editable en Word o WPS Office.
+- Su PDF, exportado con LibreOffice si está instalado o con el renderizador integrado, que no necesita programas externos.
 
-- Un DOCX editable.
-- Un PDF exportado desde ese DOCX.
-
-La portada contiene los campos de materia, docente, estudiantes, carrera, curso y ano. El desarrollo comienza en la pagina siguiente y aplica APA 7 con Times New Roman de 12 puntos. Consulta la [politica completa de entregables](docs/DOCUMENT_OUTPUT.md) para los campos, formato y revision final.
+Antes de copiarlos, el servidor los verifica: campos de portada completos, PDF legible y enlaces presentes. Nunca sobrescribe archivos y después abre el PDF. La portada ULEAM y el logo están en [academic-cover.docx](src/moodle_tasks/assets/academic-cover.docx) y [uleam-logo.png](src/moodle_tasks/assets/uleam-logo.png). Consulta los [entregables](docs/DOCUMENT_OUTPUT.md) para el formato del contenido y la [referencia del MCP](docs/MCP.md) para todas las herramientas.
 
 ## Notas
 
