@@ -287,7 +287,10 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
             picture = document.add_paragraph()
             picture.paragraph_format.first_line_indent = Cm(0)
             picture.paragraph_format.keep_with_next = bool(block.note)
-            picture.add_run().add_picture(str(image), width=Cm(block.width_cm or 14))
+            try:
+                picture.add_run().add_picture(str(image), width=Cm(block.width_cm or 14))
+            except Exception:
+                raise ValueError(f"La figura {figures} no es una imagen PNG o JPEG RGB válida (dañada o en CMYK).") from None
             _note(document, block.note)
 
     if content.references:
@@ -302,9 +305,10 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
 
     properties = document.core_properties
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    properties.title = content.title
-    properties.subject = values.get("subject", "")
-    properties.author = "; ".join(value for value in (values.get("student_1"), values.get("student_2")) if value)
+    # Las propiedades del paquete OOXML admiten como máximo 255 caracteres.
+    properties.title = content.title[:255]
+    properties.subject = values.get("subject", "")[:255]
+    properties.author = "; ".join(value for value in (values.get("student_1"), values.get("student_2")) if value)[:255]
     properties.last_modified_by = properties.author
     properties.created = properties.modified = now
     properties.revision = 1
