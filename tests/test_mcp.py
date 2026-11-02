@@ -128,7 +128,10 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 for tool, arguments in (("get_assignment", {"assignment_id": -1}),
                                         ("download_assignment_attachments", {"assignment_id": 0}),
                                         ("upload_assignment_files", {"assignment_id": 1, "file_paths": []}),
-                                        ("list_assignments", {"limit": 0}), ("list_assignments", {"mode": "recent"})):
+                                        ("list_assignments", {"limit": 0}), ("list_assignments", {"mode": "recent"}),
+                                        ("list_assignments", {"limit": True}), ("get_assignment", {"assignment_id": True}),
+                                        ("get_assignment", {"assignment_id": "11"}),
+                                        ("upload_assignment_files", {"assignment_id": True, "file_paths": ["/tmp/x.pdf"]})):
                     invalid = await client.call_tool(tool, arguments)
                     self.assertTrue(invalid.is_error, (tool, arguments))
 

@@ -76,6 +76,19 @@ class SessionCacheTests(unittest.TestCase):
         with patch.dict(os.environ, {"MOODLE_SESSION_CACHE": "0"}):
             self.assertIsNone(session.load_state(CONFIG))
 
+    def test_opt_out_in_the_credentials_file(self):
+        from dataclasses import replace
+        disabled = replace(CONFIG, session_cache=False)
+        self.assertFalse(session.save_state(self.context([MOODLE_COOKIE]), disabled))
+        session.save_state(self.context([MOODLE_COOKIE]), CONFIG)
+        self.assertIsNone(session.load_state(disabled))
+        with tempfile.TemporaryDirectory() as directory:
+            env = Path(directory) / "credentials.env"
+            env.write_text("MOODLE_URL=https://m.test\nMOODLE_USERNAME=u\nMOODLE_PASSWORD=p\nMOODLE_SESSION_CACHE=off\n")
+            from moodle_tasks.main import load_config
+            with patch.dict(os.environ, {"MOODLE_SESSION_CACHE": "true"}):
+                self.assertFalse(load_config(env).session_cache)
+
     def test_non_list_cookies_never_write(self):
         self.assertFalse(session.save_state(self.context(MagicMock()), CONFIG))
         self.assertFalse(session.save_state(self.context([]), CONFIG))

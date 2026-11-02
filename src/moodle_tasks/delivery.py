@@ -23,7 +23,8 @@ def workspaces_root() -> Path:
 def cleanup_workspaces(now: float | None = None) -> int:
     """Borra carpetas de trabajo antiguas; nunca toca la carpeta de entrega."""
     root = workspaces_root()
-    if not root.is_dir():
+    # Si la raíz fue sustituida por un enlace simbólico no se borra nada dentro de su destino.
+    if root.is_symlink() or not root.is_dir():
         return 0
     limit = (now or time.time()) - WORKSPACE_MAX_AGE_SECONDS
     removed = 0

@@ -1,6 +1,10 @@
 """Subida explícita de entregables a una tarea de Moodle."""
 
+import os
 import re
+import shutil
+import stat
+import tempfile
 import time
 import unicodedata
 from pathlib import Path
@@ -20,7 +24,9 @@ NO_UPLOAD = re.compile(
     r"do not (?:submit|upload)|don't (?:submit|upload)|"
     r"you (?:do not|don't) need to (?:submit|upload)|"
     r"no (?:files|documents) (?:are )?(?:required|allowed)|"
-    r"(?:files|documents) (?:are )?not required to (?:be )?(?:submitted|uploaded))",
+    r"(?:files|documents) (?:are )?not required to (?:be )?(?:submitted|uploaded)|"
+    r"^\s*no (?:subir|entregar|enviar|adjuntar)\b|"
+    r"no (?:files|documents) (?:should|must|need to) be (?:submitted|uploaded))",
     re.IGNORECASE,
 )
 CLOSED = re.compile(
@@ -37,7 +43,7 @@ CLOSED = re.compile(
 # Una frase con matices (formato, compresión, plazo...) no prohíbe entregar el informe.
 UPLOAD_QUALIFIER = re.compile(
     r"comprimid|\bzip\b|\brar\b|formato|tarde|late\b|captura|screenshot|c[oó]digo fuente|source code|"
-    r"\bsolo\b|\bonly\b|\bsino\b|en lugar|instead|m[aá]s de|more than|\.\w{2,4}\b",
+    r"\bsino\b|en lugar|instead|m[aá]s de|more than|\.\w{2,4}\b",
     re.IGNORECASE,
 )
 UPLOAD_REQUEST = re.compile(
@@ -74,6 +80,11 @@ def moodle_name(name: str) -> str:
     """Nombre tal como lo guarda Moodle (PARAM_FILE), normalizado para comparar."""
     cleaned = MOODLE_FILE_CHARACTERS.sub("", unicodedata.normalize("NFC", name))
     return " ".join(cleaned.split()).casefold()
+
+
+def moodle_exact(name: str) -> str:
+    """Nombre exacto con el que Moodle guarda el archivo (sin cambiar mayúsculas ni espacios internos)."""
+    return MOODLE_FILE_CHARACTERS.sub("", unicodedata.normalize("NFC", name)).strip()
 
 
 def _file_seconds(path: Path) -> float:
@@ -147,12 +158,12 @@ def _upload_input(page: Page) -> Locator | None:
     # Prefer the file input inside Moodle's active picker. A filemanager may also
     # contain a separate hidden drag-and-drop input on the underlying form.
     for selector in (
-        "[role='dialog'] .fp-file input[type='file']",
-        ".filepicker .fp-file input[type='file']",
-        ".moodle-dialogue .fp-file input[type='file']",
-        "[role='dialog'] input[type='file']",
-        ".filepicker input[type='file']",
-        ".moodle-dialogue input[type='file']",
+        "[role='dialog']:not([data-mcp-foreign]) .fp-file input[type='file']",
+        ".filepicker:not([data-mcp-foreign]) .fp-file input[type='file']",
+        ".moodle-dialogue:not([data-mcp-foreign]) .fp-file input[type='file']",
+        "[role='dialog']:not([data-mcp-foreign]) input[type='file']",
+        ".filepicker:not([data-mcp-foreign]) input[type='file']",
+        ".moodle-dialogue:not([data-mcp-foreign]) input[type='file']",
     ):
         inputs = page.locator(selector)
         if inputs.count():
@@ -163,12 +174,12 @@ def _upload_input(page: Page) -> Locator | None:
 
 def _upload_error_message(page: Page) -> str | None:
     for selector in (
-        "[role='dialog'] .fp-msg-error",
-        ".filepicker .fp-msg-error",
-        ".moodle-dialogue .fp-msg-error",
-        "[role='dialog'] .alert-danger",
-        ".filepicker .alert-danger",
-        ".moodle-dialogue .alert-danger",
+        "[role='dialog']:not([data-mcp-foreign]) .fp-msg-error",
+        ".filepicker:not([data-mcp-foreign]) .fp-msg-error",
+        ".moodle-dialogue:not([data-mcp-foreign]) .fp-msg-error",
+        "[role='dialog']:not([data-mcp-foreign]) .alert-danger",
+        ".filepicker:not([data-mcp-foreign]) .alert-danger",
+        ".moodle-dialogue:not([data-mcp-foreign]) .alert-danger",
         ".filemanager .fp-msg-error",
     ):
         messages = page.locator(selector)
@@ -197,7 +208,7 @@ def _wait_for_filemanager_ready(page: Page, filemanager: Locator) -> None:
 
 
 def _find_dialog_action(page: Page, pattern: re.Pattern[str], *, page_fallback: bool = True) -> bool:
-    dialogs = page.locator("[role='dialog'], .filepicker, .moodle-dialogue")
+    dialogs = page.locator("[role='dialog']:not([data-mcp-foreign]), .filepicker:not([data-mcp-foreign]), .moodle-dialogue:not([data-mcp-foreign])")
     for index in reversed(range(dialogs.count())):
         dialog = dialogs.nth(index)
         if dialog.is_visible() and _click_control(dialog, pattern):
@@ -241,11 +252,21 @@ def _add_control(filemanager: Locator) -> Locator | None:
     return None
 
 
+def _mark_foreign_dialogs(page: Page) -> None:
+    """Diálogos visibles que no son del selector de archivos (cookies, avisos) no se tocan ni se leen."""
+    page.evaluate("""() => document.querySelectorAll("[role='dialog'], .filepicker, .moodle-dialogue").forEach(d => {
+        const visible = !!(d.offsetWidth || d.offsetHeight || d.getClientRects().length);
+        if (visible && !d.querySelector('input[type=file], .fp-repo-area, .fp-upload-form, .fp-file, .fp-upload-btn'))
+            d.setAttribute('data-mcp-foreign', '1');
+    })""")
+
+
 def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
+    _mark_foreign_dialogs(page)
     _wait_for_filemanager_ready(page, filemanager)
     if "fm-maxfiles" in (filemanager.get_attribute("class") or "").split():
         raise RuntimeError("El área de entrega ya alcanzó el número máximo de archivos.")
-    if page.locator("[role='dialog']:visible, .filepicker:visible, .moodle-dialogue:visible").count():
+    if page.locator("[role='dialog']:not([data-mcp-foreign]):visible, .filepicker:not([data-mcp-foreign]):visible, .moodle-dialogue:not([data-mcp-foreign]):visible").count():
         _dismiss_filepicker(page)
     add = _add_control(filemanager)
     if add is None:
@@ -398,8 +419,18 @@ def _submission_files(page: Page) -> list[str]:
 def _limit(page: Page, filemanager: Locator, name: str) -> int | None:
     value = filemanager.get_attribute(f"data-{name}")
     if value is None:
-        match = re.search(rf'"{name}"\s*:\s*"?(-?\d+)', page.content())
-        value = match.group(1) if match else None
+        content = page.content()
+        client = (filemanager.get_attribute("id") or "").removeprefix("filemanager-")
+        scope = None
+        if client:
+            # La configuración de este filemanager es el objeto JSON que contiene su client_id.
+            for match in re.finditer(r"\{[^{}]*\}", content):
+                if f'"client_id":"{client}"' in match.group(0).replace(" ", ""):
+                    scope = match.group(0)
+                    break
+        matches = re.findall(rf'"{name}"\s*:\s*"?(-?\d+)', scope if scope is not None else content)
+        # Sin client_id solo se confía en un valor único: otro editor de la página puede declarar el suyo.
+        value = matches[0] if scope is not None and matches else (matches[0] if len(matches) == 1 else None)
     try:
         return int(value) if value is not None else None
     except ValueError:
@@ -502,11 +533,12 @@ def _preflight_files(file_paths: list[str]) -> tuple[list[Path], list[dict[str, 
         if path in seen_paths:
             errors.append({"name": path.name, "status": "failed", "error": "El mismo archivo aparece más de una vez."})
             continue
-        if path.name.casefold() in seen_names:
-            errors.append({"name": path.name, "status": "failed", "error": "Hay más de un archivo con el mismo nombre."})
+        if moodle_name(path.name) in seen_names:
+            errors.append({"name": path.name, "status": "failed",
+                           "error": "Hay más de un archivo con el mismo nombre una vez que Moodle lo guarde."})
             continue
         seen_paths.add(path)
-        seen_names.add(path.name.casefold())
+        seen_names.add(moodle_name(path.name))
         paths.append(path)
     return paths, errors
 
@@ -556,7 +588,39 @@ def upload_files(
     blocked = preflight_result(assignment_id, file_paths)
     if blocked is not None:
         return blocked
-    paths, _ = _preflight_files(file_paths)
+    validated, _ = _preflight_files(file_paths)
+    # Se sube una copia privada tomada al validar: cambiar el archivo original después no cambia lo que se envía.
+    with tempfile.TemporaryDirectory(prefix="moodle-upload-") as staging:
+        try:
+            paths = _stage_copies(validated, Path(staging))
+        except (OSError, ValueError) as error:
+            return _result(assignment_id, None, "blocked",
+                           files=[{"name": path.name, "status": "not_uploaded"} for path in validated],
+                           errors=[f"Un archivo cambió después de validarlo: {error}"])
+        return _upload_validated(page, config, assignment_id, paths, replace_existing)
+
+
+def _stage_copies(paths: list[Path], staging: Path) -> list[Path]:
+    copies = []
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    for path in paths:
+        expected = check_upload_file(str(path))
+        before = expected.stat()
+        descriptor = os.open(expected, flags)
+        try:
+            info = os.fstat(descriptor)
+            if (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino) or not stat.S_ISREG(info.st_mode):
+                raise ValueError(path.name)
+            target = staging / path.name
+            with os.fdopen(descriptor, "rb", closefd=False) as source, target.open("xb") as output:
+                shutil.copyfileobj(source, output)
+        finally:
+            os.close(descriptor)
+        copies.append(target)
+    return copies
+
+
+def _upload_validated(page: Page, config: Config, assignment_id: int, paths: list[Path], replace_existing: bool) -> dict:
     started = time.monotonic()
     secrets = (config.username, config.password)
 
@@ -568,7 +632,8 @@ def upload_files(
     region = page.locator("#region-main, main").first
     page_text = region.inner_text() if region.count() else ""
     # La descripción del docente no decide si la actividad está cerrada: solo el estado y las fechas.
-    status_text = page_text.replace(task.content, " ") if task.content else page_text
+    flat = lambda value: " ".join(value.replace("\xa0", " ").split())  # noqa: E731
+    status_text = flat(page_text).replace(flat(task.content), " ") if task.content else page_text
     if forbids_upload(task.content):
         return _result(assignment_id, task.title, "blocked", files=pending(),
                        errors=["Las instrucciones indican que no se deben subir archivos."])
@@ -586,11 +651,12 @@ def upload_files(
     filemanager = managers.first
     _wait_for_filemanager_ready(page, filemanager)
     existing = _file_names(filemanager)
+    form_existing = list(existing)
     if view_files and not existing:
         # La página de la tarea muestra archivos que el formulario aún no cargó: se tratan como existentes.
         existing = view_files
     if existing and not replace_existing:
-        if {moodle_name(name) for name in existing} == requested:
+        if {moodle_exact(name) for name in existing} == {moodle_exact(path.name) for path in paths}:
             return _result(assignment_id, task.title, "already_uploaded", files=pending("already_present"),
                            existing=existing, complete=True, errors=[],
                            submission=_submission_state(page, task.status),
@@ -672,6 +738,9 @@ def upload_files(
                        existing=existing, replaced=replaced,
                        errors=[f"No se pudo releer la entrega: {redact_credentials(error, secrets)[:300]}"])
     saved = _submission_file_names(page)
+    if replace_existing and existing and not form_existing and not replaced:
+        # Los archivos anteriores solo se veían en la tarea: guardar el formulario los sustituyó.
+        replaced = list(existing)
     files = [{"name": path.name, "status": "uploaded" if moodle_name(path.name) in saved else "save_unconfirmed"}
              for path in paths]
     unconfirmed = [item["name"] for item in files if item["status"] != "uploaded"]

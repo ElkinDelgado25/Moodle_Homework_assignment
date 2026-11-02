@@ -25,7 +25,7 @@ Después de instalar, el comando del servidor es `mcp-moodle serve`. Un cliente 
 | `check_moodle_connection` | Comprueba el acceso a Moodle y devuelve el error si falla. |
 | `list_assignments(mode="upcoming", limit=5, only_pending=true)` | Herramienta para «¿qué tareas pendientes tengo?». `upcoming` (predeterminado) muestra las cinco próximas tareas abiertas desde la línea de tiempo, con `response_markdown` listo para mostrar. `overdue` solo si se piden vencidas. `all` recorre los índices de todas las materias visibles, sin límite, y solo se usa si se pide un total o una revisión completa. No abre tareas ni lee anexos. |
 | `get_assignment(assignment_id=null, url=null)` | Lee UNA tarea: `description`, fechas, estado, anexos y el texto de hasta cinco páginas enlazadas en `linked_resources` (30.000 caracteres en total). Las páginas del propio Moodle se leen con la sesión; los enlaces a archivos indican que se descarguen. Acepta el `id` o el enlace `.../mod/assign/view.php?id=...`, también en instalaciones dentro de una subcarpeta. No crea archivos. |
-| `download_assignment_attachments(assignment_id=null, url=null, destination_directory=null)` | Descarga los anexos con la sesión de Moodle. La carpeta debe ser absoluta (o empezar por `~`); por defecto `~/Documentos` o `~/Documents`. Se valida antes de abrir el navegador, nunca sobrescribe y devuelve errores parciales. |
+| `download_assignment_attachments(assignment_id=null, url=null, destination_directory=null)` | Descarga los anexos de la descripción y los recursos enlazados (`/mod/resource`) con la sesión de Moodle. La carpeta debe ser absoluta (o empezar por `~`); por defecto `~/Documentos` o `~/Documents`. Se valida antes de abrir el navegador, nunca sobrescribe y devuelve errores parciales. |
 | `build_delivery_document(document, cover, destination_directory=null, file_name=null, open_pdf=true, pdf_engine="auto")` | Genera el entregable: el agente envía el contenido estructurado (títulos, párrafos, listas, tablas, figuras, código, citas y referencias) y los datos de portada; el servidor arma la portada ULEAM, aplica APA 7, crea el DOCX editable (Word o WPS) y su PDF, los verifica, los copia sin sobrescribir y abre el PDF. Si faltan datos de portada devuelve `missing_cover_fields` sin escribir nada. Ver [DOCUMENT_OUTPUT.md](DOCUMENT_OUTPUT.md). |
 | `finish_delivery(docx_path, pdf_path, destination_directory, open_pdf=true)` | Solo para documentos hechos fuera de `build_delivery_document`: verifica el par (mismo nombre, sin campos `{{...}}`, PDF legible), lo copia sin sobrescribir y abre el PDF. |
 | `upload_assignment_files(file_paths, assignment_id=null, url=null, replace_existing=false)` | Adjunta archivos a una tarea y guarda la entrega, solo si el usuario lo pidió. Valida tipo, contenido y ubicación antes de abrir Moodle; todo o nada; nunca envía para calificar. |
@@ -33,7 +33,7 @@ Después de instalar, el comando del servidor es `mcp-moodle serve`. Un cliente 
 
 ### Sesión de Moodle
 
-Cada herramienta abre su propio navegador, pero reutiliza la sesión: las cookies del dominio de Moodle (nunca las de Microsoft) se guardan en la carpeta de configuración del usuario, en `sessions/`, con permisos `0600` y una vigencia de 12 horas. Si la sesión venció, se vuelve a iniciar una vez; si Moodle rechaza las credenciales, el archivo se borra. Para desactivarlo, define `MOODLE_SESSION_CACHE=false`. Esa carpeta no se puede adjuntar a una entrega.
+Cada herramienta abre su propio navegador, pero reutiliza la sesión: las cookies del dominio de Moodle (nunca las de Microsoft) se guardan en la carpeta de configuración del usuario, en `sessions/`, con permisos `0600` y una vigencia de 12 horas. Si la sesión venció, se vuelve a iniciar una vez; si Moodle rechaza las credenciales, el archivo se borra. Para desactivarlo, define `MOODLE_SESSION_CACHE=false` (también `0`, `no` u `off`) en el entorno o en `credentials.env`; basta con que lo indique uno de los dos. Esa carpeta no se puede adjuntar a una entrega.
 
 ### Anexos y enlaces
 
@@ -72,6 +72,8 @@ Si Moodle devuelve un error del servidor (5xx), las herramientas responden:
 - `get_assignment` ya no incluye `assignment_workflow` ni `document_template`; la consigna está en `description` (antes `instructions`) y `linked_resources`.
 - `prepare_delivery_workspace` se reemplazó por `build_delivery_document`.
 - `upload_assignment_files` devuelve `submission` en lugar de `sent_for_grading`.
+- Los identificadores y `limit` son enteros estrictos: `true`, `"11"` o `11.0` se rechazan.
+- El SDK de MCP ignora los argumentos desconocidos sin error: un cliente que aún envíe `refresh` o `complete_review` recibe el listado `upcoming`. Reinicia el cliente para que cargue la nueva lista de herramientas.
 
 
 ## Codex

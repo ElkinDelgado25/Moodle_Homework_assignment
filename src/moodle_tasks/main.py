@@ -19,6 +19,7 @@ class Config:
     username: str
     password: str = field(repr=False)
     headless: bool
+    session_cache: bool = True
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,9 @@ def required_env(name: str, values: dict[str, str | None]) -> str:
     return value
 
 
+OPT_OUT = ("0", "false", "no", "off", "n")
+
+
 def load_config(env_file: Path | None = None) -> Config:
     values = config_values(env_file)
     return Config(
@@ -64,6 +68,10 @@ def load_config(env_file: Path | None = None) -> Config:
         username=required_env("MOODLE_USERNAME", values),
         password=required_env("MOODLE_PASSWORD", values),
         headless=(values.get("MOODLE_HEADLESS") or "true").lower() != "false",
+        # Desactivar la caché de sesión es una opción de privacidad: gana si lo indica el archivo o el entorno.
+        session_cache=not any((value or "").strip().lower() in OPT_OUT for value in (
+            values.get("MOODLE_SESSION_CACHE"),
+            dotenv_values(env_file or default_env_file(), interpolate=False).get("MOODLE_SESSION_CACHE"))),
     )
 
 

@@ -2,6 +2,7 @@
 
 import os
 import sys
+import unicodedata
 from pathlib import Path
 
 from .storage import default_env_file, user_cache_dir, user_config_dir
@@ -59,11 +60,36 @@ def _hidden_component(path: Path) -> str | None:
     return next((part for part in path.parts if part.startswith(".") and part not in (".", "..")), None)
 
 
+def _expand(raw: str) -> Path:
+    try:
+        return Path(raw).expanduser()
+    except RuntimeError:  # ~usuario inexistente
+        raise ValueError("La ruta usa una carpeta personal que no existe.") from None
+
+
+def _protected_inodes() -> set[tuple[int, int]]:
+    """Identidad (dispositivo, inodo) de los archivos de configuración: detecta enlaces duros hacia ellos."""
+    found = set()
+    roots = [user_config_dir(), default_env_file()]
+    for root in roots:
+        try:
+            paths = [root] if root.is_file() else [path for path in root.rglob("*") if path.is_file()]
+        except OSError:
+            continue
+        for path in paths[:500]:
+            try:
+                info = path.stat()
+                found.add((info.st_dev, info.st_ino))
+            except OSError:
+                continue
+    return found
+
+
 def resolve_local_file(raw: str) -> Path:
     """Resuelve enlaces simbólicos y rechaza rutas protegidas antes de abrir el archivo."""
     if not isinstance(raw, str) or not raw.strip() or "\x00" in raw:
         raise ValueError("La ruta local está vacía o no es válida.")
-    candidate = Path(raw).expanduser()
+    candidate = _expand(raw)
     if not candidate.is_absolute():
         raise ValueError("Usa una ruta absoluta (o que empiece por ~) para el archivo local.")
     path = Path(os.path.realpath(candidate))
@@ -83,6 +109,11 @@ def check_upload_file(raw: str) -> Path:
         raise FileNotFoundError("El archivo local no existe.")
     if not path.is_file():
         raise ValueError("La ruta local no corresponde a un archivo legible.")
+    if any(unicodedata.category(character) in ("Cc", "Cf") for character in path.name):
+        raise ValueError("El nombre del archivo tiene caracteres de control o invisibles; renómbralo.")
+    info = path.stat()
+    if info.st_nlink > 1 and (info.st_dev, info.st_ino) in _protected_inodes():
+        raise UnsafePathError("El archivo es un enlace a la configuración o a las credenciales; no se puede usar.")
     suffix = path.suffix.lower()
     if suffix not in UPLOAD_EXTENSIONS:
         raise ValueError(f"El tipo de archivo {suffix or 'sin extensión'} no es un formato de entrega admitido.")
@@ -103,7 +134,7 @@ def resolve_destination_directory(raw: str) -> Path:
     """Carpeta de salida absoluta, fuera de la configuración y de rutas del sistema."""
     if not isinstance(raw, str) or not raw.strip() or "\x00" in raw:
         raise ValueError("La carpeta de destino está vacía o no es válida.")
-    candidate = Path(raw).expanduser()
+    candidate = _expand(raw)
     if not candidate.is_absolute():
         raise ValueError("Usa una carpeta absoluta (o que empiece por ~) como destino.")
     path = Path(os.path.realpath(candidate))

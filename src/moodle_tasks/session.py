@@ -23,8 +23,13 @@ SESSION_MAX_AGE_SECONDS = 12 * 3600
 VERSION = 1
 
 
-def cache_enabled() -> bool:
-    return (os.environ.get("MOODLE_SESSION_CACHE") or "true").strip().lower() not in ("0", "false", "no")
+def cache_enabled(config: Config | None = None) -> bool:
+    """Desactivable con MOODLE_SESSION_CACHE=false en el entorno o en credentials.env."""
+    from .main import OPT_OUT
+
+    if (os.environ.get("MOODLE_SESSION_CACHE") or "true").strip().lower() in OPT_OUT:
+        return False
+    return config is None or getattr(config, "session_cache", True)
 
 
 def session_file(config: Config) -> Path:
@@ -43,7 +48,7 @@ def _moodle_cookie(cookie: dict, host: str) -> bool:
 
 def load_state(config: Config) -> dict | None:
     """storage_state de Playwright o None si no hay sesión válida para esta cuenta."""
-    if not cache_enabled():
+    if not cache_enabled(config):
         return None
     path = session_file(config)
     try:
@@ -64,7 +69,7 @@ def load_state(config: Config) -> dict | None:
 
 
 def save_state(context, config: Config) -> bool:
-    if not cache_enabled():
+    if not cache_enabled(config):
         return False
     try:
         cookies = context.cookies()

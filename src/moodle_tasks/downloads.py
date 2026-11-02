@@ -9,7 +9,7 @@ from playwright.sync_api import Page
 
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, login
-from .urls import same_origin
+from .urls import moodle_path, same_origin
 
 
 def documents_directory() -> Path:
@@ -36,10 +36,13 @@ def attachment_name(url: str) -> str:
     return name
 
 
-def authenticated_content(page: Page, config: Config, url: str) -> tuple[bytes, str]:
+def authenticated_content(page: Page, config: Config, url: str, final_url: list | None = None) -> tuple[bytes, str]:
+    final_url = final_url if final_url is not None else []
     """Sigue solo redirecciones de Moodle; nunca exporta cookies al agente."""
-    if not same_origin(url, config.base_url) or "pluginfile.php" not in urlsplit(url).path:
+    path = moodle_path(url, config.base_url) or ""
+    if not same_origin(url, config.base_url) or not ("pluginfile.php" in path or path == "/mod/resource/view.php"):
         raise ValueError("El enlace no es un anexo del Moodle configurado.")
+    final_url[:] = [url]
     for attempt in range(2):
         current = url
         expired = False
@@ -70,8 +73,9 @@ def authenticated_content(page: Page, config: Config, url: str) -> tuple[bytes, 
                     break
                 if not body:
                     raise RuntimeError("Moodle devolvió un anexo vacío.")
-                if (urlsplit(url).path.lower().endswith(".pdf") or content_type == "application/pdf") and not body.startswith(b"%PDF-"):
+                if (urlsplit(current).path.lower().endswith(".pdf") or content_type == "application/pdf") and not body.startswith(b"%PDF-"):
                     raise RuntimeError("Moodle no devolvió un PDF válido; el anexo no se guardó.")
+                final_url[:] = [current]
                 return body, content_type
             finally:
                 response.dispose()
@@ -83,9 +87,11 @@ def authenticated_content(page: Page, config: Config, url: str) -> tuple[bytes, 
 
 
 def download_attachment(page: Page, config: Config, url: str, directory: Path) -> dict:
-    body, content_type = authenticated_content(page, config, url)
+    final_url: list = []
+    body, content_type = authenticated_content(page, config, url, final_url)
     directory.mkdir(parents=True, exist_ok=True)
-    name = attachment_name(url)
+    # Un recurso (/mod/resource) redirige al archivo: el nombre sale de la URL final de pluginfile.
+    name = attachment_name(final_url[0] if final_url else url)
     for number in range(1000):
         original = Path(name)
         candidate = directory / (name if number == 0 else f"{original.stem} ({number}){original.suffix}")

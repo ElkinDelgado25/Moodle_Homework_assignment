@@ -13,7 +13,8 @@ from .errors import redact_credentials
 MAX_LINKS = 5
 MAX_CONTENT = 30_000          # total para todos los enlaces de una tarea
 MAX_BODY_BYTES = 2 * 1024 * 1024
-MOODLE_READABLE = re.compile(r"^/mod/(?:page|book|url|assign|forum|label|lesson|wiki|glossary)/")
+# Cualquier actividad o curso del mismo Moodle se lee con la sesión, salvo los archivos.
+MOODLE_READABLE = re.compile(r"^/(?:mod/[a-z0-9_]+/|course/view\.php)")
 MOODLE_FILE = re.compile(r"^/mod/(?:resource|folder)/|/pluginfile\.php/")
 EXTRACT_TEXT = """(body) => {
     const root = body.querySelector('article, main, [role="main"], #region-main') || body;
@@ -93,7 +94,7 @@ def assignment_links(page: Page, content: str, attachments: list[dict]) -> list[
         "aa => aa.map(a => ({name: (a.innerText || a.title || '').trim(), url: a.href}))"
     )
     candidates.extend({"name": "", "url": match.rstrip(".,;!?)")}
-                      for match in re.findall(r"https?://[^\s<>\"']+", content))
+                      for match in re.findall(r"https?://[^\s<>\"']+", content, re.IGNORECASE))
     seen = {urldefrag(item["url"])[0] for item in attachments}
     seen.add(urldefrag(page.url)[0])
     links = []
@@ -223,8 +224,10 @@ def read_linked_resources(browser, links: list[dict[str, str]], credentials: tup
         path = moodle_path(link["url"], config.base_url) if config is not None else None
         try:
             if path is not None and MOODLE_FILE.search(path):
-                resources.append(dict(link, kind="file",
-                                      error="Es un archivo de Moodle; descárgalo con download_assignment_attachments."))
+                downloadable = path.startswith("/mod/resource/") or "/pluginfile.php/" in path
+                resources.append(dict(link, kind="file", error=(
+                    "Es un archivo de Moodle; descárgalo con download_assignment_attachments." if downloadable
+                    else "Es una carpeta de Moodle; ábrela en Moodle para ver sus archivos.")))
                 continue
             if path is not None and session_page is not None and MOODLE_READABLE.match(path):
                 resource = read_moodle_link(session_page, config, link, remaining)

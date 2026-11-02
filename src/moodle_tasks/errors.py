@@ -8,7 +8,9 @@ from urllib.parse import quote, quote_plus
 def _variants(value: str) -> set[str]:
     """Formas en que una credencial puede aparecer dentro de un error: URL, JSON, HTML o repr."""
     forms = {value, quote(value, safe=""), quote_plus(value), repr(value)[1:-1], json.dumps(value)[1:-1],
-             html.escape(value, quote=True), html.escape(value, quote=False)}
+             html.escape(value, quote=True), html.escape(value, quote=False),
+             # Codificación parcial de los navegadores en URLs (conservan / @ & : = + , ; etc.).
+             quote(value, safe="/@&:=+$,;!*'()~?#[]")}
     return {form for form in forms if form}
 
 

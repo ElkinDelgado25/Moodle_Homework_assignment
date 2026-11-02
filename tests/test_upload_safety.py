@@ -153,3 +153,69 @@ class UploadSafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifierRegressionTests(unittest.TestCase):
+    """Hallazgos del verificador independiente de entrega y subida."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.config_dir = self.root / "config"
+        self.config_dir.mkdir()
+        self.credentials = self.config_dir / "credentials.env"
+        self.credentials.write_text("MOODLE_PASSWORD=secreto-xyz\n")
+        for target, value in (("moodle_tasks.paths.user_config_dir", self.config_dir),
+                              ("moodle_tasks.paths.default_env_file", self.credentials),
+                              ("moodle_tasks.paths.user_cache_dir", self.root / "cache")):
+            patcher = patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    @unittest.skipIf(os.name == "nt", "Enlaces duros y simbólicos de Unix")
+    def test_hardlink_to_credentials_is_rejected(self):
+        link = self.root / "notas.txt"
+        os.link(self.credentials, link)
+        with self.assertRaises(UnsafePathError):
+            check_upload_file(str(link))
+
+    @unittest.skipIf(os.name == "nt", "Enlaces simbólicos de Unix")
+    def test_swap_after_validation_never_sends_the_new_target(self):
+        from moodle_tasks.uploads import _preflight_files, _stage_copies
+        notes = self.root / "notas.txt"
+        notes.write_text("apuntes")
+        paths, errors = _preflight_files([str(notes)])
+        self.assertEqual(errors, [])
+        notes.unlink()
+        notes.symlink_to(self.credentials)
+        with self.assertRaises((OSError, ValueError)):
+            _stage_copies(paths, Path(tempfile.mkdtemp(dir=self.root)))
+
+    def test_staged_copy_is_frozen_at_validation(self):
+        from moodle_tasks.uploads import _preflight_files, _stage_copies
+        notes = self.root / "notas.txt"
+        notes.write_text("original")
+        paths, _ = _preflight_files([str(notes)])
+        copies = _stage_copies(paths, Path(tempfile.mkdtemp(dir=self.root)))
+        notes.write_text("cambiado después")
+        self.assertEqual(copies[0].read_text(), "original")
+
+    def test_names_that_moodle_merges_are_duplicates(self):
+        first = make_pdf(self.root / "Informe&final.pdf")
+        second = make_pdf(self.root / "Informefinal.pdf")
+        self.assertEqual(preflight_result(1, [str(first), str(second)])["status"], "blocked")
+
+    def test_control_characters_in_names_and_unknown_home(self):
+        weird = self.root / "linea\nnueva.pdf"
+        make_pdf(weird)
+        with self.assertRaises(ValueError):
+            check_upload_file(str(weird))
+        with self.assertRaises(ValueError):
+            resolve_destination_directory("~usuario-que-no-existe-xyz/Docs")
+
+    def test_no_upload_wordings(self):
+        from moodle_tasks.uploads import forbids_upload
+        for text in ("No subir archivos.", "No files should be uploaded for this activity.",
+                     "No se deben subir documentos, solo se evalúa la participación."):
+            self.assertTrue(forbids_upload(text), text)

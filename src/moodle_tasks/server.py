@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import hashlib
 import json
 import re
 import shutil
@@ -40,7 +41,7 @@ from .profile import load_profile
 from .session import moodle_page
 from .storage import user_config_dir
 from .uploads import preflight_result, upload_files
-from .urls import assignment_view_id, parse_id
+from .urls import assignment_view_id, moodle_path, parse_id
 from .verification import DocumentCheckError, check_delivery_pair
 
 
@@ -121,10 +122,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     def safe_error(error: Exception) -> str:
         try:
-            stat = Path(env_file).stat()
-            stamp = (str(env_file), stat.st_mtime_ns, stat.st_size)
+            # El contenido (no solo la fecha) decide si hay que releer las credenciales.
+            stamp = (str(env_file), hashlib.sha256(Path(env_file).read_bytes()).hexdigest())
         except OSError:
-            stamp = (str(env_file), 0, 0)
+            stamp = (str(env_file), "")
         return redact_credentials(error, secrets_for(stamp))
 
     async def run(function, *args) -> CallToolResult:
@@ -138,12 +139,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     # ------------------------------------------------------------- configuración
 
     @server.tool(annotations=readonly, structured_output=True)
-    def configuration_status() -> dict[str, Any]:
+    def configuration_status() -> Result:
         """Verifica si las variables locales de Moodle están completas; no revela credenciales ni consulta la red."""
         values = config_values(env_file)
         missing = [name for name in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")
                    if not (values.get(name) or "").strip()]
-        return {"configured": not missing, "missing_variables": missing}
+        return compact({"configured": not missing, "missing_variables": missing})
 
     def check_connection() -> dict[str, Any]:
         try:
@@ -164,9 +165,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             return result
 
     @server.tool(annotations=readonly, structured_output=True)
-    async def check_moodle_connection() -> dict[str, Any]:
+    async def check_moodle_connection() -> Result:
         """Comprueba que Moodle responde y acepta el inicio de sesión. Distingue errores HTTP y de acceso."""
-        return await asyncio.to_thread(check_connection)
+        return compact(await asyncio.to_thread(check_connection))
 
     # ------------------------------------------------------------- listas
 
@@ -203,7 +204,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     @server.tool(annotations=readonly, structured_output=True)
     async def list_assignments(
         mode: Annotated[Literal["upcoming", "overdue", "all"], Field(description="upcoming: próximas abiertas (por defecto). overdue: solo si piden vencidas. all: solo si piden todas las materias, un total o una revisión completa.")] = "upcoming",
-        limit: Annotated[int | None, Field(ge=1, le=200, description="Máximo de filas; 5 por defecto (sin límite en all).")] = None,
+        limit: Annotated[int | None, Field(strict=True, ge=1, le=200, description="Máximo de filas; 5 por defecto (sin límite en all).")] = None,
         only_pending: bool = True,
     ) -> Result:
         """Lista tareas de Moodle sin abrirlas. Para 'qué tareas pendientes tengo' úsala sin argumentos y muestra response_markdown tal cual."""
@@ -232,7 +233,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     @server.tool(annotations=readonly, structured_output=True)
     async def get_assignment(
-        assignment_id: Annotated[int | None, Field(ge=1, le=2**63 - 1, description="Identificador numérico de la tarea en Moodle.")] = None,
+        assignment_id: Annotated[int | None, Field(strict=True, ge=1, le=2**63 - 1, description="Identificador numérico de la tarea en Moodle.")] = None,
         url: Annotated[str | None, Field(min_length=1, max_length=2048, description="URL de Moodle de la tarea (/mod/assign/view.php?id=...).")] = None,
     ) -> Result:
         """Lee UNA tarea: description, fechas, estado, anexos y el texto de hasta cinco páginas enlazadas (linked_resources). No crea archivos ni sube entregas."""
@@ -247,7 +248,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         files, errors = [], []
         with moodle_page(settings) as (_, page):
             task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={resolved_id}", settings)
-            urls = list(dict.fromkeys(attachment["url"] for attachment in task.attachments))
+            # Anexos de la descripción y recursos enlazados (/mod/resource redirige al archivo con redirect=1).
+            resources = [link["url"].split("#", 1)[0] + ("&" if "?" in link["url"] else "?") + "redirect=1"
+                         for link in task.links if moodle_path(link["url"], settings.base_url) == "/mod/resource/view.php"]
+            urls = list(dict.fromkeys([*(attachment["url"] for attachment in task.attachments), *resources]))
             for attachment_url in urls:
                 try:
                     files.append(download_attachment(page, settings, attachment_url, directory))
@@ -259,7 +263,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     @server.tool(annotations=download_annotations, structured_output=True)
     async def download_assignment_attachments(
-        assignment_id: Annotated[int | None, Field(ge=1, le=2**63 - 1)] = None,
+        assignment_id: Annotated[int | None, Field(strict=True, ge=1, le=2**63 - 1)] = None,
         url: Annotated[str | None, Field(min_length=1, max_length=2048, description="URL de Moodle de la tarea.")] = None,
         destination_directory: Annotated[str | None, Field(min_length=1, max_length=4096, description="Carpeta absoluta; por defecto ~/Documentos o ~/Documents.")] = None,
     ) -> Result:
@@ -291,9 +295,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
 
     @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True,
                                            open_world_hint=False), structured_output=True)
-    def get_document_template() -> dict[str, Any]:
+    def get_document_template() -> Result:
         """Datos de portada guardados (student_1, materias), formato APA 7 y política de contenido para el entregable. No genera archivos."""
-        return document_template()
+        return compact(document_template())
 
     def build_task(document: DeliveryDocument, cover: CoverFields, destination_directory: str | None,
                    file_name: str | None, open_pdf: bool, pdf_engine: str) -> dict[str, Any]:
@@ -346,10 +350,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         pdf_path: Annotated[str, Field(min_length=1, max_length=4096, description="Ruta absoluta del PDF exportado desde ese DOCX.")],
         destination_directory: Annotated[str, Field(min_length=1, max_length=4096, description="Carpeta final absoluta.")],
         open_pdf: bool = True,
-    ) -> dict[str, Any]:
+    ) -> Result:
         """Solo para documentos hechos fuera de build_delivery_document: verifica el DOCX y su PDF (mismo nombre, sin campos {{...}}, PDF legible), los copia sin sobrescribir y abre el PDF."""
         try:
-            return copy_and_open_delivery(docx_path, pdf_path, destination_directory, open_pdf=open_pdf)
+            return compact(copy_and_open_delivery(docx_path, pdf_path, destination_directory, open_pdf=open_pdf))
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 
@@ -369,7 +373,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     async def upload_assignment_files(
         file_paths: Annotated[list[Annotated[str, Field(min_length=1, max_length=4096)]],
                               Field(min_length=1, max_length=10, description="Rutas absolutas de los archivos finales, por ejemplo el DOCX y el PDF.")],
-        assignment_id: Annotated[int | None, Field(ge=1, le=2**63 - 1, description="Identificador numérico de la tarea en Moodle.")] = None,
+        assignment_id: Annotated[int | None, Field(strict=True, ge=1, le=2**63 - 1, description="Identificador numérico de la tarea en Moodle.")] = None,
         url: Annotated[str | None, Field(min_length=1, max_length=2048, description="URL de Moodle de la tarea; úsala en lugar de assignment_id.")] = None,
         replace_existing: bool = False,
     ) -> Result:
