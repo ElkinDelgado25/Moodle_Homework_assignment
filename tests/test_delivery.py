@@ -158,7 +158,7 @@ class OpenFileTests(unittest.TestCase):
         for stream in ("stdin", "stdout", "stderr"):
             self.assertEqual(kwargs[stream], delivery.subprocess.DEVNULL)
         self.assertTrue(kwargs["start_new_session"])
-        self.assertEqual(popen.call_args.args[0], ["xdg-open", "/tmp/x.pdf"])
+        self.assertEqual(popen.call_args.args[0], ["xdg-open", str(Path("/tmp/x.pdf"))])
 
     def test_no_display_skips_opening(self):
         environment = {key: value for key, value in os.environ.items() if key not in ("DISPLAY", "WAYLAND_DISPLAY")}

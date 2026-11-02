@@ -207,10 +207,11 @@ class VerifierRegressionTests(unittest.TestCase):
         self.assertEqual(preflight_result(1, [str(first), str(second)])["status"], "blocked")
 
     def test_control_characters_in_names_and_unknown_home(self):
-        weird = self.root / "linea\nnueva.pdf"
-        make_pdf(weird)
-        with self.assertRaises(ValueError):
-            check_upload_file(str(weird))
+        if os.name != "nt":  # Windows no permite crear nombres con saltos de línea
+            weird = self.root / "linea\nnueva.pdf"
+            make_pdf(weird)
+            with self.assertRaises(ValueError):
+                check_upload_file(str(weird))
         with self.assertRaises(ValueError):
             resolve_destination_directory("~usuario-que-no-existe-xyz/Docs")
 

@@ -97,7 +97,8 @@ class OutOfRangeTests(unittest.TestCase):
                         real = Path(os.path.realpath(path))
                         self.assertFalse(str(real).startswith(str(config)), raw)
                         self.assertFalse(str(real).startswith(("/proc", "/etc", "/dev", "/sys")), raw)
-                        self.assertFalse(any(part.startswith(".") for part in real.relative_to("/").parts if part not in (".", "..")), raw)
+                        # parts[0] es la raíz ("/" o "C:\\"): las demás partes no pueden ser ocultas.
+                        self.assertFalse(any(part.startswith(".") for part in real.parts[1:] if part not in (".", "..")), raw)
                 self.assertEqual(check_upload_file(str(good)), good.resolve())
                 self.assertGreater(accepted, 0)
 
