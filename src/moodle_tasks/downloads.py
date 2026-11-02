@@ -1,6 +1,7 @@
 """Descargas de anexos con las cookies del mismo contexto de Moodle."""
 
 import re
+import unicodedata
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -8,6 +9,7 @@ from playwright.sync_api import Page
 
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, login
+from .urls import same_origin
 
 
 def documents_directory() -> Path:
@@ -15,16 +17,18 @@ def documents_directory() -> Path:
     return spanish if spanish.is_dir() else Path.home() / "Documents"
 
 
-def same_origin(url: str, base_url: str) -> bool:
-    def origin(value: str):
-        parts = urlsplit(value)
-        return parts.scheme, parts.hostname, parts.port or (443 if parts.scheme == "https" else 80)
-    return origin(url) == origin(base_url) and not urlsplit(url).username
-
-
 def attachment_name(url: str) -> str:
-    name = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
+    name = unicodedata.normalize("NFC", unquote(urlsplit(url).path.rsplit("/", 1)[-1]))
+    # Sin controles bidi ni invisibles (p. ej. "factura\u202efdp.exe") ni separadores de ruta.
+    name = "".join(character for character in name if unicodedata.category(character) != "Cf")
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]', "_", name).strip(" .")
+    if len(name.encode("utf-8")) > 200:
+        stem, dot, suffix = name.rpartition(".")
+        suffix = suffix if dot and len(suffix) <= 10 else ""
+        stem = stem if suffix else name
+        while len((stem + ("." + suffix if suffix else "")).encode("utf-8")) > 200:
+            stem = stem[:-1]
+        name = stem.rstrip(" .") + ("." + suffix if suffix else "")
     if not name:
         name = "anexo"
     if name.split(".", 1)[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
+import helpers  # noqa: F401 - desactiva la caché de sesión
 from moodle_tasks.main import Config, collect_assignments, is_pending, read_assignment
 from moodle_tasks.search import assignment_url, parse_moodle_date, search_assignments
 
@@ -121,6 +122,46 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(stats['detail_pages_read'], 0)
         self.assertFalse(any('/mod/assign/view.php' in url for url in self.visited))
 
+    def test_surface_index_fallback_returns_tasks_with_unconfirmed_availability(self):
+        self.context.unroute('**/*', self.respond)
+
+        def respond(route):
+            if route.request.url.endswith('/my/'):
+                route.fulfill(content_type='text/html', body='<main>Sin línea de tiempo</main>')
+            else:
+                self.respond(route)
+
+        self.context.route('**/*', respond)
+        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
+            tasks, stats = self.query(mode='upcoming', limit=5, summary_only=True)
+        self.assertEqual([task.title for task in tasks], ['Pendiente reciente', 'Pendiente anterior', 'Aún no abierta'])
+        self.assertEqual(stats['availability_unconfirmed'], 3)
+        self.assertEqual(stats['timeline_status'], 'missing')
+        self.assertEqual(stats['source'], 'course_indexes')
+
+    def test_empty_timeline_does_not_fall_back_to_course_indexes(self):
+        self.context.unroute('**/*', self.respond)
+
+        def respond(route):
+            if route.request.url.endswith('/my/'):
+                route.fulfill(content_type='text/html', body='<div class="block_timeline"><div data-region="no-events-empty-message">Sin actividades</div></div>')
+            else:
+                self.respond(route)
+
+        self.context.route('**/*', respond)
+        tasks, stats = self.query(mode='upcoming', limit=5, summary_only=True)
+        self.assertEqual(tasks, [])
+        self.assertEqual(stats['timeline_status'], 'empty')
+        self.assertFalse(any('/mod/assign/index.php' in url or 'courses.php' in url for url in self.visited))
+
+    def test_assignment_urls_support_moodle_in_a_subfolder(self):
+        from moodle_tasks.search import assignment_url
+        base = "https://moodle.test/moodle"
+        self.assertEqual(assignment_url("https://moodle.test/moodle/mod/assign/view.php?id=3&action=editsubmission", base),
+                         "https://moodle.test/moodle/mod/assign/view.php?id=3")
+        self.assertIsNone(assignment_url("https://moodle.test/mod/assign/view.php?id=3", base))
+        self.assertIsNone(assignment_url("https://moodle.test/moodle/mod/assign/view.php?id=\uff13", base))
+
     def test_quick_search_paginates_deduplicates_and_stops_after_matching_limit(self):
         tasks, stats = self.query(mode="upcoming", limit=2)
         self.assertEqual([task.url.rsplit('=', 1)[1] for task in tasks], ['3', '4'])
@@ -134,7 +175,7 @@ class SearchTests(unittest.TestCase):
         def configure_routes(page, config):
             page.context.route('**/*', self.respond)
 
-        with patch('moodle_tasks.main.login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
+        with patch('moodle_tasks.session.ensure_login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
             tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
         self.assertEqual(errors, [])
         self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])

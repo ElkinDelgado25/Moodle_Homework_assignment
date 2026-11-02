@@ -282,18 +282,12 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
                         only_pending: bool = False, refresh: bool = False, summary_only: bool = False,
                         stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
     from .search import search_assignments
+    from .session import ensure_login, moodle_page
 
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=config.headless)
-        try:
-            context = browser.new_context()
-            page = context.new_page()
-            page.set_default_timeout(15_000)
-            login(page, config)
-            return search_assignments(page, config, mode=mode, limit=limit,
-                                      only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats)
-        finally:
-            browser.close()
+    with moodle_page(config) as (_, page):
+        ensure_login(page, config)
+        return search_assignments(page, config, mode=mode, limit=limit,
+                                  only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats)
 
 
 def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None,

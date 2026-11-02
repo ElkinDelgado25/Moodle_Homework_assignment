@@ -44,3 +44,26 @@ class CredentialPrivacyTests(unittest.TestCase):
 
     def test_redaction_preserves_errors_without_credentials(self):
         self.assertEqual(redact_credentials('HTTP 502', (None, '')), 'HTTP 502')
+
+
+class RedactionVariantTests(unittest.TestCase):
+    def test_escaped_and_case_variants_are_hidden(self):
+        from moodle_tasks.errors import redact_credentials
+        secret = 'Pa"ss<w>rd/1'
+        leaked = ' '.join([secret, secret.upper(), 'Pa\\"ss<w>rd/1', "Pa&quot;ss&lt;w&gt;rd/1", "Pa%22ss%3Cw%3Erd%2F1"])
+        message = redact_credentials(leaked, ("estudiante@uleam.edu.ec", secret))
+        self.assertNotIn("ss<w>rd", message)
+        self.assertNotIn("SS<W>RD", message)
+        self.assertNotIn("ss&lt;w", message)
+        self.assertNotIn("%3Cw%3E", message)
+
+    def test_basic_auth_pair_is_hidden(self):
+        import base64
+        from moodle_tasks.errors import redact_credentials
+        pair = base64.b64encode(b"user1:clave-larga").decode()
+        self.assertNotIn(pair, redact_credentials(f"Authorization: Basic {pair}", ("user1", "clave-larga")))
+
+    def test_short_secret_does_not_shred_the_message(self):
+        from moodle_tasks.errors import redact_credentials
+        message = redact_credentials("Moodle no pudo cargar la página a", ("a",))
+        self.assertEqual(message, "Moodle no pudo cargar la página [oculto]")

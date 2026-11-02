@@ -1,5 +1,6 @@
 """Generadores de DOCX y PDF reales para las pruebas, sin LibreOffice."""
 
+import os
 from pathlib import Path
 
 from docx import Document
@@ -7,6 +8,9 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from pypdf import PdfWriter
 from pypdf.generic import ArrayObject, DictionaryObject, FloatObject, NameObject, TextStringObject
+
+# Las pruebas nunca leen ni guardan la sesión real de Moodle del usuario.
+os.environ["MOODLE_SESSION_CACHE"] = "false"
 
 
 def make_docx(path: Path, text: str = "Desarrollo de la práctica.", link: str | None = None) -> Path:
