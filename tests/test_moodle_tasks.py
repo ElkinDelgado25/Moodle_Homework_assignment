@@ -156,6 +156,33 @@ class MoodleTests(unittest.TestCase):
                                        "url": "https://developer.android.com/codelabs"}])
         self.assertEqual(task.attachments[0]["url"], "https://moodle.test/pluginfile.php/1/material.pdf")
 
+    def test_assignment_prefers_description_over_earlier_date_generalbox(self):
+        instructions = (
+            "Subir la Herramienta que permite Gestionar Referencias Bibliográficas, junto con las "
+            "pantallas de su biblioteca almacenada que le va a permitir, organizar, leer, anotar y "
+            "citar documentos de investigación respecto a su investigación. Mínimo 5 referencias "
+            "para presentar en este apartado."
+        )
+        self.page.route("**/*", lambda route: route.fulfill(content_type="text/html; charset=utf-8", body='''
+            <h1>P1 - Producción (Trabajo Autónomo) - Unidad 02: Herramientas Bibliográficas</h1>
+            <div class="activity-dates">
+              <div class="box py-3 generalbox boxaligncenter">
+                <p>Apertura: domingo, 27 de septiembre de 2026, 00:01</p>
+                <p>Cierre: viernes, 16 de octubre de 2026, 23:59</p>
+              </div>
+            </div>
+            <div class="activity-description" id="intro">
+              <div class="box py-3 generalbox boxaligncenter"><div class="no-overflow">
+                <p>Subir la Herramienta que permite Gestionar Referencias Bibliográficas, junto con las pantallas de su biblioteca almacenada que le va a permitir, organizar, leer, anotar y citar documentos de investigación respecto a su investigación. Mínimo 5 referencias para presentar en este apartado.</p>
+              </div></div>
+            </div>'''))
+
+        task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=597140")
+
+        self.assertEqual(task.content, instructions)
+        self.assertNotIn("Apertura:", task.content)
+        self.assertIn("16 de octubre de 2026", task.due_date)
+
     def test_expired_assignment_session_is_renewed_before_reading(self):
         authenticated = False
 
