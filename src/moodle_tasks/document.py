@@ -16,7 +16,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from .document_model import COVER_FIELDS, REQUIRED_COVER_FIELDS, CoverFields, DeliveryDocument, parse_inline
+from .document_model import (COVER_FIELDS, REQUIRED_COVER_FIELDS, CoverFields, DeliveryDocument, figure_size_cm,
+                             parse_inline, reference_key)
 from .paths import resolve_local_file
 from .storage import user_cache_dir
 
@@ -26,7 +27,7 @@ TEMPLATE = ASSETS / "academic-cover.docx"
 LOGO = ASSETS / "uleam-logo.png"
 PLACEHOLDER = re.compile(r"\{\{[a-z_0-9]+\}\}")
 HYPERLINK = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
-RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")}
 EXPORT_TIMEOUT_SECONDS = 120
 _export_lock = threading.Lock()
 
@@ -117,7 +118,8 @@ def _fill_cover(document, values: dict[str, str]) -> None:
             if student_1 is not None:
                 before = student_1.paragraph_format.space_after or Pt(0)
                 after = paragraph.paragraph_format.space_after or Pt(0)
-                student_1.paragraph_format.space_after = Pt(before.pt + 24 + after.pt)
+                # 27,6 pt = una línea de Times New Roman 12 a doble espacio en Word y WPS.
+                student_1.paragraph_format.space_after = Pt(before.pt + 27.6 + after.pt)
             paragraph._p.getparent().remove(paragraph._p)
             continue
         for run in paragraph.runs:
@@ -288,7 +290,8 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
             picture.paragraph_format.first_line_indent = Cm(0)
             picture.paragraph_format.keep_with_next = bool(block.note)
             try:
-                picture.add_run().add_picture(str(image), width=Cm(block.width_cm or 14))
+                width, _ = figure_size_cm(image, block.width_cm)
+                picture.add_run().add_picture(str(image), width=Cm(width))
             except Exception:
                 raise ValueError(f"La figura {figures} no es una imagen PNG o JPEG RGB válida (dañada o en CMYK).") from None
             _note(document, block.note)
@@ -297,7 +300,7 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
         heading = document.add_paragraph(style="Heading 1")
         heading.paragraph_format.page_break_before = True
         heading.add_run("Referencias")
-        for reference in sorted(content.references, key=lambda value: re.sub(r"[*\[\]]", "", value).casefold()):
+        for reference in sorted(content.references, key=reference_key):
             paragraph = document.add_paragraph()
             paragraph.paragraph_format.left_indent = Cm(1.27)
             paragraph.paragraph_format.first_line_indent = Cm(-1.27)
@@ -384,9 +387,10 @@ def export_pdf(content: DeliveryDocument, values: dict[str, str], docx: Path, en
             warnings.append(f"LibreOffice falló ({error}); se usó el renderizador integrado.")
     elif engine == "libreoffice":
         raise RuntimeError("No se encontró LibreOffice instalado.")
-    fonts = render_pdf(content, values, pdf)
+    fonts, render_warnings = render_pdf(content, values, pdf)
     if fonts != "Times New Roman":
         warnings.append(f"Times New Roman no está instalada; el PDF usa {fonts}.")
+    warnings.extend(render_warnings)
     return pdf, "builtin", warnings
 
 

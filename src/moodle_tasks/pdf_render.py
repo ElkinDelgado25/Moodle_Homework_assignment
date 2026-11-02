@@ -11,9 +11,8 @@ from pathlib import Path
 
 from fpdf import FPDF
 from fpdf.enums import TableBordersLayout, XPos, YPos
-from PIL import Image
 
-from .document_model import DeliveryDocument, parse_inline
+from .document_model import DeliveryDocument, figure_size_cm, parse_inline, reference_key
 
 
 # fontTools registra cada paso del subconjunto de fuentes en INFO: llenaría los registros del cliente MCP.
@@ -62,6 +61,29 @@ def _fontconfig(family: str) -> list[Path] | None:
     return files if all(path.is_file() for path in files) else None
 
 
+def find_mono_font() -> Path | None:
+    """Monoespaciada TrueType para el código (Courier New o equivalente) con caracteres Unicode."""
+    candidates = []
+    if sys.platform == "win32":
+        candidates.append(Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "cour.ttf")
+    if sys.platform == "darwin":
+        candidates += [Path("/System/Library/Fonts/Supplemental/Courier New.ttf"), Path("/Library/Fonts/Courier New.ttf")]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    if shutil.which("fc-match"):
+        for family in ("Courier New", "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono"):
+            try:
+                output = subprocess.run(["fc-match", "-f", "%{family}\t%{file}", f"{family}:style=Regular"],
+                                        capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
+            except (OSError, subprocess.SubprocessError):
+                return None
+            names, _, path = output.partition("\t")
+            if family.casefold() in names.casefold() and path.lower().endswith((".ttf", ".otf")) and Path(path).is_file():
+                return Path(path)
+    return None
+
+
 def find_serif_fonts() -> tuple[str, list[Path] | None]:
     """Times New Roman si está instalada; si no, una serif compatible; None = fuente base del PDF."""
     if sys.platform == "win32":
@@ -95,6 +117,11 @@ class _Renderer(FPDF):
             self.family_name = "Times"
         self.font_label = family
         self.cover = True
+        self.warnings: list[str] = []
+        mono = find_mono_font() if files else None
+        if mono:
+            self.add_font("Mono", "", str(mono))
+        self.mono = "Mono" if mono else None
 
     def text(self, value: str) -> str:  # noqa: D401 - convierte para la fuente base
         return value if self.unicode else value.encode("latin-1", "replace").decode("latin-1")
@@ -154,8 +181,7 @@ def render_cover(pdf: _Renderer, values: dict[str, str]) -> None:
     for index, (text, bold, position) in enumerate(lines):
         gap = (lines[index + 1][2] - position - 24) * PT if index + 1 < len(lines) else 0
         if COVER_LINES[index][0] == "{{student_2}}" and not values.get("student_2"):
-            carry += (24 * PT) + gap
-            y += 0  # la línea vacía no ocupa altura propia; su hueco pasa al siguiente
+            carry += LINE + gap  # su línea y su hueco pasan al siguiente: el resto no se mueve
             continue
         y += carry
         carry = 0.0
@@ -182,10 +208,17 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
     pdf.add_page()
     pdf.centered(content.title)
     tables = figures = 0
+    pending_break = False
     for block in content.blocks:
         if block.type == "page_break":
-            pdf.add_page()
-        elif block.type == "heading":
+            pending_break = True
+            continue
+        if pending_break:
+            # Un salto al inicio de una página vacía, repetido o al final no crea páginas en blanco.
+            if pdf.get_y() > MARGIN + 1:
+                pdf.add_page()
+            pending_break = False
+        if block.type == "heading":
             pdf.keep_room(LINE * 2)
             if block.level == 1:
                 pdf.centered(block.text)
@@ -213,10 +246,16 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 pdf.ln(LINE)
                 pdf.set_left_margin(base)
         elif block.type == "code":
-            pdf.set_font("Courier", "", 10)
+            text = block.text
+            if pdf.mono:
+                pdf.set_font(pdf.mono, "", 10)
+            else:
+                pdf.set_font("Courier", "", 10)
+                if any(ord(character) > 255 for character in text):
+                    pdf.warnings.append("No hay una fuente monoespaciada Unicode: algunos símbolos del código salen como «?» en el PDF.")
+                text = text.encode("latin-1", "replace").decode("latin-1")
             pdf.set_left_margin(MARGIN + 5)
-            pdf.multi_cell(0, 10 * 1.2 * PT, block.text.encode("latin-1", "replace").decode("latin-1"),
-                           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 10 * 1.2 * PT, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_left_margin(MARGIN)
             pdf.ln(SINGLE)
         elif block.type == "table":
@@ -227,12 +266,22 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
             pdf.style(italic=True)
             pdf.multi_cell(0, LINE, pdf.text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style()
-            with pdf.table(borders_layout=TableBordersLayout.HORIZONTAL_LINES, line_height=SINGLE + 1,
-                           text_align="LEFT", first_row_as_headings=True, padding=1) as table:
-                for row in block.rows:
-                    cells = table.row()
-                    for value in row:
-                        cells.cell(pdf.text(pdf.plain(value)))
+            column = pdf.epw / len(block.rows[0]) - 2
+            tallest = max(len(pdf.multi_cell(column, SINGLE + 1, pdf.text(pdf.plain(value)) or " ", dry_run=True,
+                                              output="LINES")) for row in block.rows for value in row) * (SINGLE + 1)
+            if tallest > pdf.eph * 0.8:
+                # Una fila más alta que la página no se puede dibujar como tabla: se muestra como lista.
+                pdf.warnings.append(f"La tabla {tables} tiene celdas demasiado largas para una página; en el PDF se muestra como lista.")
+                header = block.rows[0]
+                for row in block.rows[1:]:
+                    pdf.paragraph("; ".join(f"**{pdf.plain(name)}:** {value}" for name, value in zip(header, row)), indent=0)
+            else:
+                with pdf.table(borders_layout=TableBordersLayout.HORIZONTAL_LINES, line_height=SINGLE + 1,
+                               text_align="LEFT", first_row_as_headings=True, padding=1) as table:
+                    for row in block.rows:
+                        cells = table.row()
+                        for value in row:
+                            cells.cell(pdf.text(pdf.plain(value)))
             if block.note:
                 pdf.set_x(pdf.l_margin)
                 pdf.style(italic=True)
@@ -241,16 +290,14 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 pdf.ln(LINE)
         elif block.type == "figure":
             figures += 1
-            with Image.open(block.path) as image:
-                ratio = image.height / image.width
-            width = (block.width_cm or 14) * 10
-            height = width * ratio
+            width_cm, height_cm = figure_size_cm(block.path, block.width_cm)
+            width, height = width_cm * 10, height_cm * 10
             pdf.keep_room(LINE * 2 + height)
             pdf.style(bold=True)
             pdf.cell(0, LINE, f"Figura {figures}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style(italic=True)
             pdf.multi_cell(0, LINE, pdf.text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.image(block.path, x=pdf.l_margin, w=width)
+            pdf.image(block.path, x=pdf.l_margin, w=width, h=height)
             if block.note:
                 pdf.set_x(pdf.l_margin)
                 pdf.style(italic=True)
@@ -259,10 +306,15 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 pdf.ln(LINE)
 
     if content.references:
-        pdf.add_page()
+        if pdf.get_y() > MARGIN + 1:
+            pdf.add_page()
         pdf.centered("Referencias")
-        for reference in sorted(content.references, key=lambda value: re.sub(r"[*\[\]]", "", value).casefold()):
+        for reference in sorted(content.references, key=reference_key):
             pdf.paragraph(reference, indent=0, hanging=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     pdf.output(str(output))
-    return pdf.font_label
+    missing = sorted({chr(code) for font in pdf.fonts.values() for code in (getattr(font, "missing_glyphs", None) or [])})
+    if missing:
+        pdf.warnings.append("La fuente del PDF no tiene estos caracteres y no se ven (el DOCX los conserva): "
+                            + " ".join(missing[:15]))
+    return pdf.font_label, pdf.warnings

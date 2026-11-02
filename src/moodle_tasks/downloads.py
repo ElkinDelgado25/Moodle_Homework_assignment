@@ -31,7 +31,7 @@ def attachment_name(url: str) -> str:
         name = stem.rstrip(" .") + ("." + suffix if suffix else "")
     if not name:
         name = "anexo"
-    if name.split(".", 1)[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}:
+    if name.split(".", 1)[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")}:
         name = "_" + name
     return name
 

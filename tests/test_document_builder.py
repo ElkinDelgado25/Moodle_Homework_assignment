@@ -480,3 +480,101 @@ class RealLibreOfficeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifierRegressionTests(unittest.TestCase):
+    """Casos que el verificador independiente encontró fallando en la primera versión."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        patcher = patch("moodle_tasks.document.find_soffice", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def build(self, content, cover=COVER, name="x"):
+        result = build_delivery(content, cover_values(cover, PROFILE), self.root, name)
+        checks = check_delivery_pair(result["docx"], result["pdf"])
+        self.assertTrue(checks["ok"], checks)
+        return result, checks
+
+    def test_schema_maximums_build(self):
+        long_cover = CoverFields(**{**COVER.model_dump(), "student_2": "B" * 200})
+        result, _ = self.build(sample(title="T" * 300), cover=CoverFields(**{**long_cover.model_dump(), "student_1": "A" * 200}))
+        self.assertTrue(result["pdf"].is_file())
+        result, _ = self.build(sample(blocks=[{"type": "table", "title": "Larga", "rows": [["A", "B"], ["palabra " * 250, "x"]]}]))
+        self.assertTrue(any("como lista" in warning for warning in result["warnings"]))
+
+    def test_invalid_figures_give_a_clear_message(self):
+        from PIL import Image
+        cmyk = self.root / "cmyk.jpg"
+        Image.new("CMYK", (20, 20)).save(cmyk, "JPEG")
+        truncated = self.root / "rota.png"
+        truncated.write_bytes(make_png(self.root / "ok.png").read_bytes()[:30])
+        for image in (cmyk, truncated):
+            with self.assertRaises(ValueError) as caught:
+                build_delivery(sample(blocks=[{"type": "figure", "title": "F", "path": str(image)}]),
+                               cover_values(COVER, PROFILE), self.root, "f")
+            self.assertIn("imagen", str(caught.exception))
+
+    def test_tall_figures_fit_the_page(self):
+        tall = make_png(self.root / "alta.png", size=(100, 2000))
+        result, checks = self.build(sample(blocks=[{"type": "figure", "title": "Alta", "path": str(tall)}]))
+        reader = PdfReader(str(result["pdf"]))
+        self.assertEqual(checks["pages"], 4)  # portada, figura, referencias + texto inicial
+        for page in reader.pages:
+            for image in page.images:
+                self.assertTrue(image)
+
+    def test_template_tokens_in_body_code_are_allowed(self):
+        self.build(sample(blocks=[{"type": "code", "text": "<title>{{ title }}</title> {{ year }}"},
+                                  {"type": "paragraph", "text": "En Jinja se escribe {{ title }}."}]))
+
+    def test_page_breaks_never_create_blank_pages(self):
+        blocks = sample().model_dump(exclude_none=True)["blocks"]
+        brk = {"type": "page_break"}
+        _, single = self.build(sample(references=[], blocks=[*blocks[:2], brk, *blocks[2:]]), name="a")
+        _, repeated = self.build(sample(references=[], blocks=[*blocks[:2], brk, brk, brk, *blocks[2:], brk, brk]), name="b")
+        self.assertEqual(single["pages"], repeated["pages"])
+        _, references = self.build(sample(blocks=[*blocks, brk, brk]), name="c")
+        _, plain = self.build(sample(), name="d")
+        self.assertEqual(references["pages"], plain["pages"])
+
+    def test_references_use_spanish_order(self):
+        result, _ = self.build(sample(references=["Zapata, A. (2020).", "Álvarez, B. (2021).", "Benítez, C. (2019).",
+                                                  "Ávila, D. (2018).", "álamo, E. (2017)."]))
+        text = PdfReader(str(result["pdf"])).pages[-1].extract_text()
+        order = [text.index(name) for name in ("álamo", "Álvarez", "Ávila", "Benítez", "Zapata")]
+        self.assertEqual(order, sorted(order))
+
+    def test_missing_glyphs_and_code_symbols(self):
+        result, _ = self.build(sample(blocks=[{"type": "paragraph", "text": "Cohete 🚀 listo"},
+                                              {"type": "code", "text": "x → y ≥ 0\n\tindentado"}]))
+        self.assertTrue(any("🚀" in warning for warning in result["warnings"]), result["warnings"])
+        text = PdfReader(str(result["pdf"])).pages[1].extract_text()
+        self.assertIn("→", text)
+        self.assertIn("    indentado", sample(blocks=[{"type": "code", "text": "\tindentado"}]).blocks[0].text)
+
+    def test_second_student_removal_keeps_the_cover_layout(self):
+        def carrera_y(cover, name):
+            result, _ = self.build(sample(references=[]), cover=cover, name=name)
+            positions = []
+            PdfReader(str(result["pdf"])).pages[0].extract_text(
+                visitor_text=lambda text, cm, tm, font, size: positions.append(tm[5]) if "Carrera" in text else None)
+            return positions[0]
+
+        solo = carrera_y(COVER, "solo")
+        pair = carrera_y(CoverFields(**{**COVER.model_dump(), "student_2": "María López"}), "par")
+        self.assertAlmostEqual(solo, pair, delta=0.5)
+
+    def test_markup_bypasses_and_parentheses(self):
+        for text in ("**[mi repo](https://github.com/u/p)**", "[mi repo](https://github.com./u/p)"):
+            with self.assertRaises(ValidationError):
+                sample(blocks=[{"type": "paragraph", "text": text}])
+        segments = parse_inline("[Python](https://en.wikipedia.org/wiki/Python_(lenguaje)). **https://a.test/x**")
+        self.assertEqual(segments[0]["link"], "https://en.wikipedia.org/wiki/Python_(lenguaje)")
+        self.assertEqual(segments[-1]["link"], "https://a.test/x")
+        self.assertTrue(segments[-1]["bold"])
+        self.assertEqual(sample(blocks=[{"type": "paragraph", "text": "a\x85b\x9bc"}]).blocks[0].text, "abc")
+        self.assertEqual(safe_file_name("COM¹"), "_COM¹")

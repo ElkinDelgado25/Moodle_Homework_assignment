@@ -37,16 +37,25 @@ def inspect_docx(path: Path) -> dict:
     with archive:
         if "word/document.xml" not in archive.namelist():
             raise DocumentCheckError("El DOCX no contiene word/document.xml.")
-        text = []
+        text, cover = [], []
         for name in _text_parts(archive):
             try:
                 root = ET.fromstring(archive.read(name))
             except ET.ParseError:
                 raise DocumentCheckError(f"El DOCX tiene XML dañado en {name}.") from None
+            in_cover = True
             for paragraph in root.iter(W + "p"):
-                text.append("".join(node.text or "" for node in paragraph.iter(W + "t")))
+                # La portada termina en el primer salto de página; el desarrollo puede citar {{ title }} en código.
+                if name == "word/document.xml" and in_cover and (
+                        paragraph.find(f"{W}pPr/{W}pageBreakBefore") is not None
+                        or any(node.get(W + "type") == "page" for node in paragraph.iter(W + "br"))):
+                    in_cover = False
+                content = "".join(node.text or "" for node in paragraph.iter(W + "t"))
+                text.append(content)
+                if in_cover:
+                    cover.append(content)
         joined = "\n".join(text)
-        placeholders = sorted(set(PLACEHOLDER.findall(joined)))
+        placeholders = sorted(set(PLACEHOLDER.findall("\n".join(cover))))
         links = []
         for name in archive.namelist():
             if name.startswith("word/_rels/") and name.endswith(".rels"):
@@ -96,7 +105,8 @@ def inspect_pdf(path: Path) -> dict:
                 name = str(font.get_object().get("/BaseFont", ""))
                 if name:
                     fonts.add(name.split("+", 1)[-1].lstrip("/"))
-        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        # Solo la portada (página 1): el desarrollo puede contener {{ title }} dentro de código.
+        text = (reader.pages[0].extract_text() or "") if pages else ""
     except DocumentCheckError:
         raise
     except (PdfReadError, OSError, ValueError, KeyError):

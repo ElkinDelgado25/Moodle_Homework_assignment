@@ -1,6 +1,7 @@
 """Contenido estructurado que el agente redacta; el servidor aplica portada, APA 7 y exportación."""
 
 import re
+import unicodedata
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
@@ -8,14 +9,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 # Caracteres que rompen XML 1.0, sustitutos sueltos y controles bidi que permiten suplantar texto.
-INVALID_TEXT = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff\ufffe\uffff\u202a-\u202e\u2066-\u2069]")
+INVALID_TEXT = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\ud800-\udfff\ufffe\uffff\u202a-\u202e\u2066-\u2069]")
 INVISIBLE_IN_URL = re.compile("[\\s\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]")
 INLINE = re.compile(
     r"(?P<escape>\\[*\[\]\\])"
     r"|\*\*\*(?P<bolditalic>.+?)\*\*\*"
     r"|\*\*(?P<bold>.+?)\*\*"
     r"|\*(?P<italic>[^*\s](?:[^*]*?[^*\s])?)\*"
-    r"|\[(?P<label>[^\]]+)\]\((?P<target>[^)\s]+)\)"
+    r"|\[(?P<label>[^\]]+)\]\((?P<target>(?:[^()\s]|\([^()\s]*\))+)\)"
     r"|(?P<url>https?://[^\s<>\"]+)"
 )
 COVER_FIELDS = ("subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
@@ -31,7 +32,8 @@ def no_template_tokens(value: str) -> str:
 
 
 def clean_text(value: str) -> str:
-    return INVALID_TEXT.sub("", value.replace("\t", " ").replace("\r\n", "\n").replace("\r", "\n"))
+    # Las tabulaciones se convierten en cuatro espacios: conserva la sangría del código.
+    return INVALID_TEXT.sub("", value.replace("\t", "    ").replace("\r\n", "\n").replace("\r", "\n"))
 
 
 def check_url(url: str) -> str:
@@ -62,15 +64,16 @@ def parse_inline(text: str) -> list[dict]:
         position = match.end()
         if match.group("escape"):
             add(match.group("escape")[1])
-        elif match.group("bolditalic") is not None:
-            add(match.group("bolditalic"), bold=True, italic=True)
-        elif match.group("bold") is not None:
-            add(match.group("bold"), bold=True)
-        elif match.group("italic") is not None:
-            add(match.group("italic"), italic=True)
+        elif match.group("bolditalic") is not None or match.group("bold") is not None or match.group("italic") is not None:
+            # El contenido enfatizado se vuelve a analizar: enlaces y reglas de GitHub siguen aplicando.
+            inner = match.group("bolditalic") or match.group("bold") or match.group("italic")
+            bold = match.group("bolditalic") is not None or match.group("bold") is not None
+            italic = match.group("bolditalic") is not None or match.group("italic") is not None
+            for segment in parse_inline(inner):
+                add(segment["text"], bold=bold or segment["bold"], italic=italic or segment["italic"], link=segment["link"])
         elif match.group("target") is not None:
             label, target = match.group("label"), check_url(match.group("target"))
-            host = (urlsplit(target).hostname or "").lower()
+            host = (urlsplit(target).hostname or "").lower().rstrip(".")
             if host in ("github.com", "www.github.com") and label.strip() != target:
                 raise ValueError(f"El enlace de GitHub debe mostrar la URL exacta como texto: usa {target} en lugar de [{label}].")
             add(label, link=target)
@@ -86,6 +89,28 @@ def parse_inline(text: str) -> list[dict]:
             add(trailing)
     add(text[position:])
     return segments
+
+
+def reference_key(value: str) -> str:
+    """Orden alfabético en español: las tildes no envían «Álvarez» después de la Z."""
+    plain = "".join(segment["text"] for segment in parse_inline(value))
+    decomposed = unicodedata.normalize("NFD", plain)
+    return "".join(character for character in decomposed if not unicodedata.combining(character)).casefold()
+
+
+MAX_FIGURE_HEIGHT_CM = 20.0
+
+
+def figure_size_cm(path, width_cm: float | None) -> tuple[float, float]:
+    """Ancho y alto en cm: el ancho pedido, reducido si la figura no cabe en la altura de la página."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        ratio = image.height / image.width
+    width = width_cm or 14.0
+    if width * ratio > MAX_FIGURE_HEIGHT_CM:
+        width = MAX_FIGURE_HEIGHT_CM / ratio
+    return width, width * ratio
 
 
 Text = Annotated[str, Field(min_length=1, max_length=20_000)]
