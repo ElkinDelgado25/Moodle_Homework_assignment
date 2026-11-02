@@ -21,6 +21,13 @@ INLINE = re.compile(
 COVER_FIELDS = ("subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
 REQUIRED_COVER_FIELDS = ("subject", "teacher", "student_1", "degree", "class_group", "year")
 MAX_TOTAL_CHARACTERS = 400_000
+TEMPLATE_TOKEN = re.compile(r"\{\{\s*(?:title|subject|teacher|student_1|student_2|degree|class_group|year)\s*\}\}")
+
+
+def no_template_tokens(value: str) -> str:
+    if TEMPLATE_TOKEN.search(value):
+        raise ValueError("El texto no puede contener campos de plantilla como {{teacher}}; escribe el dato real.")
+    return value
 
 
 def clean_text(value: str) -> str:
@@ -151,7 +158,7 @@ class DeliveryDocument(BaseModel):
         value = " ".join(clean_text(value).split())
         if not value:
             raise ValueError("El título está vacío.")
-        return value
+        return no_template_tokens(value)
 
     @field_validator("references")
     @classmethod
@@ -202,5 +209,5 @@ class CoverFields(BaseModel):
             value = str(value)
         if isinstance(value, str):
             value = " ".join(clean_text(value).split())
-            return value or None
+            return no_template_tokens(value) or None
         return value

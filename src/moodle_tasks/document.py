@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from .storage import user_cache_dir
 ASSETS = Path(__file__).resolve().parent / "assets"
 TEMPLATE = ASSETS / "academic-cover.docx"
 LOGO = ASSETS / "uleam-logo.png"
+PLACEHOLDER = re.compile(r"\{\{[a-z_0-9]+\}\}")
 HYPERLINK = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 EXPORT_TIMEOUT_SECONDS = 120
@@ -37,7 +39,9 @@ class MissingCoverFields(ValueError):
 
 def safe_file_name(value: str) -> str:
     """Nombre base válido en Windows, macOS y Linux, sin extensión."""
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]', " ", value)
+    value = "".join(" " if unicodedata.category(character) in ("Cc", "Cf") else character
+                    for character in unicodedata.normalize("NFC", value))
+    name = re.sub(r'[<>:"/\\|?*]', " ", value)
     name = " ".join(name.split()).strip(" .")
     if name.lower().endswith((".docx", ".pdf")):
         name = name.rsplit(".", 1)[0].strip(" .")
@@ -117,9 +121,9 @@ def _fill_cover(document, values: dict[str, str]) -> None:
             paragraph._p.getparent().remove(paragraph._p)
             continue
         for run in paragraph.runs:
-            for placeholder, value in placeholders.items():
-                if placeholder in run.text:
-                    run.text = run.text.replace(placeholder, value)
+            if "{{" in run.text:
+                # Una sola pasada: un valor nunca se vuelve a interpretar como otro campo.
+                run.text = PLACEHOLDER.sub(lambda match: placeholders.get(match.group(0), match.group(0)), run.text)
 
 
 def _restart_numbering(document, paragraph) -> str:

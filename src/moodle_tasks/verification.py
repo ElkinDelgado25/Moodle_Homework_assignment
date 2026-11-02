@@ -12,7 +12,9 @@ from pypdf.errors import PdfReadError
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 HYPERLINK_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
-PLACEHOLDER = re.compile(r"\{\{\s*[\w.-]+\s*\}\}")
+# Solo los campos de la portada: un informe puede citar código con {{ variable }} (Vue, Jinja...).
+TEMPLATE_FIELDS = ("title", "subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
+PLACEHOLDER = re.compile(r"\{\{\s*(?:" + "|".join(TEMPLATE_FIELDS) + r")\s*\}\}")
 THEME_ATTRIBUTES = ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme")
 EXPECTED_FONT = "Times New Roman"
 

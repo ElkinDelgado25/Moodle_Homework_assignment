@@ -172,6 +172,16 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(values["student_1"], "Elkin Delgado")
         self.assertEqual(values["student_2"], "")
 
+    def test_template_tokens_cannot_be_injected(self):
+        with self.assertRaises(ValidationError):
+            CoverFields(teacher="{{year}}")
+        with self.assertRaises(ValidationError):
+            sample(title="Informe {{ teacher }}")
+        self.assertEqual(sample(blocks=[{"type": "code", "text": "<p>{{ nombre }}</p>"}]).blocks[0].text, "<p>{{ nombre }}</p>")
+
+    def test_safe_file_name_drops_invisible_characters(self):
+        self.assertEqual(safe_file_name("Infor\u200bme\ufeff final\u202e"), "Infor me final")
+
     def test_safe_file_name(self):
         self.assertEqual(safe_file_name('Informe: "final"/v2?.docx'), "Informe final v2")
         self.assertEqual(safe_file_name("CON"), "_CON")
@@ -292,6 +302,12 @@ class PdfTests(unittest.TestCase):
         self.assertIn("Ing. Ana & <Asoc>", cover_text)
         self.assertNotIn("{{", "".join(page.extract_text() for page in reader.pages))
         self.assertEqual(checks["warnings"], [] if "Times" in "".join(checks["pdf_fonts"]) else checks["warnings"])
+
+    def test_code_with_template_syntax_passes_verification(self):
+        content = sample(blocks=[{"type": "code", "text": "<template>{{ titulo }}</template>"},
+                                 {"type": "paragraph", "text": "Vue usa {{ variable }} en las plantillas."}])
+        result = build_delivery(content, cover_values(COVER, PROFILE), self.root, "vue")
+        self.assertTrue(check_delivery_pair(result["docx"], result["pdf"])["ok"])
 
     def test_builtin_pdf_without_any_truetype_font_falls_back(self):
         with patch("moodle_tasks.pdf_render.find_serif_fonts", return_value=("Times", None)):
