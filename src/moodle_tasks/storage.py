@@ -18,6 +18,17 @@ def user_config_dir() -> Path:
     return root / "moodle-homework-assignment"
 
 
+def user_cache_dir() -> Path:
+    """Datos temporales del usuario: carpetas de trabajo y sesión, nunca credenciales."""
+    if sys.platform == "win32":
+        root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library/Caches"
+    else:
+        root = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return root / "moodle-homework-assignment"
+
+
 def default_env_file() -> Path:
     personal = user_config_dir() / "credentials.env"
     if personal.is_file():

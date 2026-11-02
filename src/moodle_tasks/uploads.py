@@ -7,6 +7,7 @@ from playwright.sync_api import Locator, Page
 
 from .errors import redact_credentials
 from .main import Config, read_assignment
+from .paths import check_upload_file
 
 
 NO_UPLOAD = re.compile(
@@ -359,26 +360,26 @@ def _save_control(page: Page, filemanager: Locator) -> Locator | None:
 
 
 def _preflight_files(file_paths: list[str]) -> tuple[list[Path], list[dict[str, str]]]:
+    """Valida tipo, contenido y ubicación de todos los archivos antes de abrir Moodle."""
     paths: list[Path] = []
     errors: list[dict[str, str]] = []
     seen_paths: set[Path] = set()
     seen_names: set[str] = set()
     for raw in file_paths:
-        candidate = Path(raw).expanduser()
+        name = Path(raw).name if isinstance(raw, str) else "archivo"
         try:
-            path = candidate.resolve(strict=True)
-            if not path.is_file():
-                raise OSError("La ruta no corresponde a un archivo.")
-            with path.open("rb"):
-                pass
+            path = check_upload_file(raw)
         except FileNotFoundError:
-            errors.append({"name": candidate.name or "archivo", "status": "failed", "error": "El archivo local no existe."})
+            errors.append({"name": name or "archivo", "status": "failed", "error": "El archivo local no existe."})
             continue
         except PermissionError:
-            errors.append({"name": candidate.name or "archivo", "status": "failed", "error": "No se puede leer el archivo local."})
+            errors.append({"name": name or "archivo", "status": "failed", "error": "No se puede leer el archivo local."})
             continue
         except (OSError, RuntimeError):
-            errors.append({"name": candidate.name or "archivo", "status": "failed", "error": "La ruta local no corresponde a un archivo legible."})
+            errors.append({"name": name or "archivo", "status": "failed", "error": "La ruta local no corresponde a un archivo legible."})
+            continue
+        except ValueError as error:
+            errors.append({"name": name or "archivo", "status": "failed", "error": str(error)})
             continue
         if path in seen_paths:
             errors.append({"name": path.name, "status": "failed", "error": "El mismo archivo aparece más de una vez."})
@@ -392,6 +393,29 @@ def _preflight_files(file_paths: list[str]) -> tuple[list[Path], list[dict[str, 
     return paths, errors
 
 
+def preflight_result(assignment_id: int, file_paths: list[str]) -> dict | None:
+    """Resultado bloqueado si algún archivo no es válido; None si todos se pueden subir."""
+    paths, preflight_errors = _preflight_files(file_paths)
+    if not file_paths:
+        preflight_errors = [{"name": "archivo", "status": "failed", "error": "Indica al menos un archivo."}]
+    if not preflight_errors:
+        return None
+    return {
+        "assignment_id": assignment_id,
+        "title": None,
+        "status": "blocked",
+        "submission_status": None,
+        "files": preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
+        "uploaded_files": [],
+        "failed_files": [item["name"] for item in preflight_errors],
+        "existing_files": [],
+        "replaced_files": [],
+        "sent_for_grading": False,
+        "complete": False,
+        "errors": [item["error"] for item in preflight_errors],
+    }
+
+
 def upload_files(
     page: Page,
     config: Config,
@@ -401,22 +425,10 @@ def upload_files(
     replace_existing: bool = False,
 ) -> dict:
     """Agrega archivos sin enviar la tarea para calificación."""
-    paths, preflight_errors = _preflight_files(file_paths)
-    if preflight_errors:
-        return {
-            "assignment_id": assignment_id,
-            "title": None,
-            "status": "blocked",
-            "submission_status": None,
-            "files": preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in preflight_errors],
-            "existing_files": [],
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": [item["error"] for item in preflight_errors],
-        }
+    blocked = preflight_result(assignment_id, file_paths)
+    if blocked is not None:
+        return blocked
+    paths, _ = _preflight_files(file_paths)
 
     url = f"{config.base_url}/mod/assign/view.php?id={assignment_id}"
     task = read_assignment(page, url, config)

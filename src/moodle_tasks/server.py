@@ -34,7 +34,7 @@ from .downloads import documents_directory, download_attachment
 from .linked_content import read_linked_resources
 from .profile import load_profile
 from .storage import user_config_dir
-from .uploads import upload_files
+from .uploads import preflight_result, upload_files
 
 
 DOCUMENT_CONTENT_POLICY = (
@@ -433,6 +433,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     def upload_task(assignment_id: int | None, url: str | None, file_paths: list[str], replace_existing: bool) -> dict[str, Any]:
         settings = config()
         resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
+        # Los archivos se validan antes de abrir el navegador o iniciar sesión.
+        blocked = preflight_result(resolved_id, file_paths)
+        if blocked is not None:
+            return blocked
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
@@ -469,11 +473,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     def finish_delivery(
         docx_path: Annotated[str, Field(min_length=1, description="Ruta del DOCX ya creado.")],
         pdf_path: Annotated[str, Field(min_length=1, description="Ruta del PDF exportado desde ese DOCX.")],
-        destination_directory: Annotated[str, Field(min_length=1, description="Carpeta final pedida por el usuario.")],
+        destination_directory: Annotated[str, Field(min_length=1, description="Carpeta final absoluta pedida por el usuario.")],
+        open_pdf: bool = True,
     ) -> dict[str, Any]:
-        """Copia el DOCX y el PDF a la carpeta pedida y abre el PDF en el navegador predeterminado, con la ruta completa como un solo archivo. Llamar al terminar el documento, antes de preguntar si se sube a Moodle."""
+        """Verifica un DOCX y su PDF hechos fuera de build_delivery_document (mismo nombre, sin campos {{...}}, PDF legible), los copia a la carpeta pedida sin sobrescribir y abre el PDF."""
         try:
-            return copy_and_open_delivery(docx_path, pdf_path, destination_directory)
+            return copy_and_open_delivery(docx_path, pdf_path, destination_directory, open_pdf=open_pdf)
         except Exception as error:
             raise ToolError(safe_error(error)) from None
 

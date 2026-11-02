@@ -8,6 +8,8 @@ from playwright.sync_api import sync_playwright
 from moodle_tasks.main import Config
 from moodle_tasks.uploads import upload_files
 
+from helpers import make_docx, make_pdf
+
 
 class AssignmentUploadTests(unittest.TestCase):
     @classmethod
@@ -133,8 +135,8 @@ class AssignmentUploadTests(unittest.TestCase):
     def make_files(self, directory):
         docx = Path(directory) / "entrega.docx"
         pdf = Path(directory) / "entrega.pdf"
-        docx.write_bytes(b"docx")
-        pdf.write_bytes(b"pdf")
+        make_docx(docx)
+        make_pdf(pdf)
         return docx, pdf
 
     def test_missing_local_file_does_not_open_moodle(self):
