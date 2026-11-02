@@ -1,5 +1,6 @@
 """Renderizador PDF integrado: misma portada y formato APA 7 que el DOCX, sin LibreOffice ni Word."""
 
+import logging
 import os
 import re
 import shutil
@@ -14,6 +15,10 @@ from PIL import Image
 
 from .document_model import DeliveryDocument, parse_inline
 
+
+# fontTools registra cada paso del subconjunto de fuentes en INFO: llenaría los registros del cliente MCP.
+for _logger in ("fontTools", "fontTools.subset", "fpdf"):
+    logging.getLogger(_logger).setLevel(logging.WARNING)
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 PT = 25.4 / 72
