@@ -61,6 +61,9 @@ def _hidden_component(path: Path) -> str | None:
 
 
 def _expand(raw: str) -> Path:
+    # Solo la carpeta personal propia: "~usuario" se expande distinto en Windows y en Linux.
+    if raw.startswith("~") and raw != "~" and not raw.startswith(("~/", "~\\")):
+        raise ValueError("Solo se admite ~ para tu propia carpeta personal (~/...).")
     try:
         return Path(raw).expanduser()
     except RuntimeError:  # ~usuario inexistente
