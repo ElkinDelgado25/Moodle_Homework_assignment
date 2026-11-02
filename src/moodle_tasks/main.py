@@ -259,7 +259,9 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     # inner_text conserva las filas de la tabla de calificaciones.
     grade_match = re.search(r"(?:^|\n)(?:Calificación|Grade)\s+([\d.,]+)\s*/\s*[\d.,]+", raw, re.I)
     grade = grade_match.group(1) if grade_match else None
-    no_upload = bool(re.search(r"no deben subir|no (?:se )?requiere (?:subir|entrega)|do not (?:submit|upload)", content, re.I))
+    from .uploads import forbids_upload
+
+    no_upload = forbids_upload(content)
     attachments = page.locator(
         "#region-main a[href*='/mod_assign/introattachment/'], #intro a[href*='pluginfile.php'], "
         ".activity-description a[href*='pluginfile.php'], .mod_introbox a[href*='pluginfile.php'], "

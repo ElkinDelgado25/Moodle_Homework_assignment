@@ -1,12 +1,15 @@
 """Subida explícita de entregables a una tarea de Moodle."""
 
 import re
+import time
+import unicodedata
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from playwright.sync_api import Locator, Page
 
 from .errors import redact_credentials
-from .main import Config, read_assignment
+from .main import Config, open_authenticated_page, read_assignment, submission_state
 from .paths import check_upload_file
 
 
@@ -21,7 +24,8 @@ NO_UPLOAD = re.compile(
     re.IGNORECASE,
 )
 CLOSED = re.compile(
-    r"(?:(?:this )?assignment (?:is )?closed|submission (?:is )?closed|closed for submissions|"
+    r"(?:(?:this )?assignment (?:is )?closed|submissions? (?:are |is )?closed|closed for submissions|"
+    r"env[ií]os? cerrad[oa]s?|entregas? cerrad[oa]s?|no se permiten (?:env[ií]os|entregas)|"
     r"submission period has ended|no more submissions are accepted|"
     r"submissions are not accepted|you cannot make a submission to this assignment|"
     r"(?:esta )?(?:tarea|actividad) (?:est[aá] )?cerrada|no se aceptan (?:env[ií]os|entregas)|"
@@ -30,7 +34,18 @@ CLOSED = re.compile(
     r"se cerr[oó] el plazo de (?:entrega|env[ií]o))",
     re.IGNORECASE,
 )
-ACTION = re.compile(r"^(?:add|edit) submission$|^(?:agregar|a[nñ]adir|editar) entrega$", re.IGNORECASE)
+# Una frase con matices (formato, compresión, plazo...) no prohíbe entregar el informe.
+UPLOAD_QUALIFIER = re.compile(
+    r"comprimid|\bzip\b|\brar\b|formato|tarde|late\b|captura|screenshot|c[oó]digo fuente|source code|"
+    r"\bsolo\b|\bonly\b|\bsino\b|en lugar|instead|m[aá]s de|more than|\.\w{2,4}\b",
+    re.IGNORECASE,
+)
+UPLOAD_REQUEST = re.compile(
+    r"\b(?:s[uú]b(?:a|an|ir|e)|entreg(?:ue|uen|ar|a)|adjunt(?:e|en|ar|a)|upload|submit)\b.{0,60}?"
+    r"\b(?:pdf|docx?|archivo|archivos|informe|documento|file|files|report)\b",
+    re.IGNORECASE,
+)
+MOODLE_FILE_CHARACTERS = re.compile("[\x00-\x1f\x7f&<>\"`|':\\\\/]")
 SAVE = re.compile(r"^(?:save changes|guardar cambios)$", re.IGNORECASE)
 GRADING = re.compile(
     r"enviar (?:la )?tarea|enviar para calific|submit assignment|submit for grading",
@@ -41,7 +56,28 @@ UPLOAD_FILE = re.compile(r"^(?:upload this file|subir este archivo)$", re.IGNORE
 SELECT_FILE = re.compile(r"^(?:select this file|seleccionar este archivo|seleccionar archivo)$", re.IGNORECASE)
 DELETE = re.compile(r"^(?:yes|s[ií]|delete|eliminar|borrar)$", re.IGNORECASE)
 CANCEL = re.compile(r"^(?:cancel|cancelar|close|cerrar|ok|aceptar)$", re.IGNORECASE)
-POLL_ATTEMPTS = 240  # up to 60 seconds for Moodle's asynchronous file picker and uploads
+POLL_SECONDS = 0.25
+TOTAL_BUDGET_SECONDS = 240  # por debajo del límite habitual de 300 s de los clientes MCP
+
+
+def forbids_upload(text: str) -> bool:
+    """Solo una prohibición sin matices, y sin otra frase que pida subir el trabajo, bloquea la entrega."""
+    if not text:
+        return False
+    sentences = [sentence for sentence in re.split(r"[.;:!?\n]+", text) if sentence.strip()]
+    if any(UPLOAD_REQUEST.search(sentence) and not NO_UPLOAD.search(sentence) for sentence in sentences):
+        return False
+    return any(NO_UPLOAD.search(sentence) and not UPLOAD_QUALIFIER.search(sentence) for sentence in sentences)
+
+
+def moodle_name(name: str) -> str:
+    """Nombre tal como lo guarda Moodle (PARAM_FILE), normalizado para comparar."""
+    cleaned = MOODLE_FILE_CHARACTERS.sub("", unicodedata.normalize("NFC", name))
+    return " ".join(cleaned.split()).casefold()
+
+
+def _file_seconds(path: Path) -> float:
+    return min(60.0, 15.0 + path.stat().st_size / (1024 * 1024) * 5)
 
 
 def _control_text(control: Locator) -> str:
@@ -133,8 +169,7 @@ def _upload_error_message(page: Page) -> str | None:
         "[role='dialog'] .alert-danger",
         ".filepicker .alert-danger",
         ".moodle-dialogue .alert-danger",
-        ".notification-error",
-        ".alert-danger",
+        ".filemanager .fp-msg-error",
     ):
         messages = page.locator(selector)
         for index in range(messages.count()):
@@ -155,23 +190,24 @@ def _wait_for_filemanager_ready(page: Page, filemanager: Locator) -> None:
         loaded_with_files = bool(_file_names(filemanager))
         # Tras quitar los archivos previos, el área puede quedar vacía sin la clase fm-nofiles.
         ready = loaded_empty or loaded_with_files or _add_control(filemanager) is not None
-        if "fm-updating" not in classes and ready:
+        if "fm-updating" not in classes and "fm-loading" not in classes and ready:
             return
         page.wait_for_timeout(250)
     raise RuntimeError("Moodle no terminó de cargar el área de entrega.")
 
 
-def _find_dialog_action(page: Page, pattern: re.Pattern[str]) -> bool:
+def _find_dialog_action(page: Page, pattern: re.Pattern[str], *, page_fallback: bool = True) -> bool:
     dialogs = page.locator("[role='dialog'], .filepicker, .moodle-dialogue")
     for index in reversed(range(dialogs.count())):
         dialog = dialogs.nth(index)
         if dialog.is_visible() and _click_control(dialog, pattern):
             return True
-    return _click_control(page, pattern)
+    return page_fallback and _click_control(page, pattern)
 
 
 def _dismiss_filepicker(page: Page) -> None:
-    if _find_dialog_action(page, CANCEL):
+    # Nunca busca "Cancelar" fuera de un diálogo: el formulario de entrega tiene su propio Cancelar.
+    if _find_dialog_action(page, CANCEL, page_fallback=False):
         return
     try:
         page.keyboard.press("Escape")
@@ -207,6 +243,8 @@ def _add_control(filemanager: Locator) -> Locator | None:
 
 def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
     _wait_for_filemanager_ready(page, filemanager)
+    if "fm-maxfiles" in (filemanager.get_attribute("class") or "").split():
+        raise RuntimeError("El área de entrega ya alcanzó el número máximo de archivos.")
     if page.locator("[role='dialog']:visible, .filepicker:visible, .moodle-dialogue:visible").count():
         _dismiss_filepicker(page)
     add = _add_control(filemanager)
@@ -259,11 +297,13 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
     elif _find_dialog_action(page, SELECT_FILE):
         pass
 
-    for _ in range(POLL_ATTEMPTS):
+    expected = moodle_name(path.name)
+    deadline = time.monotonic() + _file_seconds(path)
+    while time.monotonic() < deadline:
         if error := _upload_error_message(page):
             _dismiss_filepicker(page)
             raise RuntimeError(f"Moodle rechazó el archivo: {error}")
-        if path.name in _file_names(filemanager):
+        if expected in {moodle_name(name) for name in _file_names(filemanager)}:
             return
         page.wait_for_timeout(250)
     _dismiss_filepicker(page)
@@ -313,7 +353,7 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
         if not _find_dialog_action(page, DELETE):
             raise RuntimeError("Moodle no mostró la confirmación para quitar un archivo existente.")
         after = before
-        for _ in range(POLL_ATTEMPTS):
+        for _ in range(240):
             after = _file_names(filemanager)
             if len(after) < len(before):
                 break
@@ -324,22 +364,100 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
     return removed
 
 
-def _submission_file_names(page: Page) -> tuple[str, str]:
-    regions = page.locator(".submissionstatustable, [data-region='submissions'], .submissionstatus")
-    text_parts: list[str] = []
-    for index in range(regions.count()):
-        try:
-            text_parts.append(regions.nth(index).inner_text())
-        except Exception:
-            continue
+def _submission_file_names(page: Page) -> set[str]:
+    """Nombres normalizados de los archivos ya guardados en la entrega (texto del enlace y su URL)."""
+    names: set[str] = set()
     links = page.locator("#region-main a[href*='assignsubmission_file']")
     for index in range(links.count()):
         try:
-            text_parts.append(links.nth(index).inner_text())
-            text_parts.append(links.nth(index).get_attribute("href") or "")
+            text = links.nth(index).inner_text().strip()
+            href = links.nth(index).get_attribute("href") or ""
         except Exception:
             continue
-    return "\n".join(text_parts), "\n".join(text_parts).casefold()
+        if text:
+            names.add(moodle_name(text))
+        segment = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
+        if segment:
+            names.add(moodle_name(segment))
+    return names
+
+
+def _submission_files(page: Page) -> list[str]:
+    files: list[str] = []
+    links = page.locator("#region-main a[href*='assignsubmission_file']")
+    for index in range(links.count()):
+        try:
+            text = links.nth(index).inner_text().strip()
+        except Exception:
+            continue
+        if text and text not in files:
+            files.append(text)
+    return files
+
+
+def _limit(page: Page, filemanager: Locator, name: str) -> int | None:
+    value = filemanager.get_attribute(f"data-{name}")
+    if value is None:
+        match = re.search(rf'"{name}"\s*:\s*"?(-?\d+)', page.content())
+        value = match.group(1) if match else None
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _submission_state(page: Page, status_text: str) -> dict:
+    status = ""
+    for row in page.locator(".submissionstatustable tr").all():
+        try:
+            label = " ".join(row.locator("th, td").first.inner_text().split())
+        except Exception:
+            continue
+        if re.search(r"submission status|estado de (?:la )?entrega", label, re.IGNORECASE):
+            status = " ".join(row.locator("td").last.inner_text().split())
+            break
+    status = status or status_text
+    if re.search(r"borrador|draft", status, re.IGNORECASE):
+        state = "draft"
+    elif submission_state(status) is True:
+        state = "submitted"
+    elif submission_state(status) is False:
+        state = "not_submitted"
+    else:
+        state = "unknown"
+    grading = page.locator("#region-main a, #region-main button, #region-main input[type='submit']")
+    requires = False
+    for index in range(grading.count()):
+        try:
+            control = grading.nth(index)
+            if control.is_visible() and GRADING.search(_control_text(control)):
+                requires = True
+                break
+        except Exception:
+            continue
+    if state == "submitted":
+        note = "Moodle muestra la entrega como enviada para calificar."
+    elif requires:
+        note = "Los archivos quedaron guardados como borrador: el estudiante debe pulsar «Enviar tarea» en Moodle para entregarla."
+    else:
+        note = "Los archivos quedaron guardados en la entrega; revisa en Moodle si la actividad exige otro paso."
+    return {"state": state, "status_text": status, "requires_submit_for_grading": requires,
+            "submitted_by_tool": False, "note": note}
+
+
+def _form_error(page: Page) -> str | None:
+    for selector in ("#region-main .invalid-feedback", "#region-main [id^='id_error_']",
+                     "#region-main .form-control-feedback", "#region-main .error"):
+        nodes = page.locator(selector)
+        for index in range(nodes.count()):
+            try:
+                node = nodes.nth(index)
+                text = " ".join(node.inner_text().split())
+                if node.is_visible() and text:
+                    return text[:300]
+            except Exception:
+                continue
+    return None
 
 
 def _save_control(page: Page, filemanager: Locator) -> Locator | None:
@@ -393,6 +511,27 @@ def _preflight_files(file_paths: list[str]) -> tuple[list[Path], list[dict[str, 
     return paths, errors
 
 
+def _result(assignment_id: int, title: str | None, status: str, *, files: list[dict], errors: list[str],
+            existing: list[str] | None = None, replaced: list[str] | None = None,
+            submission: dict | None = None, complete: bool = False, warnings: list[str] | None = None) -> dict:
+    """Forma única de respuesta de la subida."""
+    return {
+        "assignment_id": assignment_id,
+        "title": title,
+        "status": status,
+        "files": files,
+        "uploaded_files": [item["name"] for item in files if item["status"] in ("uploaded", "already_present")],
+        "failed_files": [item["name"] for item in files if item["status"] == "failed"],
+        "existing_files": existing or [],
+        "replaced_files": replaced or [],
+        "submission": submission or {"state": "unknown", "status_text": "", "requires_submit_for_grading": None,
+                                     "submitted_by_tool": False, "note": "No se modificó la entrega."},
+        "complete": complete,
+        "warnings": warnings or [],
+        "errors": errors,
+    }
+
+
 def preflight_result(assignment_id: int, file_paths: list[str]) -> dict | None:
     """Resultado bloqueado si algún archivo no es válido; None si todos se pueden subir."""
     paths, preflight_errors = _preflight_files(file_paths)
@@ -400,20 +539,9 @@ def preflight_result(assignment_id: int, file_paths: list[str]) -> dict | None:
         preflight_errors = [{"name": "archivo", "status": "failed", "error": "Indica al menos un archivo."}]
     if not preflight_errors:
         return None
-    return {
-        "assignment_id": assignment_id,
-        "title": None,
-        "status": "blocked",
-        "submission_status": None,
-        "files": preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
-        "uploaded_files": [],
-        "failed_files": [item["name"] for item in preflight_errors],
-        "existing_files": [],
-        "replaced_files": [],
-        "sent_for_grading": False,
-        "complete": False,
-        "errors": [item["error"] for item in preflight_errors],
-    }
+    return _result(assignment_id, None, "blocked",
+                   files=preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
+                   errors=[item["error"] for item in preflight_errors])
 
 
 def upload_files(
@@ -424,231 +552,130 @@ def upload_files(
     *,
     replace_existing: bool = False,
 ) -> dict:
-    """Agrega archivos sin enviar la tarea para calificación."""
+    """Agrega archivos y guarda la entrega sin enviarla para calificación."""
     blocked = preflight_result(assignment_id, file_paths)
     if blocked is not None:
         return blocked
     paths, _ = _preflight_files(file_paths)
+    started = time.monotonic()
+    secrets = (config.username, config.password)
+
+    def pending(status="not_uploaded"):
+        return [{"name": path.name, "status": status} for path in paths]
 
     url = f"{config.base_url}/mod/assign/view.php?id={assignment_id}"
     task = read_assignment(page, url, config)
-    page_text = page.locator("#region-main, main").first.inner_text() if page.locator("#region-main, main").count() else ""
-    if NO_UPLOAD.search(task.content):
-        return _blocked_result(assignment_id, task.title, task.status, paths, "Las instrucciones indican que no se deben subir archivos.")
-    if CLOSED.search(page_text):
-        return _blocked_result(assignment_id, task.title, task.status, paths, "La actividad está cerrada para entregas.")
+    region = page.locator("#region-main, main").first
+    page_text = region.inner_text() if region.count() else ""
+    # La descripción del docente no decide si la actividad está cerrada: solo el estado y las fechas.
+    status_text = page_text.replace(task.content, " ") if task.content else page_text
+    if forbids_upload(task.content):
+        return _result(assignment_id, task.title, "blocked", files=pending(),
+                       errors=["Las instrucciones indican que no se deben subir archivos."])
+    if CLOSED.search(status_text):
+        return _result(assignment_id, task.title, "blocked", files=pending(),
+                       errors=["La actividad está cerrada para entregas."])
+    view_files = _submission_files(page)
+    requested = {moodle_name(path.name) for path in paths}
 
-    action = page.locator("a, button, input[type='submit']")
-    action_control: Locator | None = None
-    for index in range(action.count()):
-        control = action.nth(index)
-        try:
-            if control.is_visible() and ACTION.fullmatch(_control_text(control).strip()):
-                action_control = control
-                break
-        except Exception:
-            continue
-    if action_control is None:
-        return _blocked_result(assignment_id, task.title, task.status, paths, "Moodle no muestra un formulario de entrega disponible.")
-    action_control.click()
-
+    open_authenticated_page(page, f"{url}&action=editsubmission", config)
     managers = page.locator(".filemanager")
     if not managers.count():
-        return _blocked_result(assignment_id, task.title, task.status, paths, "La actividad no muestra un área para adjuntar archivos.")
+        return _result(assignment_id, task.title, "blocked", files=pending(),
+                       errors=["La actividad no muestra un área para adjuntar archivos."])
     filemanager = managers.first
     _wait_for_filemanager_ready(page, filemanager)
     existing = _file_names(filemanager)
+    if view_files and not existing:
+        # La página de la tarea muestra archivos que el formulario aún no cargó: se tratan como existentes.
+        existing = view_files
     if existing and not replace_existing:
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "blocked_existing_files",
-            "submission_status": task.status,
-            "files": [{"name": path.name, "status": "not_uploaded"} for path in paths],
-            "uploaded_files": [],
-            "failed_files": [],
-            "existing_files": existing,
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": ["La entrega ya contiene archivos; no se reemplazó ninguno."],
-        }
+        if {moodle_name(name) for name in existing} == requested:
+            return _result(assignment_id, task.title, "already_uploaded", files=pending("already_present"),
+                           existing=existing, complete=True, errors=[],
+                           submission=_submission_state(page, task.status),
+                           warnings=["Moodle ya tiene archivos con estos mismos nombres; no se comparó su contenido."])
+        return _result(assignment_id, task.title, "blocked_existing_files", files=pending(), existing=existing,
+                       errors=["La entrega ya contiene archivos; no se reemplazó ninguno."])
 
-    maxfiles_value = filemanager.get_attribute("data-maxfiles")
-    try:
-        maxfiles = int(maxfiles_value) if maxfiles_value is not None else -1
-    except ValueError:
-        maxfiles = -1
-    if maxfiles == 0 or (maxfiles > 0 and len(paths) > maxfiles):
-        return _blocked_result(assignment_id, task.title, task.status, paths, "La actividad no admite esa cantidad de archivos.")
-    maxbytes_value = filemanager.get_attribute("data-maxbytes")
-    try:
-        maxbytes = int(maxbytes_value) if maxbytes_value else 0
-    except ValueError:
-        maxbytes = 0
+    maxfiles = _limit(page, filemanager, "maxfiles")
+    if maxfiles is not None and maxfiles >= 0 and (maxfiles == 0 or len(paths) > maxfiles):
+        return _result(assignment_id, task.title, "blocked", files=pending(), existing=existing,
+                       errors=[f"La actividad admite como máximo {maxfiles} archivo(s)."])
+    maxbytes = _limit(page, filemanager, "maxbytes") or 0
     oversized = [path for path in paths if maxbytes > 0 and path.stat().st_size > maxbytes]
     if oversized:
         failed = [{"name": path.name, "status": "failed", "error": "El archivo supera el tamaño máximo indicado por Moodle."} for path in oversized]
-        failed_names = {item["name"] for item in failed}
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "blocked",
-            "submission_status": task.status,
-            "files": failed + [{"name": path.name, "status": "not_uploaded"} for path in paths if path.name not in failed_names],
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in failed],
-            "existing_files": existing,
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": [item["error"] for item in failed],
-        }
+        names = {item["name"] for item in failed}
+        return _result(assignment_id, task.title, "blocked", existing=existing,
+                       files=failed + [item for item in pending() if item["name"] not in names],
+                       errors=[item["error"] for item in failed])
+    statement = page.locator("input[name='submissionstatement']")
+    if statement.count() and not statement.first.is_checked():
+        label = page.locator("label[for='id_submissionstatement']")
+        text = " ".join(label.first.inner_text().split()) if label.count() else ""
+        return _result(assignment_id, task.title, "requires_statement", files=pending(), existing=existing,
+                       errors=["La actividad exige aceptar la declaración de originalidad; el estudiante debe hacerlo en Moodle."]
+                       + ([f"Declaración: {text}"] if text else []))
 
     replaced: list[str] = []
     if existing and replace_existing:
         try:
             replaced = _remove_existing_files(page, filemanager)
         except Exception as error:
-            message = redact_credentials(error, (config.username, config.password))[:500]
-            return _blocked_result(assignment_id, task.title, task.status, paths, message, existing_files=existing)
+            return _result(assignment_id, task.title, "blocked", files=pending(), existing=existing,
+                           errors=[redact_credentials(error, secrets)[:500]])
 
     file_results: list[dict[str, str]] = []
-    staged: list[Path] = []
     for path in paths:
+        if time.monotonic() - started > TOTAL_BUDGET_SECONDS:
+            file_results.append({"name": path.name, "status": "failed", "error": "Se agotó el tiempo disponible para subir archivos."})
+            continue
         try:
             _stage_file(page, filemanager, path)
-            staged.append(path)
             file_results.append({"name": path.name, "status": "staged"})
         except Exception as error:
             _dismiss_filepicker(page)
             file_results.append({"name": path.name, "status": "failed", "error": _file_error(error, path, config)})
 
-    if not staged:
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "failed",
-            "submission_status": task.status,
-            "files": file_results,
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in file_results if item["status"] == "failed"],
-            "existing_files": existing,
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": [item.get("error", "No se pudo adjuntar el archivo.") for item in file_results],
-        }
-
-    failed = any(item["status"] == "failed" for item in file_results)
-    if failed and existing and replace_existing:
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "replacement_cancelled",
-            "submission_status": task.status,
-            "files": [{"name": path.name, "status": "not_saved" if path in staged else "failed",
-                       **({"error": next((item["error"] for item in file_results if item["name"] == path.name and item["status"] == "failed"), "")}
-                          if path not in staged else {})} for path in paths],
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in file_results if item["status"] == "failed"],
-            "existing_files": existing,
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": ["La sustitución se canceló porque falló al menos un archivo; la entrega existente se conserva."],
-        }
+    failures = [item for item in file_results if item["status"] == "failed"]
+    if failures:
+        # Todo o nada: no se guarda una entrega incompleta; Moodle descarta el borrador del formulario.
+        status = "replacement_cancelled" if replaced else "failed"
+        message = ("La sustitución se canceló porque falló al menos un archivo; la entrega existente se conserva."
+                   if replaced else "No se guardó la entrega porque falló al menos un archivo.")
+        files = [item if item["status"] == "failed" else {"name": item["name"], "status": "not_saved"} for item in file_results]
+        return _result(assignment_id, task.title, status, files=files, existing=existing,
+                       errors=[message] + [item["error"] for item in failures])
 
     save = _save_control(page, filemanager)
     if save is None:
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "failed",
-            "submission_status": task.status,
-            "files": [{"name": path.name, "status": "not_saved"} for path in staged] + [item for item in file_results if item["status"] == "failed"],
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in file_results if item["status"] == "failed"],
-            "existing_files": existing,
-            "replaced_files": [],
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": ["Moodle no mostró el botón Guardar cambios; no se guardó la entrega."],
-        }
+        return _result(assignment_id, task.title, "failed", files=pending("not_saved"), existing=existing,
+                       errors=["Moodle no mostró el botón Guardar cambios; no se guardó la entrega."])
 
     try:
-        save.click()
+        with page.expect_navigation(wait_until="domcontentloaded", timeout=60_000):
+            save.click()
+    except Exception as error:
+        return _result(assignment_id, task.title, "save_unconfirmed", files=pending("save_unconfirmed"),
+                       existing=existing, replaced=replaced,
+                       errors=[f"Moodle no confirmó el guardado: {redact_credentials(error, secrets)[:300]}"])
+    if "action=editsubmission" in page.url or page.locator(".filemanager").count():
+        problem = _form_error(page) or "Moodle volvió a mostrar el formulario sin guardar."
+        return _result(assignment_id, task.title, "failed", files=pending("not_saved"), existing=existing,
+                       errors=[f"Moodle rechazó el formulario: {problem}"])
+
+    try:
         final_task = read_assignment(page, url, config)
     except Exception as error:
-        message = redact_credentials(error, (config.username, config.password))[:500]
-        return {
-            "assignment_id": assignment_id,
-            "title": task.title,
-            "status": "save_unconfirmed",
-            "submission_status": task.status,
-            "files": [{"name": path.name, "status": "save_unconfirmed"} for path in staged] + [item for item in file_results if item["status"] == "failed"],
-            "uploaded_files": [],
-            "failed_files": [item["name"] for item in file_results if item["status"] == "failed"],
-            "existing_files": existing,
-            "replaced_files": replaced,
-            "sent_for_grading": False,
-            "complete": False,
-            "errors": [f"Moodle no confirmó el guardado: {message}"],
-        }
-
-    _, verification_folded = _submission_file_names(page)
-    for item in file_results:
-        if item["status"] not in ("staged", "failed"):
-            continue
-        if item["name"].casefold() in verification_folded:
-            item["status"] = "uploaded"
-            item.pop("error", None)
-        elif item["status"] == "staged":
-            item["status"] = "saved_unconfirmed"
-
-    uploaded = [item["name"] for item in file_results if item["status"] == "uploaded"]
-    failed_names = [item["name"] for item in file_results if item["status"] == "failed"]
-    unconfirmed = [item["name"] for item in file_results if item["status"] == "saved_unconfirmed"]
-    final_status = "uploaded" if not failed_names and not unconfirmed else "partial"
-    errors = [item["error"] for item in file_results if "error" in item]
-    if unconfirmed:
-        errors.append("Moodle guardó el formulario, pero no confirmó todos los nombres en la página de entrega.")
-    return {
-        "assignment_id": assignment_id,
-        "title": task.title,
-        "status": final_status,
-        "submission_status": final_task.status,
-        "files": file_results,
-        "uploaded_files": uploaded,
-        "failed_files": failed_names,
-        "existing_files": existing,
-        "replaced_files": replaced,
-        "sent_for_grading": False,
-        "complete": final_status == "uploaded",
-        "errors": errors,
-    }
-
-
-def _blocked_result(
-    assignment_id: int,
-    title: str,
-    submission_status: str,
-    paths: list[Path],
-    message: str,
-    *,
-    existing_files: list[str] | None = None,
-) -> dict:
-    return {
-        "assignment_id": assignment_id,
-        "title": title,
-        "status": "blocked",
-        "submission_status": submission_status,
-        "files": [{"name": path.name, "status": "not_uploaded"} for path in paths],
-        "uploaded_files": [],
-        "failed_files": [],
-        "existing_files": existing_files or [],
-        "replaced_files": [],
-        "sent_for_grading": False,
-        "complete": False,
-        "errors": [message],
-    }
+        return _result(assignment_id, task.title, "save_unconfirmed", files=pending("save_unconfirmed"),
+                       existing=existing, replaced=replaced,
+                       errors=[f"No se pudo releer la entrega: {redact_credentials(error, secrets)[:300]}"])
+    saved = _submission_file_names(page)
+    files = [{"name": path.name, "status": "uploaded" if moodle_name(path.name) in saved else "save_unconfirmed"}
+             for path in paths]
+    unconfirmed = [item["name"] for item in files if item["status"] != "uploaded"]
+    return _result(assignment_id, final_task.title or task.title, "uploaded" if not unconfirmed else "save_unconfirmed",
+                   files=files, existing=existing, replaced=replaced,
+                   submission=_submission_state(page, final_task.status), complete=not unconfirmed,
+                   errors=["Moodle guardó el formulario, pero no muestra estos archivos: " + ", ".join(unconfirmed)] if unconfirmed else [])
