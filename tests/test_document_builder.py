@@ -80,6 +80,15 @@ class TemplateTests(unittest.TestCase):
         heading3 = root.find(f"{W}style[@{W}styleId='Heading3']/{W}rPr")
         self.assertIsNotNone(heading3.find(W + "i"))
 
+    def test_logo_is_a_floating_image_with_valid_ids(self):
+        with zipfile.ZipFile(TEMPLATE) as archive:
+            header = next(archive.read(name).decode() for name in archive.namelist()
+                          if re.fullmatch(r"word/header\d+\.xml", name) and "graphic" in archive.read(name).decode())
+        self.assertIn("<wp:anchor", header)
+        self.assertNotIn("<w:tbl>", header)
+        self.assertNotIn('id="0"', header)
+        self.assertIn('relativeFrom="page"><wp:posOffset>914400<', header)
+
     def test_template_metadata_is_neutral(self):
         with zipfile.ZipFile(TEMPLATE) as archive:
             core = archive.read("docProps/core.xml").decode()
@@ -270,6 +279,7 @@ class DocxTests(unittest.TestCase):
         path = self.build(sample(blocks=[{"type": "figure", "title": "Pantalla", "path": str(image), "width_cm": 5}]))
         with zipfile.ZipFile(path) as archive:
             self.assertTrue(any(name.startswith("word/media/") for name in archive.namelist()))
+            self.assertNotIn('id="0"', archive.read("word/document.xml").decode())
         fake = self.root / "falsa.png"
         fake.write_text("no soy imagen")
         with self.assertRaises(ValueError):

@@ -5,7 +5,6 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -134,6 +133,44 @@ def page_number(paragraph) -> None:
     paragraph._p.append(field)
 
 
+def floating_logo(paragraph, image: Path, *, width, left, top) -> None:
+    """Imagen anclada a la página, sin ajuste de texto, con identificadores válidos (no 0) para WPS."""
+    inline = paragraph.add_run().add_picture(str(image), width=width)._inline
+    extent = inline.find(qn("wp:extent"))
+    anchor = OxmlElement("wp:anchor")
+    for name, value in (("distT", "0"), ("distB", "0"), ("distL", "0"), ("distR", "0"), ("simplePos", "0"),
+                        ("relativeHeight", "251659264"), ("behindDoc", "0"), ("locked", "0"),
+                        ("layoutInCell", "1"), ("allowOverlap", "1")):
+        anchor.set(name, value)
+    simple = OxmlElement("wp:simplePos")
+    simple.set("x", "0")
+    simple.set("y", "0")
+    anchor.append(simple)
+    for axis, relative, offset in (("wp:positionH", "page", left), ("wp:positionV", "page", top)):
+        position = OxmlElement(axis)
+        position.set("relativeFrom", relative)
+        value = OxmlElement("wp:posOffset")
+        value.text = str(int(offset))
+        position.append(value)
+        anchor.append(position)
+    anchor.append(extent)
+    effect = OxmlElement("wp:effectExtent")
+    for side in ("l", "t", "r", "b"):
+        effect.set(side, "0")
+    anchor.append(effect)
+    anchor.append(OxmlElement("wp:wrapNone"))
+    doc_pr = inline.find(qn("wp:docPr"))
+    doc_pr.set("id", "1001")
+    doc_pr.set("name", "Logo ULEAM")
+    doc_pr.set("descr", "Logo de la Universidad Laica Eloy Alfaro de Manabí")
+    anchor.append(doc_pr)
+    anchor.append(inline.find(qn("wp:cNvGraphicFramePr")))
+    graphic = inline.find(qn("a:graphic"))
+    graphic.find(".//" + qn("pic:cNvPr")).set("id", "1001")
+    anchor.append(graphic)
+    inline.getparent().replace(inline, anchor)
+
+
 def drop_part(document, suffix: str) -> None:
     """Quita partes heredadas de la plantilla base de python-docx (efectos de Word 2010, miniatura)."""
     for owner in (document.part, document.part.package):
@@ -159,25 +196,11 @@ def build_cover(output: Path) -> None:
     configure_styles(document)
 
     page_number(section.header.paragraphs[0])
-    first_header = section.first_page_header
-    first_header.paragraphs[0].paragraph_format.line_spacing = Pt(1)
-    table = first_header.add_table(rows=1, cols=2, width=Cm(16.51))
-    table.autofit = False
-    indent = OxmlElement("w:tblInd")
-    indent.set(qn("w:w"), "0")
-    indent.set(qn("w:type"), "dxa")
-    table._tbl.tblPr.append(indent)
-    for cell in table.rows[0].cells:
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.TOP
-        cell.paragraphs[0].paragraph_format.first_line_indent = Cm(0)
-        cell.paragraphs[0].paragraph_format.line_spacing = 1
-    table.cell(0, 0).paragraphs[0].add_run().add_picture(str(ASSETS / "uleam-logo.png"), width=Cm(3.75))
-    page_number(table.cell(0, 1).paragraphs[0])
-    # Un encabezado no debe terminar en tabla: Word lo repara al abrirlo.
-    closing = first_header.add_paragraph()
-    closing.paragraph_format.line_spacing = Pt(1)
-    closing.paragraph_format.first_line_indent = Cm(0)
-    closing.paragraph_format.space_after = Pt(0)
+    # Primera página: número a la derecha y logo flotante anclado a la página (x 2,54 cm, y 1,27 cm).
+    # Sin tabla: así el encabezado no supera el margen superior ni desplaza la portada en Word o WPS.
+    first_paragraph = section.first_page_header.paragraphs[0]
+    page_number(first_paragraph)
+    floating_logo(first_paragraph, ASSETS / "uleam-logo.png", width=Cm(3.75), left=Cm(2.54), top=Cm(1.27))
 
     lines = [
         ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72),

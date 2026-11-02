@@ -291,7 +291,10 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
             picture.paragraph_format.keep_with_next = bool(block.note)
             try:
                 width, _ = figure_size_cm(image, block.width_cm)
-                picture.add_run().add_picture(str(image), width=Cm(width))
+                shape = picture.add_run().add_picture(str(image), width=Cm(width))
+                # python-docx deja pic:cNvPr id="0": WPS no dibuja imágenes con ese identificador.
+                shape._inline.find(qn("wp:docPr")).set("id", str(2000 + figures))
+                shape._inline.find(".//" + qn("pic:cNvPr")).set("id", str(2000 + figures))
             except Exception:
                 raise ValueError(f"La figura {figures} no es una imagen PNG o JPEG RGB válida (dañada o en CMYK).") from None
             _note(document, block.note)
