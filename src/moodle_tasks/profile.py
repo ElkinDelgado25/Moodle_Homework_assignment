@@ -10,7 +10,9 @@ from .main import Config, open_page
 from .storage import atomic_write, user_config_dir
 
 
-TEXT_FIELDS = ("subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
+TEXT_FIELDS = ("materia", "nombre_docente", "carrera", "curso", "anio",
+               # Claves de versiones anteriores, que se siguen leyendo.
+               "subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
 SKIP_COURSES = re.compile(r"^(?:mis cursos|all courses|cursos|courses)$", re.IGNORECASE)
 
 
@@ -42,6 +44,11 @@ def public_profile(data: object) -> dict:
         value = _profile_text(data.get(key))
         if value:
             result[key] = value
+    students = data.get("estudiantes")
+    if isinstance(students, list):
+        cleaned_students = [text for text in (_profile_text(item) for item in students) if text]
+        if cleaned_students:
+            result["estudiantes"] = list(dict.fromkeys(cleaned_students))
     courses = data.get("courses")
     if isinstance(courses, list):
         cleaned = [text for text in (_profile_text(item) for item in courses) if text]

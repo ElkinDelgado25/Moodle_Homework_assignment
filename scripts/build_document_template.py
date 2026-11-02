@@ -204,20 +204,19 @@ def build_cover(output: Path) -> None:
 
     lines = [
         ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72),
-        ("{{title}}", True, 120),
+        ("{{titulo}}", True, 120),
         ("Materia:", True, 168),
-        ("{{subject}}", False, 192),
+        ("{{materia}}", False, 192),
         ("Docente:", True, 216),
-        ("{{teacher}}", False, 240),
+        ("{{nombre_docente}}", False, 240),
         ("Estudiantes:", True, 288),
-        ("{{student_1}}", False, 312),
-        ("{{student_2}}", False, 336),
-        ("Carrera:", True, 384),
-        ("{{degree}}", False, 408),
-        ("Curso:", True, 456),
-        ("{{class_group}}", False, 480),
-        ("Año:", True, 504),
-        ("{{year}}", False, 528),
+        ("{{estudiantes}}", False, 312),
+        ("Carrera:", True, 360),
+        ("{{carrera}}", False, 384),
+        ("Curso:", True, 432),
+        ("{{curso}}", False, 456),
+        ("Año:", True, 480),
+        ("{{anio}}", False, 504),
     ]
     for index, (text, bold, position) in enumerate(lines):
         paragraph = document.add_paragraph()

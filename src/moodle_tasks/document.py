@@ -1,5 +1,6 @@
 """Construye el entregable DOCX + PDF con la portada ULEAM y formato APA 7."""
 
+import copy
 import os
 import re
 import shutil
@@ -15,8 +16,9 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
+from docx.text.paragraph import Paragraph
 
-from .document_model import (COVER_FIELDS, REQUIRED_COVER_FIELDS, CoverFields, DeliveryDocument, figure_size_cm,
+from .document_model import (COVER_FIELDS, MAX_STUDENTS, REQUIRED_COVER_FIELDS, CoverFields, DeliveryDocument, figure_size_cm,
                              parse_inline, reference_key)
 from .paths import resolve_local_file
 from .storage import user_cache_dir
@@ -55,14 +57,26 @@ def safe_file_name(value: str) -> str:
     return name
 
 
-def cover_values(cover: CoverFields, profile: dict) -> dict[str, str]:
+# Claves del perfil local: las nuevas en español y las que guardaban versiones anteriores.
+PROFILE_KEYS = {"materia": ("materia", "subject"), "nombre_docente": ("nombre_docente", "teacher"),
+                "carrera": ("carrera", "degree"), "curso": ("curso", "class_group"), "anio": ("anio", "year")}
+
+
+def cover_values(cover: CoverFields, profile: dict) -> dict:
     """Une los datos dados con el perfil verificado; el docente, curso y año nunca se deducen."""
-    values = {field: getattr(cover, field) or "" for field in COVER_FIELDS}
-    if not values["student_1"] and isinstance(profile.get("student_1"), str):
-        values["student_1"] = " ".join(profile["student_1"].split())
-    for field in ("teacher", "degree", "class_group", "year", "subject"):
-        if not values[field] and isinstance(profile.get(field), str):
-            values[field] = " ".join(profile[field].split())
+    def text(value):
+        return " ".join(value.split()) if isinstance(value, str) else ""
+
+    values: dict = {field: getattr(cover, field) or "" for field in COVER_FIELDS if field != "estudiantes"}
+    for field, keys in PROFILE_KEYS.items():
+        if not values[field]:
+            values[field] = next((text(profile.get(key)) for key in keys if text(profile.get(key))), "")
+    students = list(cover.estudiantes)
+    if not students:
+        saved = profile.get("estudiantes")
+        saved = saved if isinstance(saved, list) else [profile.get("student_1"), profile.get("student_2")]
+        students = [text(name) for name in saved if text(name)]
+    values["estudiantes"] = students[:MAX_STUDENTS]
     missing = [field for field in REQUIRED_COVER_FIELDS if not values[field]]
     if missing:
         raise MissingCoverFields(missing)
@@ -108,19 +122,23 @@ def _paragraphs(text: str) -> list[str]:
     return [" ".join(part.split()) for part in re.split(r"\n\s*\n", text) if part.strip()]
 
 
-def _fill_cover(document, values: dict[str, str]) -> None:
-    placeholders = {f"{{{{{key}}}}}": value for key, value in values.items()}
-    body = list(document.paragraphs)
-    student_1 = next((p for p in body if p.text.strip() == "{{student_1}}"), None)
-    for paragraph in body:
-        if paragraph.text.strip() == "{{student_2}}" and not values.get("student_2"):
-            # Conserva la posición de "Carrera:" sumando el hueco al párrafo anterior.
-            if student_1 is not None:
-                before = student_1.paragraph_format.space_after or Pt(0)
-                after = paragraph.paragraph_format.space_after or Pt(0)
-                # 27,6 pt = una línea de Times New Roman 12 a doble espacio en Word y WPS.
-                student_1.paragraph_format.space_after = Pt(before.pt + 27.6 + after.pt)
-            paragraph._p.getparent().remove(paragraph._p)
+def _fill_cover(document, values: dict) -> None:
+    placeholders = {f"{{{{{key}}}}}": value for key, value in values.items() if isinstance(value, str)}
+    for paragraph in list(document.paragraphs):
+        if paragraph.text.strip() == "{{estudiantes}}":
+            # Una línea por integrante; el espacio hasta "Carrera:" queda después del último.
+            students = values.get("estudiantes") or [""]
+            spacing = paragraph.paragraph_format.space_after
+            current = paragraph
+            for index, name in enumerate(students):
+                if index:
+                    clone = copy.deepcopy(paragraph._p)
+                    current._p.addnext(clone)
+                    current = Paragraph(clone, paragraph._parent)
+                current.runs[0].text = name
+                for extra in current.runs[1:]:
+                    extra.text = ""
+                current.paragraph_format.space_after = spacing if index == len(students) - 1 else Pt(0)
             continue
         for run in paragraph.runs:
             if "{{" in run.text:
@@ -220,7 +238,7 @@ def _note(document, note: str | None) -> None:
 
 def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) -> dict:
     document = Document(str(TEMPLATE))
-    _fill_cover(document, {**values, "title": content.title})
+    _fill_cover(document, {**values, "titulo": content.title})
 
     title = document.add_paragraph(style="Title")
     title.paragraph_format.page_break_before = True
@@ -313,8 +331,8 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
     now = datetime.now(timezone.utc).replace(microsecond=0)
     # Las propiedades del paquete OOXML admiten como máximo 255 caracteres.
     properties.title = content.title[:255]
-    properties.subject = values.get("subject", "")[:255]
-    properties.author = "; ".join(value for value in (values.get("student_1"), values.get("student_2")) if value)[:255]
+    properties.subject = values.get("materia", "")[:255]
+    properties.author = "; ".join(values.get("estudiantes", []))[:255]
     properties.last_modified_by = properties.author
     properties.created = properties.modified = now
     properties.revision = 1

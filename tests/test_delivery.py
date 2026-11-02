@@ -107,11 +107,11 @@ class DeliveryTests(unittest.TestCase):
         self.assertFalse(self.destination.exists())
 
     def test_unfilled_placeholders_block_the_delivery(self):
-        docx = make_docx(self.source / "portada.docx", text="Docente: {{teacher}}")
+        docx = make_docx(self.source / "portada.docx", text="Docente: {{nombre_docente}}")
         pdf = make_pdf(self.source / "portada.pdf")
         with self.assertRaises(DocumentCheckError) as caught:
             finish_delivery(str(docx), str(pdf), str(self.destination))
-        self.assertIn("{{teacher}}", str(caught.exception))
+        self.assertIn("{{nombre_docente}}", str(caught.exception))
 
     def test_missing_pdf_link_and_stale_pdf_are_warnings(self):
         docx, _ = self.pair(link="https://github.com/a/b")

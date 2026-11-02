@@ -136,7 +136,8 @@ class OutOfRangeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             for index in range(25):
                 fields = {name: random_text(rng, rng.randint(0, 60)) for name in
-                          ("subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")}
+                          ("materia", "nombre_docente", "carrera", "curso", "anio")}
+                fields["estudiantes"] = [random_text(rng, rng.randint(0, 40)) for _ in range(rng.randint(0, 3))]
                 try:
                     cover = CoverFields(**fields)
                     document = DeliveryDocument(title=random_text(rng, rng.randint(1, 80)) + "x",

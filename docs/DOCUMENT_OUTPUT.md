@@ -43,19 +43,27 @@ Si ya existen archivos con ese nombre, se usa `nombre (1)`, `nombre (2)`... Nunc
 
 ## Portada (`cover`)
 
-La plantilla ULEAM incluye el logo arriba a la izquierda en la primera página, la numeración arriba a la derecha y bloques centrados en este orden: universidad, título del trabajo, Materia, Docente, Estudiantes, Carrera, Curso y Año.
+La plantilla ULEAM incluye el logo arriba a la izquierda en la primera página, la numeración arriba a la derecha y bloques centrados en este orden: universidad, título del trabajo, Materia, Docente, Estudiantes, Carrera, Curso y Año. Sus campos son genéricos y se rellenan en cada tarea:
 
-| Campo | Origen |
-| --- | --- |
-| `subject` | Materia de la tarea (debe coincidir con una de las materias verificadas; si no, se avisa). |
-| `teacher` | Lo indica el usuario o la consigna. Nunca se inventa. |
-| `student_1` | Nombre verificado al instalar; se completa solo si se omite. |
-| `student_2` | Opcional. Si está vacío, la línea desaparece sin mover el resto. |
-| `degree` | Carrera. |
-| `class_group` | Curso o paralelo. |
-| `year` | Año o periodo. |
+| Campo en la plantilla | Dato en `cover` | Origen |
+| --- | --- | --- |
+| `{{titulo}}` | `document.title` | Título del trabajo. |
+| `{{materia}}` | `materia` | Materia de la tarea (si no coincide con una materia verificada, se avisa). |
+| `{{nombre_docente}}` | `nombre_docente` | Lo indica el usuario o la consigna. Nunca se inventa. |
+| `{{estudiantes}}` | `estudiantes` | Lista de 1 a 6 integrantes del grupo, una línea por persona. Si se omite, se usa el estudiante verificado del perfil. |
+| `{{carrera}}` | `carrera` | Carrera. |
+| `{{curso}}` | `curso` | Curso o paralelo. |
+| `{{anio}}` | `anio` | Año o periodo. |
 
-Si falta un dato obligatorio, la herramienta devuelve `status="missing_cover_fields"` con la lista y no escribe ningún archivo; el agente pregunta solo esos datos. El perfil `document_profile.json` acepta números (por ejemplo `"year": 2026`) y descarta solo los campos inválidos.
+Ejemplo para un grupo de tres:
+
+```json
+{"materia": "Aplicaciones Móviles Nativas", "nombre_docente": "Ing. Nombre Apellido",
+ "estudiantes": ["Integrante 1", "Integrante 2", "Integrante 3"],
+ "carrera": "Ingeniería de Software", "curso": "Quinto A", "anio": "2026"}
+```
+
+Si falta un dato obligatorio, la herramienta devuelve `status="missing_cover_fields"` con la lista y no escribe ningún archivo; el agente pregunta solo esos datos. El perfil `document_profile.json` acepta estas claves en español y también las de versiones anteriores (`student_1`, `teacher`, `year`...). Acepta números (por ejemplo `"anio": 2026`) y descarta solo los campos inválidos.
 
 ## Formato APA 7
 

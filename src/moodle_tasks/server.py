@@ -282,7 +282,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 "template_path": str(assets / "academic-cover.docx"),
                 "logo_path": str(assets / "uleam-logo.png"),
                 "output_formats": ["docx", "pdf"],
-                "fields": ["title", *COVER_FIELDS],
+                "fields": ["titulo", *COVER_FIELDS],
                 "field_syntax": "{{field}}",
                 "local_defaults": defaults,
                 "formatting": {"standard": "APA 7", "font": "Times New Roman", "font_size_pt": 12,
@@ -296,7 +296,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True,
                                            open_world_hint=False), structured_output=True)
     def get_document_template() -> Result:
-        """Datos de portada guardados (student_1, materias), formato APA 7 y política de contenido para el entregable. No genera archivos."""
+        """Datos de portada guardados (estudiante, materias), formato APA 7 y política de contenido para el entregable. No genera archivos."""
         return compact(document_template())
 
     def build_task(document: DeliveryDocument, cover: CoverFields, destination_directory: str | None,
@@ -314,7 +314,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                     "docx_path": None, "pdf_path": None,
                     "message": "Pide al usuario estos datos de portada (no los inventes) y vuelve a llamar la herramienta."}
         courses = profile.get("courses") or []
-        if courses and values["subject"].casefold() not in {course.casefold() for course in courses}:
+        if courses and values["materia"].casefold() not in {course.casefold() for course in courses}:
             warnings.append("La materia no coincide con ninguna de las materias verificadas del perfil.")
         destination = resolve_destination_directory(destination_directory or str(documents_directory()))
         workspace = prepare_workspace()

@@ -19,15 +19,18 @@ INLINE = re.compile(
     r"|\[(?P<label>[^\]]+)\]\((?P<target>(?:[^()\s]|\([^()\s]*\))+)\)"
     r"|(?P<url>https?://[^\s<>\"]+)"
 )
-COVER_FIELDS = ("subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
-REQUIRED_COVER_FIELDS = ("subject", "teacher", "student_1", "degree", "class_group", "year")
+# Campos de la portada en la plantilla: {{titulo}}, {{materia}}, {{nombre_docente}}, {{estudiantes}}...
+COVER_FIELDS = ("materia", "nombre_docente", "estudiantes", "carrera", "curso", "anio")
+TEMPLATE_FIELDS = ("titulo", *COVER_FIELDS)
+REQUIRED_COVER_FIELDS = COVER_FIELDS
+MAX_STUDENTS = 6
 MAX_TOTAL_CHARACTERS = 400_000
-TEMPLATE_TOKEN = re.compile(r"\{\{\s*(?:title|subject|teacher|student_1|student_2|degree|class_group|year)\s*\}\}")
+TEMPLATE_TOKEN = re.compile(r"\{\{\s*(?:" + "|".join(TEMPLATE_FIELDS) + r")\s*\}\}")
 
 
 def no_template_tokens(value: str) -> str:
     if TEMPLATE_TOKEN.search(value):
-        raise ValueError("El texto no puede contener campos de plantilla como {{teacher}}; escribe el dato real.")
+        raise ValueError("El texto no puede contener campos de plantilla como {{nombre_docente}}; escribe el dato real.")
     return value
 
 
@@ -213,21 +216,20 @@ CoverText = Annotated[str, Field(max_length=200)]
 
 
 class CoverFields(BaseModel):
-    """Datos de portada. student_1 y la materia pueden venir del perfil verificado; no inventes docente, curso ni año."""
+    """Datos de portada. Los estudiantes y la materia pueden venir del perfil verificado; no inventes docente, curso ni año."""
 
     model_config = ConfigDict(extra="forbid")
 
-    subject: CoverText | None = None
-    teacher: CoverText | None = None
-    student_1: CoverText | None = None
-    student_2: CoverText | None = Field(None, description="Segundo estudiante; vacío si es individual.")
-    degree: CoverText | None = Field(None, description="Carrera.")
-    class_group: CoverText | None = Field(None, description="Curso o paralelo.")
-    year: CoverText | None = None
+    materia: CoverText | None = None
+    nombre_docente: CoverText | None = None
+    estudiantes: list[CoverText] = Field(default_factory=list, max_length=MAX_STUDENTS,
+                                         description="Integrantes del grupo, uno por elemento (1 a 6). Vacío: el estudiante del perfil.")
+    carrera: CoverText | None = None
+    curso: CoverText | None = Field(None, description="Curso o paralelo.")
+    anio: CoverText | None = Field(None, description="Año o periodo académico.")
 
-    @field_validator("*", mode="before")
-    @classmethod
-    def _text(cls, value):
+    @staticmethod
+    def _clean(value):
         if isinstance(value, bool):
             raise ValueError("Se esperaba texto.")
         if isinstance(value, int):
@@ -236,3 +238,20 @@ class CoverFields(BaseModel):
             value = " ".join(clean_text(value).split())
             return no_template_tokens(value) or None
         return value
+
+    @field_validator("materia", "nombre_docente", "carrera", "curso", "anio", mode="before")
+    @classmethod
+    def _text(cls, value):
+        return cls._clean(value)
+
+    @field_validator("estudiantes", mode="before")
+    @classmethod
+    def _students(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = [value]
+        if not isinstance(value, list):
+            raise ValueError("Se esperaba una lista de nombres.")
+        names = [cls._clean(item) for item in value]
+        return list(dict.fromkeys(name for name in names if name))

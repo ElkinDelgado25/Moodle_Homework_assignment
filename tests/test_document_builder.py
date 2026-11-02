@@ -19,8 +19,8 @@ from moodle_tasks.verification import check_delivery_pair, inspect_docx
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 from moodle_tasks.document import TEMPLATE  # noqa: E402 - el asset del paquete instalado
-COVER = CoverFields(subject="Desarrollo Móvil", teacher="Ing. Ana & <Asoc>", degree="Software",
-                    class_group="Quinto \"A\"", year=2026)
+COVER = CoverFields(materia="Desarrollo Móvil", nombre_docente="Ing. Ana & <Asoc>", carrera="Software",
+                    curso="Quinto \"A\"", anio=2026)
 PROFILE = {"student_1": "Elkin Delgado"}
 
 
@@ -105,7 +105,7 @@ class TemplateTests(unittest.TestCase):
 
     def test_cover_has_title_and_all_fields(self):
         text = all_text(TEMPLATE)
-        for field in ("title", "subject", "teacher", "student_1", "student_2", "degree", "class_group", "year"):
+        for field in ("titulo", "materia", "nombre_docente", "estudiantes", "carrera", "curso", "anio"):
             self.assertIn("{{" + field + "}}", text)
 
 
@@ -162,30 +162,36 @@ class ModelTests(unittest.TestCase):
             sample(blocks=[{"type": "paragraph", "text": "sustituto \ud800 suelto"}])
 
     def test_cover_fields_normalization(self):
-        cover = CoverFields(year=2026, teacher="  Ing.\n Ana  ", student_2="   ")
-        self.assertEqual(cover.year, "2026")
-        self.assertEqual(cover.teacher, "Ing. Ana")
-        self.assertIsNone(cover.student_2)
+        cover = CoverFields(anio=2026, nombre_docente="  Ing.\n Ana  ", estudiantes=["  Ana  ", "", "Ana", " Luis\n"])
+        self.assertEqual(cover.anio, "2026")
+        self.assertEqual(cover.nombre_docente, "Ing. Ana")
+        self.assertEqual(cover.estudiantes, ["Ana", "Luis"])
+        self.assertEqual(CoverFields(estudiantes="Sola").estudiantes, ["Sola"])
         with self.assertRaises(ValidationError):
-            CoverFields(year=True)
+            CoverFields(anio=True)
         with self.assertRaises(ValidationError):
-            CoverFields(teacher="x" * 201)
+            CoverFields(nombre_docente="x" * 201)
+        with self.assertRaises(ValidationError):
+            CoverFields(estudiantes=[f"E{i}" for i in range(7)])
         with self.assertRaises(ValidationError):
             CoverFields(career="no existe")
 
     def test_missing_cover_fields_are_reported_and_profile_fills_student(self):
         with self.assertRaises(MissingCoverFields) as caught:
-            cover_values(CoverFields(subject="Materia"), {})
-        self.assertEqual(caught.exception.fields, ["teacher", "student_1", "degree", "class_group", "year"])
+            cover_values(CoverFields(materia="Materia"), {})
+        self.assertEqual(caught.exception.fields, ["nombre_docente", "estudiantes", "carrera", "curso", "anio"])
         values = cover_values(COVER, PROFILE)
-        self.assertEqual(values["student_1"], "Elkin Delgado")
-        self.assertEqual(values["student_2"], "")
+        self.assertEqual(values["estudiantes"], ["Elkin Delgado"])
+        legacy = cover_values(CoverFields(), {"subject": "M", "teacher": "D", "student_1": "A", "student_2": "B",
+                                              "degree": "C", "class_group": "K", "year": "2026"})
+        self.assertEqual((legacy["materia"], legacy["nombre_docente"], legacy["estudiantes"], legacy["anio"]),
+                         ("M", "D", ["A", "B"], "2026"))
 
     def test_template_tokens_cannot_be_injected(self):
         with self.assertRaises(ValidationError):
-            CoverFields(teacher="{{year}}")
+            CoverFields(nombre_docente="{{anio}}")
         with self.assertRaises(ValidationError):
-            sample(title="Informe {{ teacher }}")
+            sample(title="Informe {{ nombre_docente }}")
         self.assertEqual(sample(blocks=[{"type": "code", "text": "<p>{{ nombre }}</p>"}]).blocks[0].text, "<p>{{ nombre }}</p>")
 
     def test_safe_file_name_drops_invisible_characters(self):
@@ -224,7 +230,7 @@ class DocxTests(unittest.TestCase):
         paragraphs = ["".join(n.text or "" for n in p.iter(W + "t")) for p in document_xml(path).iter(W + "p")]
         index = paragraphs.index("Elkin Delgado")
         self.assertEqual(paragraphs[index + 1], "Carrera:")
-        with_partner = CoverFields(**{**COVER.model_dump(), "student_2": "María López"})
+        with_partner = CoverFields(**{**COVER.model_dump(), "estudiantes": ["Elkin Delgado", "María López"]})
         paragraphs = ["".join(n.text or "" for n in p.iter(W + "t")) for p in document_xml(self.build(cover=with_partner)).iter(W + "p")]
         self.assertEqual(paragraphs[paragraphs.index("Elkin Delgado") + 1], "María López")
 
@@ -440,8 +446,8 @@ class ToolTests(unittest.TestCase):
     def test_tool_builds_verifies_and_never_overwrites(self):
         destination = self.root / "Entregas"
         arguments = {"document": sample().model_dump(exclude_none=True),
-                     "cover": {"subject": "Desarrollo Móvil", "teacher": "Ing. Ana", "degree": "Software",
-                               "class_group": "5A", "year": "2026"},
+                     "cover": {"materia": "Desarrollo Móvil", "nombre_docente": "Ing. Ana", "carrera": "Software",
+                               "curso": "5A", "anio": "2026"},
                      "destination_directory": str(destination)}
         first = self.call(arguments)
         self.assertFalse(first.is_error, first)
@@ -459,15 +465,15 @@ class ToolTests(unittest.TestCase):
 
     def test_missing_cover_fields_write_nothing(self):
         destination = self.root / "Entregas"
-        result = self.call({"document": sample().model_dump(exclude_none=True), "cover": {"subject": "X"},
+        result = self.call({"document": sample().model_dump(exclude_none=True), "cover": {"materia": "X"},
                             "destination_directory": str(destination)})
         data = result.structured_content
         self.assertEqual(data["status"], "missing_cover_fields")
-        self.assertEqual(data["missing_cover_fields"], ["teacher", "degree", "class_group", "year"])
+        self.assertEqual(data["missing_cover_fields"], ["nombre_docente", "carrera", "curso", "anio"])
         self.assertFalse(destination.exists())
 
     def test_schema_rejects_unknown_fields_and_bad_destinations(self):
-        cover = {"subject": "X", "teacher": "Y", "degree": "Z", "class_group": "W", "year": "2026"}
+        cover = {"materia": "X", "nombre_docente": "Y", "carrera": "Z", "curso": "W", "anio": "2026"}
         bad = self.call({"document": {**sample().model_dump(exclude_none=True), "autor": "x"}, "cover": cover})
         self.assertTrue(bad.is_error)
         relative = self.call({"document": sample().model_dump(exclude_none=True), "cover": cover,
@@ -510,8 +516,8 @@ class VerifierRegressionTests(unittest.TestCase):
         return result, checks
 
     def test_schema_maximums_build(self):
-        long_cover = CoverFields(**{**COVER.model_dump(), "student_2": "B" * 200})
-        result, _ = self.build(sample(title="T" * 300), cover=CoverFields(**{**long_cover.model_dump(), "student_1": "A" * 200}))
+        long_cover = CoverFields(**{**COVER.model_dump(), "estudiantes": ["A" * 200, "B" * 200]})
+        result, _ = self.build(sample(title="T" * 300), cover=long_cover)
         self.assertTrue(result["pdf"].is_file())
         result, _ = self.build(sample(blocks=[{"type": "table", "title": "Larga", "rows": [["A", "B"], ["palabra " * 250, "x"]]}]))
         self.assertTrue(any("como lista" in warning for warning in result["warnings"]))
@@ -538,8 +544,8 @@ class VerifierRegressionTests(unittest.TestCase):
                 self.assertTrue(image)
 
     def test_template_tokens_in_body_code_are_allowed(self):
-        self.build(sample(blocks=[{"type": "code", "text": "<title>{{ title }}</title> {{ year }}"},
-                                  {"type": "paragraph", "text": "En Jinja se escribe {{ title }}."}]))
+        self.build(sample(blocks=[{"type": "code", "text": "<title>{{ titulo }}</title> {{ anio }}"},
+                                  {"type": "paragraph", "text": "En Jinja se escribe {{ titulo }}."}]))
 
     def test_page_breaks_never_create_blank_pages(self):
         blocks = sample().model_dump(exclude_none=True)["blocks"]
@@ -566,17 +572,29 @@ class VerifierRegressionTests(unittest.TestCase):
         self.assertIn("→", text)
         self.assertIn("    indentado", sample(blocks=[{"type": "code", "text": "\tindentado"}]).blocks[0].text)
 
-    def test_second_student_removal_keeps_the_cover_layout(self):
-        def carrera_y(cover, name):
-            result, _ = self.build(sample(references=[]), cover=cover, name=name)
-            positions = []
-            PdfReader(str(result["pdf"])).pages[0].extract_text(
-                visitor_text=lambda text, cm, tm, font, size: positions.append(tm[5]) if "Carrera" in text else None)
-            return positions[0]
+    def test_each_student_takes_one_line_and_six_fit_on_the_cover(self):
+        from moodle_tasks.pdf_render import LINE, PT
 
-        solo = carrera_y(COVER, "solo")
-        pair = carrera_y(CoverFields(**{**COVER.model_dump(), "student_2": "María López"}), "par")
-        self.assertAlmostEqual(solo, pair, delta=0.5)
+        def cover_positions(students, name):
+            cover = CoverFields(**{**COVER.model_dump(), "estudiantes": students})
+            result, checks = self.build(sample(references=[]), cover=cover, name=name)
+            found = {}
+            PdfReader(str(result["pdf"])).pages[0].extract_text(
+                visitor_text=lambda text, cm, tm, font, size: found.setdefault(text.strip(), tm[5]) if text.strip() else None)
+            return found, result
+
+        one, _ = cover_positions(["Ana"], "uno")
+        three, result = cover_positions(["Ana", "Luis", "Marta"], "tres")
+        self.assertAlmostEqual(one["Carrera:"] - three["Carrera:"], 2 * LINE / PT, delta=0.5)
+        for name in ("Ana", "Luis", "Marta"):
+            self.assertIn(name, three)
+        root = document_xml(result["docx"])
+        paragraphs = [p for p in root.iter(W + "p") if "".join(n.text or "" for n in p.iter(W + "t")) in ("Ana", "Luis", "Marta")]
+        spacing = [p.find(f"{W}pPr/{W}spacing").get(W + "after") for p in paragraphs]
+        self.assertEqual(spacing[:2], ["0", "0"])
+        self.assertNotEqual(spacing[2], "0")
+        six, _ = cover_positions([f"Integrante {i}" for i in range(1, 7)], "seis")
+        self.assertIn("2026", six)  # el año sigue en la portada (página 1)
 
     def test_markup_bypasses_and_parentheses(self):
         for text in ("**[mi repo](https://github.com/u/p)**", "[mi repo](https://github.com./u/p)"):

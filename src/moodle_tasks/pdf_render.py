@@ -29,11 +29,11 @@ SINGLE = 12 * 1.149 * PT
 LINK_COLOR = (5, 99, 193)
 # Posición (en puntos) de cada línea de la portada, igual que scripts/build_document_template.py.
 COVER_LINES = [
-    ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72), ("{{title}}", True, 120),
-    ("Materia:", True, 168), ("{{subject}}", False, 192), ("Docente:", True, 216), ("{{teacher}}", False, 240),
-    ("Estudiantes:", True, 288), ("{{student_1}}", False, 312), ("{{student_2}}", False, 336),
-    ("Carrera:", True, 384), ("{{degree}}", False, 408), ("Curso:", True, 456), ("{{class_group}}", False, 480),
-    ("Año:", True, 504), ("{{year}}", False, 528),
+    ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72), ("{{titulo}}", True, 120),
+    ("Materia:", True, 168), ("{{materia}}", False, 192), ("Docente:", True, 216), ("{{nombre_docente}}", False, 240),
+    ("Estudiantes:", True, 288), ("{{estudiantes}}", False, 312),
+    ("Carrera:", True, 360), ("{{carrera}}", False, 384), ("Curso:", True, 432), ("{{curso}}", False, 456),
+    ("Año:", True, 480), ("{{anio}}", False, 504),
 ]
 TIMES_FILES = {
     "win32": ("times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf"),
@@ -172,23 +172,22 @@ def _paragraphs(text: str) -> list[str]:
     return [" ".join(part.split()) for part in re.split(r"\n\s*\n", text) if part.strip()]
 
 
-def render_cover(pdf: _Renderer, values: dict[str, str]) -> None:
-    lines = [(text.replace("{{" + key + "}}", value) if "{{" in text else text, bold, position)
-             for text, bold, position in COVER_LINES
-             for key, value in [(text.strip("{}"), values.get(text.strip("{}"), ""))]]
+def render_cover(pdf: _Renderer, values: dict) -> None:
     y = MARGIN
-    carry = 0.0
-    for index, (text, bold, position) in enumerate(lines):
-        gap = (lines[index + 1][2] - position - 24) * PT if index + 1 < len(lines) else 0
-        if COVER_LINES[index][0] == "{{student_2}}" and not values.get("student_2"):
-            carry += LINE + gap  # su línea y su hueco pasan al siguiente: el resto no se mueve
-            continue
-        y += carry
-        carry = 0.0
-        pdf.set_xy(MARGIN, y)
+    for index, (text, bold, position) in enumerate(COVER_LINES):
+        gap = (COVER_LINES[index + 1][2] - position - 24) * PT if index + 1 < len(COVER_LINES) else 0
+        if text == "{{estudiantes}}":
+            entries = values.get("estudiantes") or [""]
+        elif text.startswith("{{"):
+            entries = [values.get(text.strip("{}"), "")]
+        else:
+            entries = [text]
         pdf.style(bold)
-        pdf.multi_cell(0, LINE, pdf.text(text), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-        y = pdf.get_y() + gap
+        for entry in entries:
+            pdf.set_xy(MARGIN, y)
+            pdf.multi_cell(0, LINE, pdf.text(entry), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            y = pdf.get_y()
+        y += gap
 
 
 def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) -> str:
@@ -196,13 +195,13 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
     family, files = find_serif_fonts()
     pdf = _Renderer(family, files)
     pdf.set_title(content.title)
-    pdf.set_author("; ".join(value for value in (values.get("student_1"), values.get("student_2")) if value))
-    pdf.set_subject(values.get("subject", ""))
+    pdf.set_author("; ".join(values.get("estudiantes", [])))
+    pdf.set_subject(values.get("materia", ""))
     pdf.set_creator("moodle-homework-assignment")
     pdf.set_lang("es-EC")
     pdf.set_creation_date(datetime.now(timezone.utc))
     pdf.add_page()
-    render_cover(pdf, {**values, "title": content.title})
+    render_cover(pdf, {**values, "titulo": content.title})
 
     pdf.cover = False
     pdf.add_page()
