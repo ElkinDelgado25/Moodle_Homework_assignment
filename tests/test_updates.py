@@ -87,6 +87,45 @@ class UpdateTests(unittest.TestCase):
             else:
                 continuation.assert_not_called()
 
+    def test_update_failure_is_printed_to_stderr_without_crashing(self):
+        stderr = io.StringIO()
+        with patch.object(updates, "fetch_latest_release", side_effect=updates.UpdateError("sin red")), patch(
+            "sys.stderr", stderr
+        ), self.assertRaises(SystemExit) as exit_:
+            updates.main([])
+        self.assertEqual(exit_.exception.code, 1)
+        self.assertIn("sin red", stderr.getvalue())
+
+    def test_checkout_root_explains_why_each_candidate_failed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "borrado"
+            not_git = Path(directory)
+            with patch.object(updates, "_source_candidates", return_value=[missing, not_git]), patch.object(
+                updates, "_run_git", side_effect=updates.UpdateError("no es un repositorio")
+            ):
+                with self.assertRaises(updates.UpdateError) as error:
+                    updates.checkout_root()
+        message = str(error.exception)
+        self.assertIn("ya no existe", message)
+        self.assertIn("no es un repositorio", message)
+
+    def test_checkout_root_reports_missing_git_and_untrusted_clone_directly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for failure in (updates.GitMissingError("No se encontró Git."),
+                            updates.UntrustedCheckoutError("safe.directory")):
+                with self.subTest(failure=type(failure).__name__), patch.object(
+                    updates, "_source_candidates", return_value=[Path(directory)]
+                ), patch.object(updates, "_run_git", side_effect=failure):
+                    with self.assertRaises(type(failure)):
+                        updates.checkout_root()
+
+    def test_dubious_ownership_suggests_safe_directory(self):
+        result = subprocess.CompletedProcess([], 128, "", "fatal: detected dubious ownership in repository")
+        with patch.object(updates.subprocess, "run", return_value=result):
+            with self.assertRaises(updates.UntrustedCheckoutError) as error:
+                updates._run_git(Path("C:/Users/PC/Moodle_Homework_assignment"), "status")
+        self.assertIn("git config --global --add safe.directory", str(error.exception))
+
     def test_dirty_checkout_is_not_changed_by_automatic_update(self):
         def git(_root, *arguments, **_options):
             output = {

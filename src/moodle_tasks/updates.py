@@ -39,6 +39,14 @@ class UpdateError(RuntimeError):
     """Error claro y seguro que impide completar una actualización."""
 
 
+class GitMissingError(UpdateError):
+    """Git no está instalado o no aparece en el PATH de esta terminal."""
+
+
+class UntrustedCheckoutError(UpdateError):
+    """Git rechaza el clon por pertenecer a otro usuario (safe.directory)."""
+
+
 @dataclass(frozen=True)
 class Release:
     tag: str
@@ -241,8 +249,13 @@ def _run_git(root: Path, *arguments: str, check: bool = True) -> subprocess.Comp
             errors="replace",
         )
     except OSError:
-        raise UpdateError("No se encontró Git. Instala Git y vuelve a intentar.") from None
+        raise GitMissingError("No se encontró Git. Instala Git y vuelve a intentar.") from None
     if check and result.returncode:
+        if "dubious ownership" in result.stderr or "safe.directory" in result.stderr:
+            raise UntrustedCheckoutError(
+                f"Git no confía en el clon {root} porque pertenece a otro usuario de Windows. "
+                f"Autorízalo con: git config --global --add safe.directory \"{root.as_posix()}\""
+            )
         raise UpdateError("Git no pudo preparar la actualización. No se reemplazaron archivos locales.")
     return result
 
@@ -261,17 +274,26 @@ def _source_candidates() -> list[Path]:
 
 
 def checkout_root() -> Path:
+    reasons: list[str] = []
     for candidate in _source_candidates():
+        if not candidate.is_dir():
+            reasons.append(f"{candidate} ya no existe")
+            continue
         try:
             root_text = _run_git(candidate, "rev-parse", "--show-toplevel").stdout.strip()
             root = Path(root_text).resolve()
             _project_version(root)
             return root
-        except (UpdateError, OSError):
-            continue
+        except (GitMissingError, UntrustedCheckoutError):
+            raise
+        except UpdateError as error:
+            reasons.append(f"{candidate}: {error}")
+        except OSError as error:
+            reasons.append(f"{candidate}: {error.strerror or error}")
+    detail = f" Rutas revisadas: {'; '.join(reasons)}." if reasons else ""
     raise UpdateError(
-        "No se encontró el clon Git desde el que se instaló Moodle MCP. "
-        "Reinstálalo desde el repositorio clonado para habilitar las actualizaciones."
+        "No se encontró el clon Git desde el que se instaló Moodle MCP." + detail
+        + " Actualiza el clon con git y vuelve a ejecutar el instalador desde su carpeta."
     )
 
 
@@ -459,7 +481,7 @@ def main(argv: list[str] | None = None) -> None:
             console.print(f"Moodle MCP ya está en la última release estable ({release.version}).")
             setup_main(["--skip-update", "--sync-only"])
     except UpdateError as error:
-        console.print(f"[red]No se pudo actualizar Moodle MCP: {error}[/red]", stderr=True)
+        Console(stderr=True).print(f"[red]No se pudo actualizar Moodle MCP: {error}[/red]")
         raise SystemExit(1) from None
 
 
