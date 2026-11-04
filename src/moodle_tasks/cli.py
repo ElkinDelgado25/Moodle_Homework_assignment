@@ -4,11 +4,13 @@ import argparse
 
 from . import main as tasks
 from . import server, setup, status, updates
+from .console import configure_utf8_streams
 from .monitoring import initialize_sentry
 from .ui import show_dashboard
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_utf8_streams()
     initialize_sentry(tasks.config_values())
     parser = argparse.ArgumentParser(prog="mcp-moodle", description=__doc__)
     commands = parser.add_subparsers(dest="command")

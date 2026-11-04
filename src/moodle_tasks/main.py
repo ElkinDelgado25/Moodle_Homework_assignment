@@ -340,7 +340,10 @@ def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_coun
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .console import configure_utf8_streams
     from .monitoring import initialize_sentry
+
+    configure_utf8_streams()
 
     initialize_sentry(config_values())
     import argparse

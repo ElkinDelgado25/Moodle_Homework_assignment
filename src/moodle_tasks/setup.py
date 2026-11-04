@@ -142,6 +142,9 @@ def sync_agent_configurations(env_file: Path, *, selected_agent: str | None = No
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .console import configure_utf8_streams
+
+    configure_utf8_streams()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", help="Dirección de Moodle; por defecto la guardada o ULEAM")
     parser.add_argument("--agent", choices=AGENTS, help="Agente que se desea configurar")
