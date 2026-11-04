@@ -1,7 +1,5 @@
 # Instalación
 
-Produced by elkindelgado25
-
 Moodle MCP se instala desde una copia del repositorio. Elige tu sistema y ejecuta sus tres comandos.
 
 ## Windows

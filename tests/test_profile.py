@@ -20,7 +20,7 @@ class ProfileTests(unittest.TestCase):
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page()
             page.set_content(
-                '<div class="usermenu"><span class="usertext">Elkin Delgado Licoa</span></div>'
+                '<div class="usermenu"><span class="usertext">Carlos Mendoza Rivera</span></div>'
                 '<a href="/my/courses.php">Mis cursos</a>'
             )
             page.route("**/*", lambda route: route.fulfill(
@@ -34,7 +34,7 @@ class ProfileTests(unittest.TestCase):
                 saved = record_verified_profile(page, Config("https://moodle.test", "student", "secret", True), root)
             finally:
                 browser.close()
-            self.assertEqual(saved["student_1"], "Elkin Delgado Licoa")
+            self.assertEqual(saved["student_1"], "Carlos Mendoza Rivera")
             self.assertEqual(saved["courses"], ["Ciberseguridad", "Metodología"])
             stored = json.loads((root / "document_profile.json").read_text(encoding="utf-8"))
             self.assertEqual(stored["teacher"], "Ing. María Esther")

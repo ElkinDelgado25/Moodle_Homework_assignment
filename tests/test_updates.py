@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
@@ -119,12 +119,63 @@ class UpdateTests(unittest.TestCase):
                     with self.assertRaises(type(failure)):
                         updates.checkout_root()
 
-    def test_dubious_ownership_suggests_safe_directory(self):
-        result = subprocess.CompletedProcess([], 128, "", "fatal: detected dubious ownership in repository")
+    def test_checkout_root_reports_unreadable_candidate_without_crashing(self):
+        unreadable = MagicMock(spec=Path)
+        unreadable.exists.side_effect = PermissionError(13, "Permiso denegado")
+        unreadable.__str__.return_value = "/srv/clon"
+        with patch.object(updates, "_source_candidates", return_value=[unreadable]):
+            with self.assertRaises(updates.UpdateError) as error:
+                updates.checkout_root()
+        self.assertIn("/srv/clon: Permiso denegado", str(error.exception))
+
+    def test_checkout_root_distinguishes_files_and_tries_next_candidate_after_untrusted_clone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a_file = Path(directory) / "archivo"
+            a_file.write_text("x")
+            untrusted, trusted = Path(directory) / "ajeno", Path(directory) / "propio"
+            untrusted.mkdir()
+            trusted.mkdir()
+            (trusted / "pyproject.toml").write_text('[project]\nname = "moodle-homework-assignment"\nversion = "1.0.0"\n')
+
+            def git(root, *arguments, check=True):
+                if root == untrusted:
+                    raise updates.UntrustedCheckoutError("safe.directory")
+                return subprocess.CompletedProcess([], 0, str(trusted), "")
+
+            with patch.object(updates, "_source_candidates", return_value=[a_file, untrusted, trusted]), patch.object(
+                updates, "_run_git", side_effect=git
+            ):
+                self.assertEqual(updates.checkout_root(), trusted.resolve())
+            with patch.object(updates, "_source_candidates", return_value=[a_file]):
+                with self.assertRaises(updates.UpdateError) as error:
+                    updates.checkout_root()
+        message = str(error.exception)
+        self.assertIn("no es una carpeta", message)
+        self.assertNotIn("..", message)
+        self.assertIn("vuelve a clonar", message)
+
+    def test_git_failure_includes_git_reason(self):
+        result = subprocess.CompletedProcess(
+            [], 128, "", "fatal: unable to access 'https://user:abc@github.com/x.git/': timeout.\n"
+        )
+        with patch.object(updates.subprocess, "run", return_value=result):
+            with self.assertRaises(updates.UpdateError) as error:
+                updates._run_git(Path("/tmp/clon"), "fetch")
+        message = str(error.exception)
+        self.assertIn("git fetch", message)
+        self.assertIn("unable to access 'https://github.com/x.git/'", message)
+        self.assertNotIn("abc@", message)
+
+    def test_dubious_ownership_suggests_safe_directory_for_repository_root(self):
+        stderr = ("fatal: detected dubious ownership in repository at '/srv/Moodle_Homework_assignment'\n"
+                  "To add an exception for this directory, call:\n")
+        result = subprocess.CompletedProcess([], 128, "", stderr)
         with patch.object(updates.subprocess, "run", return_value=result):
             with self.assertRaises(updates.UntrustedCheckoutError) as error:
-                updates._run_git(Path("C:/Users/PC/Moodle_Homework_assignment"), "status")
-        self.assertIn("git config --global --add safe.directory", str(error.exception))
+                updates._run_git(Path("/srv/Moodle_Homework_assignment/lib/python3.11"), "status")
+        message = str(error.exception)
+        self.assertIn('git config --global --add safe.directory "/srv/Moodle_Homework_assignment"', message)
+        self.assertNotIn("Windows", message)
 
     def test_dirty_checkout_is_not_changed_by_automatic_update(self):
         def git(_root, *arguments, **_options):

@@ -116,7 +116,7 @@ Para usarlo desde otros proyectos, añade la misma entrada a la configuración M
 
 Usa `examples/claude_desktop_config.json` como ejemplo. Sustituye `/RUTA/ABSOLUTA/Moodle_Homework_assignment` por la carpeta real e incorpora la entrada `moodle` a `mcpServers` en la configuración existente. Reinicia el cliente. [Guía de conexión de Claude Desktop](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
 
-Si el cliente no encuentra `uv`, usa la ruta completa al ejecutable; en este equipo es `/home/elkindev/.local/bin/uv`.
+Si el cliente no encuentra `uv`, usa la ruta completa al ejecutable; en Linux y macOS suele ser `~/.local/bin/uv`.
 
 Un cliente que solo se ejecuta en la nube necesitaría un servidor remoto accesible por HTTP; esta implementación usa un proceso local `stdio`.
 
