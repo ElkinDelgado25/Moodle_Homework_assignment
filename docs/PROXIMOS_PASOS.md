@@ -1,7 +1,5 @@
 # Próximos pasos
 
-Produced by elkindelgado25
-
 Después de instalar Moodle MCP, abre una terminal nueva. El comando `mcp-moodle` estará disponible desde cualquier carpeta.
 
 ## Configurar una cuenta o un agente

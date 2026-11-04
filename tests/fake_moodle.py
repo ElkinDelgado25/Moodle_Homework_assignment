@@ -119,7 +119,7 @@ class FakeMoodle:
 
     def shell(self, body: str) -> str:
         return (f'<!doctype html><html><head><title>Moodle</title></head><body>'
-                f'<nav class="usermenu"><span class="usertext">Elkin Delgado</span>'
+                f'<nav class="usermenu"><span class="usertext">Carlos Mendoza</span>'
                 f'<a href="/login/logout.php">Salir</a></nav>{body}</body></html>')
 
     def login_page(self, error: bool = False) -> str:

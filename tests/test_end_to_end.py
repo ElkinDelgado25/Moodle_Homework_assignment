@@ -77,7 +77,7 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
                 "document": {"title": "Práctica 3: App con Compose",
                              "blocks": [{"type": "heading", "level": 1, "text": "Desarrollo"},
                                         {"type": "paragraph", "text": "Se implementó la pantalla principal. Repositorio: https://github.com/estudiante/practica-3"}]},
-                "cover": {"materia": "Desarrollo Móvil", "nombre_docente": "Ing. Ana Pérez", "estudiantes": ["Elkin Delgado"],
+                "cover": {"materia": "Desarrollo Móvil", "nombre_docente": "Ing. Ana Pérez", "estudiantes": ["Carlos Mendoza"],
                           "carrera": "Software", "curso": "Quinto A", "anio": "2026"},
                 "destination_directory": str(self.deliveries)})
             self.assertFalse(build.is_error, build)

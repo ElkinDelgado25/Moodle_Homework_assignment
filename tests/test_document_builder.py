@@ -21,7 +21,7 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 from moodle_tasks.document import TEMPLATE  # noqa: E402 - el asset del paquete instalado
 COVER = CoverFields(materia="Desarrollo Móvil", nombre_docente="Ing. Ana & <Asoc>", carrera="Software",
                     curso="Quinto \"A\"", anio=2026)
-PROFILE = {"student_1": "Elkin Delgado"}
+PROFILE = {"student_1": "Carlos Mendoza"}
 
 
 def make_png(path: Path, size=(40, 20)) -> Path:
@@ -181,7 +181,7 @@ class ModelTests(unittest.TestCase):
             cover_values(CoverFields(materia="Materia"), {})
         self.assertEqual(caught.exception.fields, ["nombre_docente", "estudiantes", "carrera", "curso", "anio"])
         values = cover_values(COVER, PROFILE)
-        self.assertEqual(values["estudiantes"], ["Elkin Delgado"])
+        self.assertEqual(values["estudiantes"], ["Carlos Mendoza"])
         legacy = cover_values(CoverFields(), {"subject": "M", "teacher": "D", "student_1": "A", "student_2": "B",
                                               "degree": "C", "class_group": "K", "year": "2026"})
         self.assertEqual((legacy["materia"], legacy["nombre_docente"], legacy["estudiantes"], legacy["anio"]),
@@ -220,7 +220,7 @@ class DocxTests(unittest.TestCase):
         path = self.build()
         text = all_text(path)
         self.assertNotIn("{{", text)
-        for value in ("Informe de la práctica 3", "Desarrollo Móvil", "Ing. Ana & <Asoc>", "Elkin Delgado",
+        for value in ("Informe de la práctica 3", "Desarrollo Móvil", "Ing. Ana & <Asoc>", "Carlos Mendoza",
                       "Quinto \"A\"", "2026", "Software"):
             self.assertIn(value, text)
         self.assertEqual(inspect_docx(path)["placeholders"], [])
@@ -228,11 +228,11 @@ class DocxTests(unittest.TestCase):
     def test_empty_second_student_paragraph_is_removed(self):
         path = self.build()
         paragraphs = ["".join(n.text or "" for n in p.iter(W + "t")) for p in document_xml(path).iter(W + "p")]
-        index = paragraphs.index("Elkin Delgado")
+        index = paragraphs.index("Carlos Mendoza")
         self.assertEqual(paragraphs[index + 1], "Carrera:")
-        with_partner = CoverFields(**{**COVER.model_dump(), "estudiantes": ["Elkin Delgado", "María López"]})
+        with_partner = CoverFields(**{**COVER.model_dump(), "estudiantes": ["Carlos Mendoza", "María López"]})
         paragraphs = ["".join(n.text or "" for n in p.iter(W + "t")) for p in document_xml(self.build(cover=with_partner)).iter(W + "p")]
-        self.assertEqual(paragraphs[paragraphs.index("Elkin Delgado") + 1], "María López")
+        self.assertEqual(paragraphs[paragraphs.index("Carlos Mendoza") + 1], "María López")
 
     def test_body_starts_on_page_two_with_title(self):
         root = document_xml(self.build())
@@ -420,7 +420,7 @@ class ToolTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.config = self.root / "config"
         self.config.mkdir()
-        (self.config / "document_profile.json").write_text(json.dumps({"student_1": "Elkin Delgado", "courses": ["Desarrollo Móvil"]}))
+        (self.config / "document_profile.json").write_text(json.dumps({"student_1": "Carlos Mendoza", "courses": ["Desarrollo Móvil"]}))
         for target, value in (("moodle_tasks.server.user_config_dir", self.config),
                               ("moodle_tasks.paths.user_config_dir", self.config),
                               ("moodle_tasks.paths.user_cache_dir", self.root / "cache"),

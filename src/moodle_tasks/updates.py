@@ -252,48 +252,77 @@ def _run_git(root: Path, *arguments: str, check: bool = True) -> subprocess.Comp
         raise GitMissingError("No se encontró Git. Instala Git y vuelve a intentar.") from None
     if check and result.returncode:
         if "dubious ownership" in result.stderr or "safe.directory" in result.stderr:
+            # safe.directory debe nombrar la raíz del repositorio, que Git indica en su mensaje.
+            match = re.search(r"repository at '([^']+)'", result.stderr)
+            repository = match.group(1) if match else root.as_posix()
             raise UntrustedCheckoutError(
-                f"Git no confía en el clon {root} porque pertenece a otro usuario de Windows. "
-                f"Autorízalo con: git config --global --add safe.directory \"{root.as_posix()}\""
+                f"Git no confía en el clon {repository} porque pertenece a otro usuario del sistema. "
+                f"Autorízalo con: git config --global --add safe.directory \"{repository}\""
             )
-        raise UpdateError("Git no pudo preparar la actualización. No se reemplazaron archivos locales.")
+        raise UpdateError(f"Git falló al ejecutar «git {arguments[0]}»: {_git_detail(result.stderr)}")
     return result
 
 
+def _git_detail(stderr: str) -> str:
+    """Primera línea útil del error de Git, con las URLs simplificadas."""
+    line = next((text.strip() for text in stderr.splitlines() if text.strip()), "")
+    line = re.sub(r"^(?:fatal|error):\s*", "", line)
+    line = re.sub(r"://[^/@\s]+@", "://", line).rstrip(".")
+    return line[:300] or "sin detalle"
+
+
 def _source_candidates() -> list[Path]:
-    candidates = [Path(__file__).resolve().parents[2]]
+    candidates: list[Path] = []
     try:
         direct_url = metadata.distribution(PROJECT_NAME).read_text("direct_url.json")
         data = json.loads(direct_url) if direct_url else {}
         parsed = urlsplit(data.get("url", ""))
         if parsed.scheme == "file":
-            candidates.insert(0, Path(url2pathname(unquote(parsed.path))))
+            candidates.append(Path(url2pathname(unquote(parsed.path))))
     except (metadata.PackageNotFoundError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+    # La carpeta del paquete solo es un clon en un checkout de desarrollo; en una instalación
+    # con uv tool apunta al entorno virtual y no aporta nada al diagnóstico.
+    source = Path(__file__).resolve().parents[2]
+    try:
+        if (source / "pyproject.toml").is_file() and source not in candidates:
+            candidates.append(source)
+    except OSError:
         pass
     return candidates
 
 
 def checkout_root() -> Path:
     reasons: list[str] = []
+    untrusted: UntrustedCheckoutError | None = None
     for candidate in _source_candidates():
-        if not candidate.is_dir():
-            reasons.append(f"{candidate} ya no existe")
-            continue
         try:
+            if not candidate.exists():
+                reasons.append(f"{candidate} ya no existe")
+                continue
+            if not candidate.is_dir():
+                reasons.append(f"{candidate} no es una carpeta")
+                continue
             root_text = _run_git(candidate, "rev-parse", "--show-toplevel").stdout.strip()
             root = Path(root_text).resolve()
             _project_version(root)
             return root
-        except (GitMissingError, UntrustedCheckoutError):
+        except GitMissingError:
             raise
+        except UntrustedCheckoutError as error:
+            untrusted = untrusted or error
+            reasons.append(f"{candidate}: Git no confía en este clon")
         except UpdateError as error:
-            reasons.append(f"{candidate}: {error}")
+            reasons.append(f"{candidate}: {str(error).rstrip('.')}")
         except OSError as error:
             reasons.append(f"{candidate}: {error.strerror or error}")
+    if untrusted:
+        raise untrusted
     detail = f" Rutas revisadas: {'; '.join(reasons)}." if reasons else ""
     raise UpdateError(
         "No se encontró el clon Git desde el que se instaló Moodle MCP." + detail
-        + " Actualiza el clon con git y vuelve a ejecutar el instalador desde su carpeta."
+        + " Si borraste o moviste el clon, vuelve a clonar el repositorio y ejecuta el instalador "
+        "desde su carpeta; si todavía existe, ejecuta el instalador desde esa carpeta."
     )
 
 
