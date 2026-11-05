@@ -60,9 +60,12 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
         stats["timeline_status"] = "missing"
         return
     items = region.locator("[data-region='event-list-item']")
-    empty = region.locator("[data-region='no-events-empty-message'], [data-region='empty-message'], .empty-placeholder-image-lg")
+    # El mensaje de lista vacía ya existe oculto en el HTML inicial; solo cuenta cuando se muestra.
+    empty = region.locator(
+        "[data-region='no-events-empty-message'], [data-region='empty-message'], .empty-placeholder-image-lg"
+    ).filter(visible=True)
     try:
-        # Espera lo que aparezca primero: actividades o el mensaje de lista vacía.
+        # Espera lo que aparezca primero: actividades o el mensaje de lista vacía visible.
         items.first.or_(empty.first).wait_for(state="attached", timeout=10_000)
     except PlaywrightTimeoutError:
         stats["timeline_status"] = "timeout"
