@@ -7,7 +7,9 @@ requires-python = ">=3.11"
 dependencies = [
     "fpdf2>=2.8,<3",
     "mcp>=2,<3",
+    "pillow>=10",
     "playwright>=1.51.0",
+    "pydantic>=2,<3",
     "pypdf>=5,<7",
     "python-docx>=1.1,<2",
     "python-dotenv>=1.0.1",
