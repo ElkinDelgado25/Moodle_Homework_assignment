@@ -87,6 +87,20 @@ class UpdateTests(unittest.TestCase):
             else:
                 continuation.assert_not_called()
 
+    def test_manual_update_asks_github_for_the_release_only_once(self):
+        with patch.object(updates, "fetch_latest_release", return_value=self.release) as fetch, patch.object(
+            updates, "installed_version", return_value="0.2.0"
+        ), patch.object(updates.sys.stdin, "isatty", return_value=True), patch.object(
+            updates.Confirm, "ask", return_value=True
+        ), patch.object(updates, "_apply_release") as apply, patch.object(
+            updates, "continue_with_updated_setup"
+        ) as continuation:
+            updates.main([])
+        fetch.assert_called_once()
+        apply.assert_called_once()
+        self.assertEqual(apply.call_args.args[0], self.release)
+        continuation.assert_called_once_with(["--sync-only"])
+
     def test_update_failure_is_printed_to_stderr_without_crashing(self):
         stderr = io.StringIO()
         with patch.object(updates, "fetch_latest_release", side_effect=updates.UpdateError("sin red")), patch(
