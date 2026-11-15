@@ -55,6 +55,27 @@ ASSIGNMENT_PAGE = """
     </tr></tbody></table></td></tr></tbody></table></div></div></section>"""
 
 
+# Tarea calificada de Moodle 4: tabla «Comentario» con nota, fecha, docente (con su foto), comentarios en varios
+# párrafos y un archivo corregido, además del archivo que entregó el estudiante.
+GRADED_PAGE = """
+<nav class="breadcrumb"><a href="/course/view.php?id=4">A -- SEGURIDAD--1208690--20262-1</a></nav>
+<section id="region-main"><h1>U2-A1: Informe</h1>
+<div class="activity-description" id="intro"><div class="box generalbox"><div class="no-overflow">
+  <p>Entregue el informe en PDF.</p></div></div></div>
+<div class="submissionstatustable"><h3>Estado de la entrega</h3><div class="box generalbox"><table class="generaltable"><tbody>
+  <tr><th>Estado de la entrega</th><td>Enviado para calificar</td></tr>
+  <tr><th>Estado de la calificación</th><td>Calificado</td></tr>
+  <tr><th>Archivos enviados</th><td><a href="/pluginfile.php/7/assignsubmission_file/submission_files/2/informe.pdf?forcedownload=1">informe.pdf</a></td></tr>
+</tbody></table></div></div>
+<div class="feedback"><h3>Comentario</h3><div class="boxaligncenter feedbacktable"><table class="generaltable"><tbody>
+  <tr><th>Calificación</th><td>8,50 / 10,00</td></tr>
+  <tr><th>Calificado sobre</th><td>martes, 10 de noviembre de 2026, 14:05</td></tr>
+  <tr><th>Calificado por</th><td><img class="userpicture" alt="___picture___" src="/u.png"> <a href="/user/view.php?id=3">María Pérez</a></td></tr>
+  <tr><th>Comentarios de retroalimentación</th><td><div class="no-overflow"><p>Buen trabajo.</p><p>Falta   la conclusión.</p></div></td></tr>
+  <tr><th>Archivos de retroalimentación</th><td><div class="box generalbox"><ul><li>
+    <a href="/pluginfile.php/7/assignfeedback_file/feedback_files/3/correccion.pdf?forcedownload=1">correccion.pdf</a></li></ul></div></td></tr>
+</tbody></table></div></div></section>"""
+
 @contextmanager
 def fake_browser():
     browser, page = MagicMock(name="browser"), MagicMock(name="page")
@@ -102,6 +123,27 @@ class AssignmentPageTests(unittest.TestCase):
         self.assertEqual(course_name(task.course), "SEGURIDAD")
         for noise in ("___picture___", "Guardar comentario", "puntos"):
             self.assertNotIn(noise, task.status)
+
+    def test_a_graded_assignment_reads_the_teacher_feedback(self):
+        page = self.browser.new_page()
+        self.addCleanup(page.close)
+        page.route("**/*", lambda route: route.fulfill(content_type="text/html; charset=utf-8", body=GRADED_PAGE))
+        task = read_assignment(page, TASK_URL)
+        corrected = "https://moodle.test/pluginfile.php/7/assignfeedback_file/feedback_files/3/correccion.pdf?forcedownload=1"
+        self.assertEqual(task.feedback, {
+            "grade": "8,50 / 10,00", "graded_at": "2026-11-10T14:05:00", "graded_by": "María Pérez",
+            "comments": "Buen trabajo.\n\nFalta la conclusión.",
+            "files": [{"name": "correccion.pdf", "url": corrected}]})
+        self.assertEqual(task.grade, "8,50")
+        self.assertIs(task.requires_submission, False)
+        # Ni lo entregado ni lo corregido son anexos de la consigna.
+        self.assertEqual(task.attachments, [])
+
+    def test_an_ungraded_assignment_has_no_feedback(self):
+        page = self.browser.new_page()
+        self.addCleanup(page.close)
+        page.route("**/*", lambda route: route.fulfill(content_type="text/html; charset=utf-8", body=ASSIGNMENT_PAGE))
+        self.assertIsNone(read_assignment(page, TASK_URL).feedback)
 
     def test_course_name_is_the_same_for_the_list_and_the_detail(self):
         self.assertEqual(course_name("A -- VISUALIZACIÓN DE DATOS / SOFTWARE 2024 - NS--20262-1"), "VISUALIZACIÓN DE DATOS")
