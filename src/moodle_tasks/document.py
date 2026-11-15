@@ -162,7 +162,7 @@ def _fill_cover(document, values: dict) -> None:
                 run.text = PLACEHOLDER.sub(lambda match: placeholders.get(match.group(0), match.group(0)), run.text)
 
 
-def _restart_numbering(document, paragraph) -> str:
+def _restart_numbering(document) -> str:
     """Nueva instancia de numeración para que cada lista numerada empiece en 1."""
     numbering = document.part.numbering_part.element
     style = document.styles["List Number"].element
@@ -291,7 +291,7 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 paragraph.paragraph_format.first_line_indent = None
                 if block.type == "numbered":
                     if num_id is None:
-                        num_id = _restart_numbering(document, paragraph)
+                        num_id = _restart_numbering(document)
                     if num_id:
                         _set_num(paragraph, num_id)
                 _write_inline(paragraph, " ".join(item.split()))
