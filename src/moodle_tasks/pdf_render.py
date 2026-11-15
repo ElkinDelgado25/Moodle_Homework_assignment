@@ -192,8 +192,8 @@ def render_cover(pdf: _Renderer, values: dict) -> None:
 
 
 def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
-               figure_paths: list[Path] | None = None) -> str:
-    """Escribe el PDF y devuelve la familia tipográfica usada.
+               figure_paths: list[Path] | None = None) -> tuple[str, list[str]]:
+    """Escribe el PDF y devuelve la familia tipográfica usada y los avisos del renderizado.
 
     figure_paths son las rutas ya resueltas de document.figure_files: el DOCX y el PDF dibujan la misma imagen.
     Sin ellas se resuelven aquí, igual que en el DOCX (con ~/ expandido y rutas protegidas rechazadas).
