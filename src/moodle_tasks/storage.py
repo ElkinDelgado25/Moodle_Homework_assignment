@@ -56,10 +56,10 @@ def save_credentials(path: Path, url: str, username: str, password: str) -> None
     def quoted(value: str) -> str:
         return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
-    values = {"MOODLE_URL": url, "MOODLE_USERNAME": username,
-              "MOODLE_PASSWORD": password, "MOODLE_HEADLESS": "true"}
+    values = {"MOODLE_URL": url, "MOODLE_USERNAME": username, "MOODLE_PASSWORD": password}
     if path.is_file():
-        existing_sentry_dsn = dotenv_values(path).get("SENTRY_DSN")
-        if existing_sentry_dsn:
-            values["SENTRY_DSN"] = existing_sentry_dsn
+        # Solo cambian las tres credenciales: el resto de opciones del usuario (MOODLE_SESSION_CACHE, SENTRY_*, etc.) se conserva.
+        for name, value in dotenv_values(path, interpolate=False).items():
+            if name not in values and value is not None:
+                values[name] = value
     atomic_write(path, "".join(f"{name}={quoted(value)}\n" for name, value in values.items()))
