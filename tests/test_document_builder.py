@@ -401,10 +401,14 @@ class PdfTests(unittest.TestCase):
 
         docx = self.root / "a.docx"
         docx.write_bytes(b"PK")
+        # El fake no es un proceso real: el helper que mata el grupo de procesos se prueba con uno real en
+        # test_libreoffice_timeout.py, y aquí se comprueba que se usa al vencer el tiempo.
         with patch("moodle_tasks.document.subprocess.Popen", Hanging), \
+                patch("moodle_tasks.document._kill_process_tree", side_effect=lambda process: process.kill()) as tree, \
                 patch("moodle_tasks.document.user_cache_dir", return_value=self.root / "cache"):
             with self.assertRaises(RuntimeError):
                 export_with_libreoffice(["soffice"], docx, self.root, timeout=1)
+        tree.assert_called_once()
         self.assertTrue(Hanging.killed)
 
     def test_soffice_discovery(self):
