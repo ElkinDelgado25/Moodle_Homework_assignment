@@ -17,6 +17,15 @@ Completa y guarda `.env`, como indica el README. El servidor lee ese archivo aun
 
 Después de instalar, el comando del servidor es `mcp-moodle serve`. Un cliente MCP lo inicia y mantiene conectado; al ejecutarlo directamente en una terminal, espera mensajes del protocolo por la entrada estándar. La salida estándar está reservada para MCP. No confundas `mcp-moodle` con `moodle-mcp`: el segundo es el punto de entrada directo del servidor y no tiene el subcomando `setup`; para abrir el asistente usa `mcp-moodle setup`.
 
+### Opciones avanzadas
+
+| Variable | Dónde | Efecto |
+|---|---|---|
+| `MOODLE_SESSION_CACHE` | entorno o `credentials.env` | `false` (también `0`, `no` u `off`) desactiva la [sesión guardada](#sesión-de-moodle). |
+| `SENTRY_DSN` | entorno o `credentials.env` | Activa el envío de errores a Sentry; vacío lo desactiva. |
+| `SENTRY_ENVIRONMENT` | entorno o `credentials.env` | Entorno con el que se etiquetan los errores en Sentry. Por defecto, `production`. |
+| `MOODLE_UPDATE_CHECK_HOURS` | solo entorno | Horas entre consultas a GitHub para avisar de una release nueva. Por defecto, `24`; `0` consulta en cada ejecución. Valores no numéricos o fuera de 0–8760 usan el valor por defecto. Tras un fallo se reintenta a los 5 minutos. |
+
 ## Herramientas disponibles
 
 | Herramienta | Función |
