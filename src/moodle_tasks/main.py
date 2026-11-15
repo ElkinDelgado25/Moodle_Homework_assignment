@@ -4,7 +4,6 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
 
 from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
@@ -193,33 +192,6 @@ def login_microsoft(page: Page, config: Config) -> None:
             stay.first.click()
         page.wait_for_timeout(500)
     raise RuntimeError("Microsoft requiere completar el acceso o una verificación adicional. No se confirmó una sesión de Moodle.")
-
-
-def find_assignment_links(page: Page, config: Config) -> list[str]:
-    links: set[str] = set()
-    courses: set[str] = set()
-    for path in ("/my/", "/my/courses.php"):
-        open_page(page, urljoin(f"{config.base_url}/", path.lstrip("/")))
-        # La lista de cursos puede cargarse después mediante JavaScript.
-        try:
-            page.locator("a[href*='/course/view.php'], a[href*='/mod/assign/view.php']").first.wait_for(
-                state="attached", timeout=10_000
-            )
-        except PlaywrightTimeoutError:
-            pass
-        courses.update(page.locator("a[href*='/course/view.php']").evaluate_all(
-            "(anchors) => anchors.map((anchor) => anchor.href)"
-        ))
-        hrefs = page.locator("a[href*='/mod/assign/view.php']").evaluate_all(
-            "(anchors) => anchors.map((anchor) => anchor.href)"
-        )
-        links.update(hrefs)
-    for course_url in sorted(courses):
-        open_page(page, course_url)
-        links.update(page.locator("a[href*='/mod/assign/view.php']").evaluate_all(
-            "(anchors) => anchors.map((anchor) => anchor.href)"
-        ))
-    return sorted(links)
 
 
 def submission_state(status: str) -> bool | None:
