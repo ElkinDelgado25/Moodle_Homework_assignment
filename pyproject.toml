@@ -18,9 +18,6 @@ dependencies = [
 
 [project.scripts]
 mcp-moodle = "moodle_tasks.cli:main"
-moodle-tasks = "moodle_tasks.main:main"
-moodle-mcp = "moodle_tasks.server:main"
-moodle-setup = "moodle_tasks.setup:main"
 
 [build-system]
 requires = ["hatchling"]
