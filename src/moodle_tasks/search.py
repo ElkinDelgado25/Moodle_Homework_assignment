@@ -52,6 +52,24 @@ def assignment_url(url: str, base_url: str) -> str | None:
     return f"{base_url}/mod/assign/view.php?id={identifier}" if identifier else None
 
 
+# El enlace action=editsubmission de la línea de tiempo sirve para «Agregar entrega» (sin entregar) y para
+# «Editar entrega» (ya entregada): solo el texto los distingue. Un texto que no se reconoce deja la disponibilidad
+# sin confirmar (null) en vez de descartar la tarea, que haría desaparecer pendientes sin ningún aviso.
+TIMELINE_EVENTS = """events => events.flatMap(e => {
+    const a = e.querySelector('a[href*="/mod/assign/view.php"]');
+    if (!a) return [];
+    const ADD = /Agregar entrega|Agregar envío|Añadir entrega|Añadir envío|Add submission|Adicionar (?:entrega|envio)|Ajouter un travail|Abgabe hinzufügen/i;
+    const EDIT = /Editar entrega|Editar envío|Modificar entrega|Edit submission|Editar tarefa|Modifier le travail|Abgabe bearbeiten/i;
+    const link = Array.from(e.querySelectorAll('a')).find(l => /[?&]action=editsubmission(?:&|$)/.test(l.href));
+    const label = link ? link.textContent.trim() : '';
+    const available = !link ? false : ADD.test(label) ? true : EDIT.test(label) ? false : null;
+    return [{url:a.href, title:a.innerText.trim(),
+        deadline:a.getAttribute('aria-label') || '',
+        course:e.querySelector('.event-name-container > small')?.innerText.split('·').slice(1).join('·').trim() || '',
+        available:available, actionText: available === null ? label : ''}];
+})"""
+
+
 def dashboard_candidates(page: Page, config: Config, stats: dict):
     open_page(page, config.base_url + "/my/")
     stats["dashboard_pages_read"] += 1
@@ -81,21 +99,15 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
         return
     seen = set()
     for _ in range(100):
-        links = region.locator("[data-region='event-list-item']").evaluate_all("""events => events.flatMap(e => {
-            const a = e.querySelector('a[href*="/mod/assign/view.php"]');
-            if (!a) return [];
-            const action = Array.from(e.querySelectorAll('a')).some(link =>
-                /[?&]action=editsubmission(?:&|$)/.test(link.href) &&
-                /Agregar entrega|Add submission/i.test(link.textContent));
-            return [{url:a.href, title:a.innerText.trim(),
-                deadline:a.getAttribute('aria-label') || '',
-                course:e.querySelector('.event-name-container > small')?.innerText.split('·').slice(1).join('·').trim() || '',
-                available:action}];
-        })""")
+        links = region.locator("[data-region='event-list-item']").evaluate_all(TIMELINE_EVENTS)
         for link in links:
             url = assignment_url(link["url"], config.base_url)
             if url and url not in seen:
                 seen.add(url)
+                if link.get("actionText"):
+                    unknown = stats.setdefault("unrecognized_action_texts", [])
+                    if link["actionText"] not in unknown and len(unknown) < 5:
+                        unknown.append(link["actionText"][:60])
                 yield dict(link, url=url, row=None)
         more = region.get_by_role("button", name=re.compile(r"Mostrar más actividades|Show more activities", re.I))
         if not more.count() or not more.first.is_visible() or more.first.is_disabled():
