@@ -197,7 +197,7 @@ Para configurar otra cuenta o conectar mas agentes:
 mcp-moodle setup
 ```
 
-`mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **4. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`. Sigue [los pasos completos de instalación](docs/INSTALL.md).
+`mcp-moodle run` muestra el panel de Aula Moodle. Si ya tienes una cuenta guardada, elige **3. Validar cuenta** para comprobar el acceso. También puedes usar `mcp-moodle status`. Sigue [los pasos completos de instalación](docs/INSTALL.md).
 
 ---
 

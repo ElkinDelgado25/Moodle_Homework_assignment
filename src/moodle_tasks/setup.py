@@ -188,10 +188,10 @@ def main(argv: list[str] | None = None) -> None:
             show_agent_menu(ordered_agents(), detect_agents(), title="Agentes en este equipo")
             if env_file.is_file() and all((values.get(key) or "").strip() for key in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")):
                 choice = ask_setup_action()
-                if choice == "3":
+                if choice == "4":
                     print("Hasta luego. Tu configuración se conserva.")
                     return
-                if choice == "4":
+                if choice == "3":
                     from .status import main as validate_account
 
                     validate_account(["--env-file", str(env_file)])

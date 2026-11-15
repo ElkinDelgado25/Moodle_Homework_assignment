@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from rich.console import Console
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.agents import AGENTS, AgentDetection, AgentSyncResult
@@ -103,7 +104,7 @@ class SetupTests(unittest.TestCase):
             events = []
             with patch("moodle_tasks.setup.prepare_browser", side_effect=lambda *_: events.append("browser")), patch(
                 "moodle_tasks.setup.sync_agent_configurations", side_effect=lambda *_a, **_k: events.append("sync")
-            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "3"), patch(
+            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "4"), patch(
                 "moodle_tasks.setup.show_dashboard"
             ), patch("moodle_tasks.setup.show_agent_menu"), redirect_stdout(io.StringIO()):
                 main(["--skip-update", "--sync-after-update", "--config-dir", str(root)])
@@ -118,7 +119,7 @@ class SetupTests(unittest.TestCase):
             with patch("moodle_tasks.setup.prepare_browser"), patch(
                 "moodle_tasks.setup.synchronize_agents",
                 return_value=AgentSyncResult({}, {broken: "JSON inválido"}),
-            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "3"), patch(
+            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "4"), patch(
                 "moodle_tasks.setup.show_dashboard"
             ), patch("moodle_tasks.setup.show_agent_menu"), redirect_stdout(io.StringIO()), redirect_stderr(errors):
                 main(["--skip-update", "--sync-after-update", "--config-dir", str(root)])
@@ -153,7 +154,7 @@ class SetupTests(unittest.TestCase):
                 agent_path.write_text('{"existing": true}')
                 agent_before = agent_path.read_bytes()
                 output = io.StringIO()
-                with patch("moodle_tasks.setup.prepare_browser"), patch("builtins.input", return_value="4"), patch.dict(os.environ, {}, clear=True), patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.ask_agent") as agent, patch("moodle_tasks.setup.synchronize_agents") as register, patch("moodle_tasks.status.verify_credentials", side_effect=failure) as verify, redirect_stdout(output):
+                with patch("moodle_tasks.setup.prepare_browser"), patch("builtins.input", return_value="3"), patch.dict(os.environ, {}, clear=True), patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.ask_agent") as agent, patch("moodle_tasks.setup.synchronize_agents") as register, patch("moodle_tasks.status.verify_credentials", side_effect=failure) as verify, redirect_stdout(output):
                     arguments = ["--config-dir", str(path.parent), "--agent-config", str(agent_path)]
                     if failure:
                         with self.assertRaises(SystemExit) as caught:
@@ -175,6 +176,15 @@ class SetupTests(unittest.TestCase):
                 self.assertIn("Validar cuenta", output.getvalue())
                 self.assertIn("Con problemas" if failure else "Conectado", output.getvalue())
 
+    def test_exit_is_the_last_option_of_the_saved_account_menu(self):
+        from moodle_tasks.ui import show_setup_menu
+
+        output = io.StringIO()
+        with patch("moodle_tasks.ui.Console", side_effect=lambda: Console(file=output, width=100)):
+            show_setup_menu()
+        lines = [line.strip(" │") for line in output.getvalue().splitlines() if line.strip(" │")[:1].isdigit()]
+        self.assertEqual(lines, ["1  Cambiar credenciales", "2  Configurar otro agente", "3  Validar cuenta", "4  Salir"])
+
     def test_exit_from_saved_account_menu_preserves_credentials_and_agents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -182,7 +192,7 @@ class SetupTests(unittest.TestCase):
             save_credentials(path, "https://moodle.test", "saved", "saved-password")
             before = path.read_bytes()
             with patch("moodle_tasks.setup.ask_account") as account, patch("moodle_tasks.setup.synchronize_agents") as register:
-                output = self.run_wizard(root, ["3"], [])
+                output = self.run_wizard(root, ["4"], [])
             account.assert_not_called()
             register.assert_not_called()
             self.assertEqual(path.read_bytes(), before)
