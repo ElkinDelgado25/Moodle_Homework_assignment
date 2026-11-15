@@ -430,6 +430,13 @@ class PdfTests(unittest.TestCase):
                 patch("moodle_tasks.document.Path.is_file", return_value=False):
             self.assertIsNone(find_soffice())
 
+    def test_the_renderer_keeps_the_text_method_of_fpdf(self):
+        from fpdf import FPDF
+
+        from moodle_tasks.pdf_render import _Renderer
+
+        self.assertIs(_Renderer.text, FPDF.text)
+
 
 class ToolTests(unittest.TestCase):
     def setUp(self):

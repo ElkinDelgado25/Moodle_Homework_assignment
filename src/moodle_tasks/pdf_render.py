@@ -124,7 +124,11 @@ class _Renderer(FPDF):
             self.add_font("Mono", "", str(mono))
         self.mono = "Mono" if mono else None
 
-    def text(self, value: str) -> str:  # noqa: D401 - convierte para la fuente base
+    def encode_text(self, value: str) -> str:
+        """Texto que la fuente puede escribir: sin fuente Unicode, los caracteres fuera de latin-1 salen como «?».
+
+        No se llama text() para no tapar FPDF.text(x, y, text), que fpdf2 puede usar internamente.
+        """
         return value if self.unicode else value.encode("latin-1", "replace").decode("latin-1")
 
     def header(self):
@@ -145,7 +149,7 @@ class _Renderer(FPDF):
             self.style(segment["bold"] or bold, segment["italic"] or italic, underline=bool(link))
             if link:
                 self.set_text_color(*LINK_COLOR)
-            self.write(height, self.text(segment["text"]), link=link or "")
+            self.write(height, self.encode_text(segment["text"]), link=link or "")
             self.set_text_color(0, 0, 0)
 
     def plain(self, text: str) -> str:
@@ -166,7 +170,7 @@ class _Renderer(FPDF):
 
     def centered(self, text: str, *, bold=True, italic=False):
         self.style(bold, italic)
-        self.multi_cell(0, LINE, self.text(self.plain(text)), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.multi_cell(0, LINE, self.encode_text(self.plain(text)), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
 def _paragraphs(text: str) -> list[str]:
@@ -186,7 +190,7 @@ def render_cover(pdf: _Renderer, values: dict) -> None:
         pdf.style(bold)
         for entry in entries:
             pdf.set_xy(MARGIN, y)
-            pdf.multi_cell(0, LINE, pdf.text(entry), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, LINE, pdf.encode_text(entry), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             y = pdf.get_y()
         y += gap
 
@@ -273,10 +277,10 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
             pdf.style(bold=True)
             pdf.cell(0, LINE, f"Tabla {tables}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style(italic=True)
-            pdf.multi_cell(0, LINE, pdf.text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, LINE, pdf.encode_text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style()
             column = pdf.epw / len(block.rows[0]) - 2
-            tallest = max(len(pdf.multi_cell(column, SINGLE + 1, pdf.text(pdf.plain(value)) or " ", dry_run=True,
+            tallest = max(len(pdf.multi_cell(column, SINGLE + 1, pdf.encode_text(pdf.plain(value)) or " ", dry_run=True,
                                               output="LINES")) for row in block.rows for value in row) * (SINGLE + 1)
             if tallest > pdf.eph * 0.8:
                 # Una fila más alta que la página no se puede dibujar como tabla: se muestra como lista.
@@ -290,7 +294,7 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
                     for row in block.rows:
                         cells = table.row()
                         for value in row:
-                            cells.cell(pdf.text(pdf.plain(value)))
+                            cells.cell(pdf.encode_text(pdf.plain(value)))
             if block.note:
                 pdf.set_x(pdf.l_margin)
                 pdf.style(italic=True)
@@ -306,7 +310,7 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
             pdf.style(bold=True)
             pdf.cell(0, LINE, f"Figura {figures}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style(italic=True)
-            pdf.multi_cell(0, LINE, pdf.text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, LINE, pdf.encode_text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.image(str(image), x=pdf.l_margin, w=width, h=height)
             if block.note:
                 pdf.set_x(pdf.l_margin)
