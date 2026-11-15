@@ -136,8 +136,9 @@ def check_delivery_pair(docx: Path, pdf: Path) -> dict:
     if missing_links:
         warnings.append("Enlaces del DOCX sin enlace en el PDF: " + ", ".join(missing_links))
     if word["theme_font_styles"]:
-        warnings.append("Estilos con fuente del tema (pueden no salir en Times New Roman): " + ", ".join(word["theme_font_styles"]))
-    if portable["fonts"] and not any("Times" in font for font in portable["fonts"]):
-        warnings.append("El PDF no incrusta Times New Roman: " + ", ".join(portable["fonts"]))
+        warnings.append("Estilos con fuente del tema (pueden no salir en " + EXPECTED_FONT + "): " + ", ".join(word["theme_font_styles"]))
+    if portable["fonts"] and not any(EXPECTED_FONT.split()[0] in font for font in portable["fonts"]):
+        # Los PDF nombran la fuente sin espacios (TimesNewRomanPSMT), por eso se busca solo la primera palabra.
+        warnings.append(f"El PDF no incrusta {EXPECTED_FONT}: " + ", ".join(portable["fonts"]))
     return {"ok": not errors, "errors": errors, "warnings": warnings,
             "pages": portable["pages"], "hyperlinks": portable["hyperlinks"], "pdf_fonts": portable["fonts"]}
