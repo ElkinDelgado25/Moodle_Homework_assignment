@@ -100,7 +100,7 @@ def save_state(context, config: Config) -> bool:
     if sys.platform != "win32":
         os.chmod(path.parent, 0o700)
     atomic_write(path, json.dumps({"version": VERSION, "saved_at": time.time(), "base_url": config.base_url,
-                                   "cookies": cookies}))
+                                   "cookies": cookies}), private=True)
     if sys.platform != "win32":
         os.chmod(path, 0o600)
     _remove_legacy_session(config)

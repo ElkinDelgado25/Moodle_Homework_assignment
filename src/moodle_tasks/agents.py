@@ -9,7 +9,7 @@ from pathlib import Path
 
 import tomlkit
 
-from .storage import atomic_write
+from .storage import ConcurrentChangeError, atomic_write, read_bytes
 
 
 AGENTS = {"codex": "Codex", "claude": "Claude Code", "cursor": "Cursor",
@@ -34,10 +34,13 @@ class AgentSyncResult:
     errors: dict[str, str]
 
 
-def read_json_config(agent: str, path: Path) -> dict:
-    if not path.exists():
+def read_json_config(agent: str, path: Path, content: bytes | None = None) -> dict:
+    """content permite analizar una copia ya leída del archivo en vez de volver a leerlo."""
+    if content is None:
+        content = read_bytes(path)
+    if content is None:
         return {}
-    text = path.read_text(encoding="utf-8-sig")
+    text = content.decode("utf-8-sig")
     if not text.strip():
         return {}
     try:
@@ -118,29 +121,47 @@ def agent_config_file(agent: str) -> Path:
     raise ValueError("Agente desconocido.")
 
 
+REGISTER_ATTEMPTS = 3
+
+
+def _registered_config(agent: str, path: Path, original: bytes | None, entry: dict) -> str:
+    entry = dict(entry)
+    if agent == "codex":
+        if original is None:
+            document = tomlkit.document()
+        else:
+            # Mismos saltos de línea que read_text: atomic_write escribe en modo texto y los vuelve a convertir.
+            document = tomlkit.parse(original.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n"))
+        document.setdefault("mcp_servers", {})["moodle"] = {
+            **entry, "enabled": True, "tool_timeout_sec": 300,
+        }
+        return tomlkit.dumps(document)
+    document = read_json_config(agent, path, original)
+    key = "servers" if agent == "copilot" else "mcpServers"
+    if not isinstance(document.get(key, {}), dict):
+        raise ValueError(f"El campo {key} no es un objeto JSON válido.")
+    if agent == "copilot":
+        entry["type"] = "stdio"
+    document.setdefault(key, {})["moodle"] = entry
+    return json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+
+
 def register_agent(agent: str, env_file: Path, config_file: Path | None = None) -> Path:
     path = config_file or agent_config_file(agent)
     # El intérprete absoluto pertenece al entorno aislado de uv tool install.
     # No depende del PATH del editor ni de un checkout del repositorio.
     entry = {"command": sys.executable,
              "args": ["-m", "moodle_tasks.cli", "serve", "--env-file", str(env_file.resolve())]}
-    if agent == "codex":
-        document = tomlkit.parse(path.read_text(encoding="utf-8")) if path.exists() else tomlkit.document()
-        document.setdefault("mcp_servers", {})["moodle"] = {
-            **entry, "enabled": True, "tool_timeout_sec": 300,
-        }
-        content = tomlkit.dumps(document)
-    else:
-        document = read_json_config(agent, path)
-        key = "servers" if agent == "copilot" else "mcpServers"
-        if not isinstance(document.get(key, {}), dict):
-            raise ValueError(f"El campo {key} no es un objeto JSON válido.")
-        if agent == "copilot":
-            entry["type"] = "stdio"
-        document.setdefault(key, {})["moodle"] = entry
-        content = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
-    atomic_write(path, content)
-    return path
+    # Clientes como Claude Code reescriben su archivo a menudo: si cambió mientras se preparaba
+    # la nueva versión, se vuelve a leer en lugar de descartar sus cambios.
+    for _ in range(REGISTER_ATTEMPTS):
+        original = read_bytes(path)
+        try:
+            atomic_write(path, _registered_config(agent, path, original, entry), expected=original)
+            return path
+        except ConcurrentChangeError:
+            continue
+    raise RuntimeError(f"La configuración de {AGENTS[agent]} cambió durante el registro; vuelve a intentarlo.")
 
 
 def _existing_account(agent: str, fallback: Path) -> Path:

@@ -147,6 +147,36 @@ class AgentTests(unittest.TestCase):
                     self.assertIn("--env-file", servers["moodle"]["args"])
                     self.assertNotIn("MOODLE_PASSWORD", first)
 
+    def test_registration_keeps_changes_the_client_writes_at_the_same_time(self):
+        from moodle_tasks import agents
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".claude.json"
+            path.write_text(json.dumps({"numStartups": 1}))
+            prepare = agents._registered_config
+
+            def client_writes_meanwhile(agent, config, original, entry):
+                content = prepare(agent, config, original, entry)
+                if json.loads(original)["numStartups"] == 1:
+                    path.write_text(json.dumps({"numStartups": 2}))
+                return content
+
+            with patch("moodle_tasks.agents._registered_config", side_effect=client_writes_meanwhile):
+                register_agent("claude", Path(directory) / "credentials.env", path)
+            data = json.loads(path.read_text())
+            self.assertEqual(data["numStartups"], 2)
+            self.assertIn("moodle", data["mcpServers"])
+
+    def test_registration_gives_up_if_the_file_never_stops_changing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text("{}")
+            with patch("moodle_tasks.agents.read_bytes", return_value=b"{}"), \
+                    patch("moodle_tasks.storage.read_bytes", return_value=b'{"otro": 1}'), \
+                    self.assertRaises(RuntimeError):
+                register_agent("cursor", Path(directory) / "credentials.env", path)
+            self.assertEqual(path.read_text(), "{}")
+
     def test_broken_configuration_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             for agent in AGENTS:

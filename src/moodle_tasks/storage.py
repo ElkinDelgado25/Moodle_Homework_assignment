@@ -1,6 +1,7 @@
 """Configuración personal independiente de la carpeta donde se instaló el paquete."""
 
 import os
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -49,13 +50,43 @@ def default_env_file() -> Path:
     return personal
 
 
-def atomic_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=".moodle-")
+class ConcurrentChangeError(RuntimeError):
+    """Otro programa modificó el archivo entre la lectura y la escritura."""
+
+
+_UNCHECKED = object()
+
+
+def read_bytes(path: Path) -> bytes | None:
+    """Contenido actual del archivo, o None si no existe."""
+    try:
+        return Path(path).read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def atomic_write(path: Path, text: str, *, private: bool = False, expected=_UNCHECKED) -> None:
+    """Reemplaza el contenido de golpe, sin dejar nunca un archivo a medio escribir.
+
+    Un enlace simbólico se conserva y se escribe en su destino (dotfiles gestionados con stow).
+    Los permisos del archivo existente se mantienen; private=True fuerza 0600.
+    expected es el contenido leído antes de modificarlo (None si no existía): si el archivo
+    cambió desde entonces se lanza ConcurrentChangeError y no se toca.
+    """
+    target = Path(os.path.realpath(path))
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=".moodle-")
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as output:
             output.write(text)
-        os.replace(temporary, path)
+        if not private:
+            try:
+                os.chmod(temporary, stat.S_IMODE(target.stat().st_mode))
+            except FileNotFoundError:
+                pass
+        if expected is not _UNCHECKED and read_bytes(target) != expected:
+            raise ConcurrentChangeError(f"{target} cambió mientras se actualizaba.")
+        os.replace(temporary, target)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -71,4 +102,4 @@ def save_credentials(path: Path, url: str, username: str, password: str) -> None
         for name, value in dotenv_values(path, interpolate=False).items():
             if name not in values and value is not None:
                 values[name] = value
-    atomic_write(path, "".join(f"{name}={quoted(value)}\n" for name, value in values.items()))
+    atomic_write(path, "".join(f"{name}={quoted(value)}\n" for name, value in values.items()), private=True)
