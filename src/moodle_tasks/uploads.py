@@ -371,7 +371,12 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
         if not delete.count() or not delete.first.is_visible():
             raise RuntimeError("No se encontró la opción de Moodle para reemplazar los archivos existentes.")
         delete.first.click()
-        if not _find_dialog_action(page, DELETE):
+        # Solo se pulsa el botón dentro del diálogo de confirmación, una vez visible: nunca otro control de la página.
+        for _ in range(40):
+            if _find_dialog_action(page, DELETE, page_fallback=False):
+                break
+            page.wait_for_timeout(250)
+        else:
             raise RuntimeError("Moodle no mostró la confirmación para quitar un archivo existente.")
         after = before
         for _ in range(240):
