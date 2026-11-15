@@ -410,7 +410,6 @@ def _apply_release(release: Release, console: Console) -> None:
             # commits posteriores que todavía no forman parte de una versión estable.
             _run_git(root, "checkout", "--detach", f"refs/tags/{release.tag}")
 
-        _run_step(["uv", "sync", "--locked"], root, "la sincronización de dependencias del clon")
         with tempfile.TemporaryDirectory(prefix="moodle-update-") as temporary:
             requirements = Path(temporary) / "requirements.txt"
             _run_step(
