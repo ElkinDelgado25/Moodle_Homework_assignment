@@ -583,6 +583,7 @@ def upload_files(
     file_paths: list[str],
     *,
     replace_existing: bool = False,
+    progress=None,
 ) -> dict:
     """Agrega archivos y guarda la entrega sin enviarla para calificación."""
     blocked = preflight_result(assignment_id, file_paths)
@@ -597,7 +598,7 @@ def upload_files(
             return _result(assignment_id, None, "blocked",
                            files=[{"name": path.name, "status": "not_uploaded"} for path in validated],
                            errors=[f"Un archivo cambió después de validarlo: {error}"])
-        return _upload_validated(page, config, assignment_id, paths, replace_existing)
+        return _upload_validated(page, config, assignment_id, paths, replace_existing, progress)
 
 
 def _stage_copies(paths: list[Path], staging: Path) -> list[Path]:
@@ -620,8 +621,12 @@ def _stage_copies(paths: list[Path], staging: Path) -> list[Path]:
     return copies
 
 
-def _upload_validated(page: Page, config: Config, assignment_id: int, paths: list[Path], replace_existing: bool) -> dict:
+def _upload_validated(page: Page, config: Config, assignment_id: int, paths: list[Path], replace_existing: bool,
+                      progress=None) -> dict:
     started = time.monotonic()
+    progress = progress or (lambda done, total, message: None)
+    steps = len(paths) + 2
+    progress(0, steps, "Abriendo la tarea en Moodle")
     secrets = (config.username, config.password)
 
     def pending(status="not_uploaded"):
@@ -693,7 +698,8 @@ def _upload_validated(page: Page, config: Config, assignment_id: int, paths: lis
                            errors=[redact_credentials(error, secrets)[:500]])
 
     file_results: list[dict[str, str]] = []
-    for path in paths:
+    for index, path in enumerate(paths, start=1):
+        progress(index, steps, f"Adjuntando {path.name}")
         if time.monotonic() - started > TOTAL_BUDGET_SECONDS:
             file_results.append({"name": path.name, "status": "failed", "error": "Se agotó el tiempo disponible para subir archivos."})
             continue
@@ -719,6 +725,7 @@ def _upload_validated(page: Page, config: Config, assignment_id: int, paths: lis
         return _result(assignment_id, task.title, "failed", files=pending("not_saved"), existing=existing,
                        errors=["Moodle no mostró el botón Guardar cambios; no se guardó la entrega."])
 
+    progress(steps - 1, steps, "Guardando la entrega")
     try:
         with page.expect_navigation(wait_until="domcontentloaded", timeout=60_000):
             save.click()

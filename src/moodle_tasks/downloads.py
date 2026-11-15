@@ -1,5 +1,6 @@
 """Descargas de anexos con las cookies del mismo contexto de Moodle."""
 
+import hashlib
 import re
 import unicodedata
 from pathlib import Path
@@ -12,9 +13,18 @@ from .main import Config, login
 from .urls import moodle_path, same_origin
 
 
+MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
+
+
 def documents_directory() -> Path:
     spanish = Path.home() / "Documentos"
     return spanish if spanish.is_dir() else Path.home() / "Documents"
+
+
+def attachments_directory(title: str) -> Path:
+    """Carpeta propia de la tarea: los anexos no se mezclan con otros archivos de Documentos."""
+    folder = attachment_name(title)[:80].strip(" .") or "Tarea"
+    return documents_directory() / "Moodle" / folder
 
 
 def attachment_name(url: str) -> str:
@@ -65,7 +75,12 @@ def authenticated_content(page: Page, config: Config, url: str, final_url: list 
                 if status >= 400:
                     raise MoodleHTTPError(status, current)
                 content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                declared = response.headers.get("content-length", "")
+                if declared.isdigit() and int(declared) > MAX_ATTACHMENT_BYTES:
+                    raise RuntimeError("El anexo supera 100 MB; descárgalo desde Moodle.")
                 body = response.body()
+                if len(body) > MAX_ATTACHMENT_BYTES:
+                    raise RuntimeError("El anexo supera 100 MB; descárgalo desde Moodle.")
                 prefix = body[:1024].lstrip().lower()
                 html = content_type in ("text/html", "application/xhtml+xml") or prefix.startswith((b"<!doctype html", b"<html"))
                 if html:
@@ -92,12 +107,22 @@ def download_attachment(page: Page, config: Config, url: str, directory: Path) -
     directory.mkdir(parents=True, exist_ok=True)
     # Un recurso (/mod/resource) redirige al archivo: el nombre sale de la URL final de pluginfile.
     name = attachment_name(final_url[0] if final_url else url)
+    digest = hashlib.sha256(body).digest()
     for number in range(1000):
         original = Path(name)
         candidate = directory / (name if number == 0 else f"{original.stem} ({number}){original.suffix}")
         try:
             output = candidate.open("xb")
         except FileExistsError:
+            # Repetir la descarga no acumula copias: un archivo idéntico ya guardado se reutiliza.
+            try:
+                same = (candidate.is_file() and not candidate.is_symlink() and candidate.stat().st_size == len(body)
+                        and hashlib.sha256(candidate.read_bytes()).digest() == digest)
+            except OSError:
+                same = False
+            if same:
+                return {"name": candidate.name, "path": str(candidate.resolve()), "size_bytes": len(body),
+                        "content_type": content_type, "source_url": url, "reused": True}
             continue
         try:
             with output:
@@ -105,5 +130,6 @@ def download_attachment(page: Page, config: Config, url: str, directory: Path) -
         except BaseException:
             candidate.unlink(missing_ok=True)
             raise
-        return {"name": candidate.name, "path": str(candidate.resolve()), "size_bytes": len(body), "content_type": content_type}
+        return {"name": candidate.name, "path": str(candidate.resolve()), "size_bytes": len(body),
+                "content_type": content_type, "source_url": url, "reused": False}
     raise RuntimeError("Ya existen demasiados anexos con el mismo nombre en la carpeta.")

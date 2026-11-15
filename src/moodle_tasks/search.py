@@ -112,7 +112,7 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
     raise RuntimeError("Se alcanzó el límite de paginación de la línea de tiempo.")
 
 
-def index_candidates(page: Page, config: Config, stats: dict, errors: list[str]) -> list[dict]:
+def index_candidates(page: Page, config: Config, stats: dict, errors: list[str], progress=None) -> list[dict]:
     open_page(page, config.base_url + "/my/courses.php")
     try:
         page.locator("a[href*='/course/view.php']").first.wait_for(state="attached", timeout=10_000)
@@ -147,7 +147,9 @@ def index_candidates(page: Page, config: Config, stats: dict, errors: list[str])
         errors.append("Se alcanzó el límite de paginación de Mis cursos.")
     stats["courses_found"] = len(courses)
     candidates = {}
-    for course_id, course in courses.items():
+    for position, (course_id, course) in enumerate(courses.items()):
+        if progress is not None:
+            progress(position, len(courses), f"Revisando {course}")
         try:
             open_page(page, f"{config.base_url}/mod/assign/index.php?id={course_id}")
             stats["index_pages_read"] += 1
@@ -179,7 +181,7 @@ def cache_path(config: Config) -> Path:
 
 def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", limit: int | None = 5,
                        only_pending: bool = True, refresh: bool = False, summary_only: bool = False,
-                       stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
+                       stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
     if mode not in MODES or limit is not None and limit < 1:
         raise ValueError("Modo o límite de consulta inválido.")
     if summary_only and mode == "recent":
@@ -279,7 +281,7 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
     timeline_ok = stats.get("timeline_status") in ("ok", "empty")
     if mode != "upcoming" or errors or (not tasks and not timeline_ok):
         stats["source"] = "course_indexes" if not tasks else "dashboard_and_course_indexes"
-        for candidate in index_candidates(page, config, stats, errors):
+        for candidate in index_candidates(page, config, stats, errors, progress):
             inspect(candidate)
     if mode == "recent":
         tasks.sort(key=lambda task: task.opens_at or "", reverse=True)

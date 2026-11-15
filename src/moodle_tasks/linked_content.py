@@ -44,6 +44,19 @@ DATE_VALUE = re.compile(
 )
 
 
+# El árbol de anexos vive dentro del bloque de la descripción: se oculta para leer solo la consigna.
+DESCRIPTION_TEXT = """el => {
+    const hidden = Array.from(el.querySelectorAll(
+        "[id^='assign_files_tree'], .fileuploadsubmission, .fileuploadsubmissiontime"));
+    const previous = hidden.map(node => node.style.display);
+    hidden.forEach(node => { node.style.display = 'none'; });
+    try { return el.innerText || ''; } finally { hidden.forEach((node, i) => { node.style.display = previous[i]; }); }
+}"""
+DESCRIPTION_IMAGES = """images => images.filter(image => !image.closest("[id^='assign_files_tree']")
+        && !/\\bicon\\b/.test(image.className || '') && image.src)
+    .map(image => ({name: (image.alt || image.title || '').trim(), url: image.src}))"""
+
+
 def clean_block_text(value: str | None) -> str:
     """Normaliza espacios sin perder los párrafos y listas de la consigna."""
     lines = [re.sub(r"[\t\f\v ]+", " ", line).strip() for line in (value or "").replace("\xa0", " ").splitlines()]
@@ -79,7 +92,7 @@ def assignment_description(page: Page) -> str:
         texts = []
         for index in range(matches.count()):
             try:
-                text = clean_block_text(matches.nth(index).inner_text())
+                text = clean_block_text(matches.nth(index).evaluate(DESCRIPTION_TEXT))
             except PlaywrightTimeoutError:
                 continue
             if text and not is_date_summary(text) and text not in texts:
@@ -87,6 +100,18 @@ def assignment_description(page: Page) -> str:
         if texts:
             return "\n\n".join(texts)
     return ""
+
+
+def assignment_images(page: Page) -> list[dict[str, str]]:
+    """Imágenes incrustadas en la consigna: una captura puede ser la instrucción completa."""
+    found = page.locator(INTRO_SELECTORS).locator("img[src]").evaluate_all(DESCRIPTION_IMAGES)
+    images, seen = [], set()
+    for item in found if isinstance(found, list) else []:
+        url = urldefrag(str(item.get("url", "")))[0]
+        if url.startswith(("http://", "https://")) and url not in seen:
+            seen.add(url)
+            images.append({"name": str(item.get("name", "")), "url": url})
+    return images[:20]
 
 
 def assignment_links(page: Page, content: str, attachments: list[dict]) -> list[dict[str, str]]:
@@ -124,7 +149,17 @@ def validate_public_url(url: str) -> None:
         raise ValueError("El enlace apunta a una dirección local o privada.")
 
 
-def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT) -> dict:
+def _slice(result: dict, text: str, offset: int, max_chars: int) -> None:
+    """Tramo del texto desde offset; next_offset permite pedir el resto con otra llamada."""
+    end = offset + max_chars
+    result.update(content=text[offset:end], truncated=len(text) > end, total_chars=len(text))
+    if offset:
+        result["offset"] = offset
+    if len(text) > end:
+        result["next_offset"] = end
+
+
+def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
     result = dict(link, kind="page", content="", truncated=False)
     validate_public_url(link["url"])
     # Sin cookies de Moodle ni ejecución de scripts de los sitios enlazados.
@@ -185,14 +220,14 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT) -> di
         text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
         if not text:
             raise ValueError("La página no contiene instrucciones legibles sin ejecutar JavaScript.")
-        result.update(resolved_url=resolved_url, title=page.title(), content=text[:max_chars],
-                      truncated=len(text) > max_chars)
+        result.update(resolved_url=resolved_url, title=page.title())
+        _slice(result, text, offset, max_chars)
         return result
     finally:
         context.close()
 
 
-def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int = MAX_CONTENT) -> dict:
+def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
     """Página del mismo Moodle leída con la sesión iniciada (las anónimas piden login)."""
     from .main import open_authenticated_page
 
@@ -204,17 +239,25 @@ def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int 
         text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
         if not text:
             raise ValueError("La página de Moodle no tiene texto legible.")
-        result.update(resolved_url=page.url, title=page.title(), content=text[:max_chars],
-                      truncated=len(text) > max_chars)
+        result.update(resolved_url=page.url, title=page.title())
+        _slice(result, text, offset, max_chars)
         return result
     finally:
         page.close()
 
 
 def read_linked_resources(browser, links: list[dict[str, str]], credentials: tuple[str, ...] = (), *,
-                          session_page=None, config=None) -> dict:
+                          session_page=None, config=None, only_url: str | None = None, offset: int = 0) -> dict:
+    """Texto de los enlaces de la consigna. only_url y offset continúan un enlace que quedó truncado."""
     from .urls import moodle_path
 
+    if only_url is not None:
+        wanted = urldefrag(only_url)[0]
+        links = [link for link in links if link["url"] == wanted]
+        if not links:
+            raise ValueError("resource_url debe ser uno de los enlaces de linked_resources de esta tarea.")
+    else:
+        offset = 0
     resources = []
     remaining = MAX_CONTENT
     for link in links[:MAX_LINKS]:
@@ -230,9 +273,9 @@ def read_linked_resources(browser, links: list[dict[str, str]], credentials: tup
                     else "Es una carpeta de Moodle; ábrela en Moodle para ver sus archivos.")))
                 continue
             if path is not None and session_page is not None and MOODLE_READABLE.match(path):
-                resource = read_moodle_link(session_page, config, link, remaining)
+                resource = read_moodle_link(session_page, config, link, remaining, offset)
             else:
-                resource = read_link(browser, link, remaining)
+                resource = read_link(browser, link, remaining, offset)
             remaining -= len(resource.get("content", ""))
             resources.append(resource)
         except PlaywrightTimeoutError:

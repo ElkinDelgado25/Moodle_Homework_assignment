@@ -129,7 +129,7 @@ class UploadSafetyTests(unittest.TestCase):
         async def run():
             settings = Config("https://moodle.test", "u", "p", True)
             with patch("moodle_tasks.server.load_config", return_value=settings), \
-                    patch("moodle_tasks.server.sync_playwright", side_effect=AssertionError("no debe abrir Chromium")):
+                    patch("moodle_tasks.server.moodle_page", side_effect=AssertionError("no debe abrir Chromium")):
                 async with Client(create_server()) as client:
                     return await client.call_tool("upload_assignment_files",
                                                   {"assignment_id": 3, "file_paths": [str(self.credentials)]})

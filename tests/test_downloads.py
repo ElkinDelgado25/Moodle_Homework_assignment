@@ -145,7 +145,7 @@ class LinkedBudgetTests(unittest.TestCase):
         from unittest.mock import patch
         from moodle_tasks import linked_content
 
-        def fake_read(browser, link, max_chars=linked_content.MAX_CONTENT):
+        def fake_read(browser, link, max_chars=linked_content.MAX_CONTENT, offset=0):
             return dict(link, content="x" * min(20_000, max_chars), truncated=max_chars < 20_000)
 
         links = [{"name": "", "url": f"https://example.com/{index}"} for index in range(4)]

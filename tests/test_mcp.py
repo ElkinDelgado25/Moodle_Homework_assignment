@@ -89,16 +89,26 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
         with fake_browser(), patch("moodle_tasks.server.load_config", return_value=SETTINGS), \
                 patch("moodle_tasks.server.collect_assignments", side_effect=failure), \
                 patch("moodle_tasks.server.read_assignment", side_effect=failure), \
-                patch("moodle_tasks.server.login", side_effect=failure):
+                patch("moodle_tasks.server.ensure_login", side_effect=failure), \
+                patch("moodle_tasks.server.upload_files", side_effect=failure), \
+                patch("moodle_tasks.server.preflight_result", return_value=None):
             async with Client(create_server()) as client:
                 for tool, arguments in (("list_assignments", {}), ("list_assignments", {"mode": "all"}),
                                         ("get_assignment", {"assignment_id": 1})):
                     result = await client.call_tool(tool, arguments)
                     self.assertTrue(result.is_error)
                     self.assertIn(str(failure), text_of(result))
+                    self.assertEqual(result.structured_content["error_code"], "moodle_server_error")
+                    self.assertTrue(result.structured_content["retryable"])
+                # Al subir, el mensaje no habla de «consultar tus tareas» y pide revisar la entrega.
+                upload = await client.call_tool("upload_assignment_files", {"assignment_id": 1, "file_paths": ["/tmp/a.pdf"]})
+                self.assertTrue(upload.is_error)
+                self.assertEqual(upload.structured_content["error_code"], "moodle_server_error")
+                self.assertNotIn("consultar tus tareas", text_of(upload))
+                self.assertIn("Revisa la entrega en Moodle", text_of(upload))
                 connection = await client.call_tool("check_moodle_connection")
                 self.assertEqual(connection.structured_content, {
-                    "connected": False, "error": str(failure), "http_status": 502, "error_code": "server_error"
+                    "connected": False, "error": str(failure), "http_status": 502, "error_code": "moodle_server_error"
                 })
 
     async def test_standard_stdio_discovery_from_another_directory(self):
@@ -141,11 +151,12 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             async with Client(create_server()) as client:
                 result = await client.call_tool("get_document_template")
         data = result.structured_content
-        self.assertEqual(data["tool"], "build_delivery_document")
+        self.assertIn("build_delivery_document", data["instructions"])
         self.assertEqual(data["local_defaults"], {})
+        for removed in ("tool", "logo_path", "field_syntax", "output_formats"):
+            self.assertNotIn(removed, data)
         self.assertEqual(data["formatting"]["font"], "Times New Roman")
         self.assertIn("gh repo view", data["content_policy"])
-        self.assertTrue(Path(data["logo_path"]).is_file())
         with ZipFile(data["template_path"]) as document:
             xml = document.read("word/document.xml").decode()
             for field in data["fields"]:
@@ -154,10 +165,14 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
     async def test_cover_profile_is_local_filtered_and_validated(self):
         with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.server.user_config_dir", return_value=Path(directory)):
             profile = Path(directory) / "document_profile.json"
-            profile.write_text('{"student_1": "Test Student", "password": "excluded-test-value", "year": 2026}')
+            profile.write_text('{"student_1": "Test Student", "password": "excluded-test-value", "year": 2026, '
+                               '"subject": "Redes", "teacher": "Ing. Uno", "teachers": {"Bases de Datos": "Ing. Dos"}}')
             async with Client(create_server()) as client:
                 result = await client.call_tool("get_document_template")
-                self.assertEqual(result.structured_content["local_defaults"], {"student_1": "Test Student", "year": "2026"})
+                # Los mismos nombres que cover, aunque el perfil se guardó con las claves antiguas.
+                self.assertEqual(result.structured_content["local_defaults"], {
+                    "materia": "Redes", "nombre_docente": "Ing. Uno", "anio": "2026", "estudiantes": ["Test Student"],
+                    "docentes_por_materia": {"Bases de Datos": "Ing. Dos"}})
                 self.assertNotIn("excluded-test-value", str(result))
                 profile.write_text('["no es un objeto"]')
                 invalid = await client.call_tool("get_document_template")
@@ -213,23 +228,31 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 markdown = data['response_markdown']
                 self.assertTrue(markdown.startswith('Estas son las tareas pendientes\n\n'))
                 self.assertIn('Aplicaciones Móviles Nativas | 11/10/2026 23:59 (', markdown)
-                self.assertIn(data['assignments'][0]['due_display'], markdown)
+                self.assertIn(tasks[0].url, markdown)
                 self.assertNotIn('1208706', markdown)
-                self.assertEqual(set(data['assignments'][0]), {"assignment_id", "title", "course", "due_at",
-                                                               "due_display", "submitted", "url"})
-                complete = await client.call_tool('list_assignments', {'mode': 'all'})
-                self.assertNotIn('response_markdown', complete.structured_content)
+                # La fila solo lleva lo que la tabla no da: el id y los valores para decidir.
+                self.assertEqual(data['assignments'][0], {"assignment_id": 3, "title": "App de cuadrícula",
+                                                          "course": "Aplicaciones Móviles Nativas",
+                                                          "due_at": "2026-10-11T23:59:00", "submitted": False})
+                self.assertFalse(data['has_more'])
+                self.assertNotIn('+', data['checked_at'])
+                complete = (await client.call_tool('list_assignments', {'mode': 'all'})).structured_content
+                self.assertTrue(complete['response_markdown'].startswith('Estas son las tareas pendientes de todas las materias\n'))
+                overdue = (await client.call_tool('list_assignments', {'mode': 'overdue'})).structured_content
+                self.assertTrue(overdue['response_markdown'].startswith('Estas son las tareas vencidas\n'))
+                everything = (await client.call_tool('list_assignments', {'only_pending': False})).structured_content
+                self.assertTrue(everything['response_markdown'].startswith('Estas son las tareas\n'))
 
     async def test_modes_and_limits(self):
         with patch("moodle_tasks.server.collect_assignments", return_value=([], [])) as collect, \
                 patch("moodle_tasks.server.load_config", return_value=SETTINGS):
             async with Client(create_server()) as client:
                 await client.call_tool("list_assignments")
-                self.assertEqual((collect.call_args.kwargs['mode'], collect.call_args.kwargs['limit']), ('upcoming', 5))
+                self.assertEqual((collect.call_args.kwargs['mode'], collect.call_args.kwargs['limit']), ('upcoming', 6))
                 await client.call_tool("list_assignments", {"mode": "all"})
                 self.assertEqual((collect.call_args.kwargs['mode'], collect.call_args.kwargs['limit']), ('all', None))
                 await client.call_tool("list_assignments", {"mode": "overdue", "limit": 20})
-                self.assertEqual((collect.call_args.kwargs['mode'], collect.call_args.kwargs['limit']), ('overdue', 20))
+                self.assertEqual((collect.call_args.kwargs['mode'], collect.call_args.kwargs['limit']), ('overdue', 21))
                 self.assertNotIn("refresh", collect.call_args.kwargs)
 
     async def test_graded_activities_do_not_inflate_pending_count(self):

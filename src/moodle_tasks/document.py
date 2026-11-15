@@ -37,6 +37,7 @@ _export_lock = threading.Lock()
 class MissingCoverFields(ValueError):
     def __init__(self, fields: list[str]):
         self.fields = fields
+        self.known: dict = {}
         super().__init__("Faltan datos de portada: " + ", ".join(fields))
 
 
@@ -62,24 +63,40 @@ PROFILE_KEYS = {"materia": ("materia", "subject"), "nombre_docente": ("nombre_do
                 "carrera": ("carrera", "degree"), "curso": ("curso", "class_group"), "anio": ("anio", "year")}
 
 
-def cover_values(cover: CoverFields, profile: dict) -> dict:
-    """Une los datos dados con el perfil verificado; el docente, curso y año nunca se deducen."""
+def cover_values(cover: CoverFields, profile: dict, course: str | None = None, notes: list[str] | None = None) -> dict:
+    """Une los datos dados con el perfil verificado; el docente, curso y año nunca se deducen.
+
+    course es la materia de la tarea en Moodle: tiene prioridad sobre la materia guardada en el perfil, y el
+    docente guardado solo se usa si corresponde a esa misma materia.
+    """
+    from .profile import teacher_for
+
     def text(value):
         return " ".join(value.split()) if isinstance(value, str) else ""
 
+    def saved(field):
+        return next((text(profile.get(key)) for key in PROFILE_KEYS[field] if text(profile.get(key))), "")
+
     values: dict = {field: getattr(cover, field) or "" for field in COVER_FIELDS if field != "estudiantes"}
-    for field, keys in PROFILE_KEYS.items():
-        if not values[field]:
-            values[field] = next((text(profile.get(key)) for key in keys if text(profile.get(key))), "")
+    if not values["materia"]:
+        values["materia"] = text(course) or saved("materia")
+        if values["materia"] and not text(course) and notes is not None:
+            notes.append(f"La materia «{values['materia']}» se tomó del perfil guardado; confirma que corresponde a esta tarea.")
+    if not values["nombre_docente"] and values["materia"]:
+        values["nombre_docente"] = teacher_for(profile, values["materia"])
+    for field in ("carrera", "curso", "anio"):
+        values[field] = values[field] or saved(field)
     students = list(cover.estudiantes)
     if not students:
-        saved = profile.get("estudiantes")
-        saved = saved if isinstance(saved, list) else [profile.get("student_1"), profile.get("student_2")]
-        students = [text(name) for name in saved if text(name)]
+        saved_students = profile.get("estudiantes")
+        saved_students = saved_students if isinstance(saved_students, list) else [profile.get("student_1"), profile.get("student_2")]
+        students = [text(name) for name in saved_students if text(name)]
     values["estudiantes"] = students[:MAX_STUDENTS]
     missing = [field for field in REQUIRED_COVER_FIELDS if not values[field]]
     if missing:
-        raise MissingCoverFields(missing)
+        error = MissingCoverFields(missing)
+        error.known = {field: value for field, value in values.items() if value}
+        raise error
     return values
 
 

@@ -2,6 +2,7 @@
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 from playwright.sync_api import Page
@@ -54,7 +55,51 @@ def public_profile(data: object) -> dict:
         cleaned = [text for text in (_profile_text(item) for item in courses) if text]
         if cleaned:
             result["courses"] = list(dict.fromkeys(cleaned))
+    teachers = data.get("teachers")
+    if isinstance(teachers, dict):
+        cleaned_teachers = {subject: teacher for subject, teacher in (
+            (_profile_text(key), _profile_text(value)) for key, value in list(teachers.items())[:60]) if subject and teacher}
+        if cleaned_teachers:
+            result["teachers"] = cleaned_teachers
     return result
+
+
+def subject_key(value: object) -> str:
+    """Materia sin tildes, mayúsculas ni espacios repetidos, para comparar nombres escritos distinto."""
+    text = unicodedata.normalize("NFD", " ".join(str(value or "").split()))
+    return "".join(character for character in text if not unicodedata.combining(character)).casefold()
+
+
+def teacher_for(profile: dict, subject: str) -> str:
+    """Docente guardado para esa materia; el docente general del perfil solo vale para su propia materia."""
+    key = subject_key(subject)
+    for saved, teacher in (profile.get("teachers") or {}).items():
+        if subject_key(saved) == key:
+            return teacher
+    general = profile.get("nombre_docente") or profile.get("teacher") or ""
+    own = profile.get("materia") or profile.get("subject") or ""
+    return general if general and (not own or subject_key(own) == key) else ""
+
+
+def remember_teacher(subject: str, teacher: str, directory: Path | None = None) -> bool:
+    """Guarda el docente indicado para una materia, para no volver a pedirlo en su próxima tarea."""
+    subject, teacher = _profile_text(subject), _profile_text(teacher)
+    if not subject or not teacher:
+        return False
+    path = profile_file(directory)
+    try:
+        current = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        if not isinstance(current, dict):
+            return False
+        teachers = current.get("teachers") if isinstance(current.get("teachers"), dict) else {}
+        teachers = {key: value for key, value in teachers.items() if subject_key(key) != subject_key(subject)}
+        teachers[subject] = teacher
+        current["teachers"] = teachers
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(path, json.dumps(current, ensure_ascii=False, indent=2) + "\n")
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def load_profile(directory: Path | None = None) -> dict:

@@ -37,6 +37,16 @@ class Assignment:
     grade: str | None = None
     requires_submission: bool | None = None
     links: list[dict[str, str]] = field(default_factory=list)
+    group: str | None = None
+    grading_status: str | None = None
+    rubric: dict | None = None
+    images: list[dict[str, str]] = field(default_factory=list)
+
+
+def course_name(raw: str | None) -> str:
+    """Nombre de la materia sin el paralelo ni los códigos del periodo que Moodle le añade."""
+    name = re.sub(r"^[A-Z]\s*--\s*", "", clean_text(raw))
+    return re.split(r"\s*/\s*SOFTWARE\b|--\d", name, maxsplit=1, flags=re.I)[0].strip()
 
 
 def is_pending(task: Assignment) -> bool:
@@ -221,6 +231,48 @@ def submission_state(status: str) -> bool | None:
     return None
 
 
+STATUS_ROWS = """table => Array.from(table.querySelectorAll('tr')).map(row => {
+    const cells = row.querySelectorAll('th, td');
+    if (cells.length < 2) return null;
+    const value = cells[cells.length - 1];
+    // La fila de comentarios trae el formulario y su plantilla, no un estado.
+    if (value.querySelector('.commentscontainer, textarea')) return null;
+    return [cells[0].innerText || cells[0].textContent || '', value.innerText || value.textContent || ''];
+}).filter(Boolean)"""
+RUBRIC = """root => {
+    const text = node => node ? (node.innerText || node.textContent || '').replace(/\\s+/g, ' ').trim() : '';
+    const criteria = Array.from(root.querySelectorAll('tr.criterion')).map(row => ({
+        criterion: text(row.querySelector('td.description')),
+        levels: Array.from(row.querySelectorAll('td.level')).map(level => ({
+            points: text(level.querySelector('.scorevalue')), definition: text(level.querySelector('.definition'))})),
+    })).filter(item => item.criterion || item.levels.length);
+    return criteria.length ? criteria : null;
+}"""
+STATUS_LABELS = {
+    "status": r"submission status|estado de (?:la )?entrega",
+    "grading_status": r"grading status|estado de (?:la )?calificaci[oó]n",
+    "group": r"^(?:group|grupo)$",
+}
+
+
+def read_submission_summary(page: Page) -> dict:
+    """Filas de la tabla «Estado de la entrega» por separado y la rúbrica como criterios y niveles."""
+    summary: dict = {}
+    table = page.locator(".submissionstatustable table").first
+    rows = table.evaluate(STATUS_ROWS) if table.count() else []
+    for label, value in rows:
+        label, value = clean_text(label), clean_text(value)
+        for key, pattern in STATUS_LABELS.items():
+            if key not in summary and value and re.search(pattern, label, re.IGNORECASE):
+                summary[key] = value[:300]
+    rubric = page.locator(".gradingform_rubric").first
+    criteria = rubric.evaluate(RUBRIC) if rubric.count() else None
+    if criteria:
+        summary["rubric"] = {"description": first_text(page, ".gradingform_rubric-description")[:2_000],
+                             "criteria": criteria[:60]}
+    return summary
+
+
 def open_authenticated_page(page: Page, url: str, config: Config) -> None:
     """Renueva una sesión vencida una vez, sin leer el formulario como una tarea."""
     for attempt in range(2):
@@ -238,24 +290,20 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     else:
         open_page(page, url)
     title = first_text(page, "h1, .page-header-headings h1") or "Tarea sin título"
-    from .linked_content import assignment_description, assignment_links
+    from .linked_content import assignment_description, assignment_images, assignment_links
 
     content = assignment_description(page) or NO_DESCRIPTION
     due_date = first_text(
         page,
         ".activity-dates, .assign-dates, [data-region='activity-information'] .description",
     ) or "Fecha de vencimiento no indicada."
-    status = first_text(
+    summary = read_submission_summary(page)
+    # Sin tabla reconocible se conserva el texto visible, recortado: nunca el volcado de la rúbrica y los comentarios.
+    status = summary.get("status") or first_text(
         page,
         "[data-region='submissions'], .submissionstatus, .submissionstatustable",
-    ) or "Estado de entrega no visible."
-    submission = ""
-    for row in page.locator(".submissionstatustable tr").all():
-        label = clean_text(row.locator("th, td").first.text_content())
-        if re.search(r"submission status|estado de (?:la )?entrega", label, re.IGNORECASE):
-            submission = clean_text(row.locator("td").last.text_content())
-            break
-    submitted = submission_state(submission or status)
+    )[:300] or "Estado de entrega no visible."
+    submitted = submission_state(status)
     from .search import parse_moodle_date
 
     region = page.locator("#region-main, main").first
@@ -283,19 +331,22 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
                       course=course, attachments=attachments, links=links,
                       opens_at=parse_moodle_date(opening.group(1)) if opening else None,
                       due_at=parse_moodle_date(closing.group(1)) if closing else None,
-                      grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None)
+                      grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None,
+                      group=summary.get("group"), grading_status=summary.get("grading_status"),
+                      rubric=summary.get("rubric"), images=assignment_images(page))
 
 
 def collect_assignments(config: Config, *, mode: str = "all", limit: int | None = None,
                         only_pending: bool = False, refresh: bool = False, summary_only: bool = False,
-                        stats: dict | None = None) -> tuple[list[Assignment], list[str]]:
+                        stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
     from .search import search_assignments
     from .session import ensure_login, moodle_page
 
     with moodle_page(config) as (_, page):
         ensure_login(page, config)
         return search_assignments(page, config, mode=mode, limit=limit,
-                                  only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats)
+                                  only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats,
+                                  progress=progress)
 
 
 def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None,
