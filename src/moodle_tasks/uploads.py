@@ -311,12 +311,10 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
     else:
         raise RuntimeError("Moodle no mostró el botón para subir el archivo.")
 
-    if _submit_upload_form(page):
-        # Moodle puede presentar una pantalla de confirmación del repositorio antes
-        # de volver al selector de archivos.
-        _find_dialog_action(page, SELECT_FILE)
-    elif _find_dialog_action(page, SELECT_FILE):
-        pass
+    _submit_upload_form(page)
+    # Moodle puede presentar una pantalla de confirmación del repositorio antes
+    # de volver al selector de archivos.
+    _find_dialog_action(page, SELECT_FILE)
 
     expected = moodle_name(path.name)
     deadline = time.monotonic() + _file_seconds(path)
