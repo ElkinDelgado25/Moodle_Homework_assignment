@@ -290,7 +290,8 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 paragraph = new_paragraph("List Bullet" if block.type == "bullets" else "List Number")
                 paragraph.paragraph_format.first_line_indent = None
                 if block.type == "numbered":
-                    num_id = num_id or _restart_numbering(document, paragraph)
+                    if num_id is None:
+                        num_id = _restart_numbering(document, paragraph)
                     if num_id:
                         _set_num(paragraph, num_id)
                 _write_inline(paragraph, " ".join(item.split()))
