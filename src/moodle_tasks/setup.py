@@ -122,7 +122,8 @@ def ask_setup_action() -> str:
 
 
 def sync_agent_configurations(env_file: Path, *, selected_agent: str | None = None,
-                              selected_config: Path | None = None) -> None:
+                              selected_config: Path | None = None, fatal: bool = True) -> None:
+    """Sincroniza los agentes. Con fatal=False un fallo se informa pero no termina el programa."""
     result = synchronize_agents(env_file, selected_agent=selected_agent, selected_config=selected_config)
     for agent, paths in result.paths.items():
         for path in paths:
@@ -133,7 +134,7 @@ def sync_agent_configurations(env_file: Path, *, selected_agent: str | None = No
         print("Reinicia o recarga los clientes MCP abiertos para cargar la versión instalada.")
     elif not result.errors:
         print("No se detectaron agentes instalados ni conexiones de Moodle para sincronizar.")
-    if result.errors:
+    if result.errors and fatal:
         raise SystemExit(1)
 
 
