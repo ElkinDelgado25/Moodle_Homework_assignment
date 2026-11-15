@@ -2,10 +2,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from moodle_tasks.paths import UnsafePathError, check_upload_file, resolve_destination_directory
-from moodle_tasks.uploads import preflight_result
+from moodle_tasks.uploads import preflight_result, upload_files, validate_upload
 
 from helpers import make_docx, make_pdf
 
@@ -43,6 +43,23 @@ class UploadSafetyTests(unittest.TestCase):
         self.assertEqual(check_upload_file(str(docx)), docx.resolve())
         self.assertEqual(check_upload_file(str(pdf)), pdf.resolve())
         self.assertIsNone(preflight_result(1, [str(docx), str(pdf)]))
+
+    def test_each_file_is_validated_once_before_the_browser_and_once_when_copied(self):
+        paths = [str(make_docx(self.work / "Informe final.docx")), str(make_pdf(self.work / "Informe final.pdf"))]
+        with patch("moodle_tasks.uploads.check_upload_file", wraps=check_upload_file) as check, \
+                patch("moodle_tasks.uploads._upload_validated", return_value={"status": "uploaded"}):
+            validated, blocked = validate_upload(1, paths)
+            self.assertIsNone(blocked)
+            upload_files(MagicMock(), MagicMock(), 1, paths, validated=validated)
+        # Dos archivos × (validación previa + copia). Antes de este cambio eran cuatro por archivo.
+        self.assertEqual(check.call_count, 4)
+
+    def test_upload_files_without_validated_paths_validates_by_itself_only_once(self):
+        paths = [str(make_docx(self.work / "Informe final.docx")), str(make_pdf(self.work / "Informe final.pdf"))]
+        with patch("moodle_tasks.uploads.check_upload_file", wraps=check_upload_file) as check, \
+                patch("moodle_tasks.uploads._upload_validated", return_value={"status": "uploaded"}):
+            upload_files(MagicMock(), MagicMock(), 1, paths)
+        self.assertEqual(check.call_count, 4)
 
     def test_credentials_and_config_directory_are_rejected(self):
         self.assertIn("configuración", self.rejected(str(self.credentials)))
