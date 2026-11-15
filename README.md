@@ -215,7 +215,7 @@ Despues de instalar, abre una terminal nueva y usa estos comandos desde cualquie
 | Actualizar y sincronizar agentes sin preguntas de cuenta | `mcp-moodle setup --sync-only` |
 | Consultar las proximas tareas pendientes | `mcp-moodle tasks` |
 | Consultar tareas vencidas | `mcp-moodle tasks --mode overdue` |
-| Revisar todas las materias | `mcp-moodle tasks --mode all --refresh` |
+| Revisar todas las materias | `mcp-moodle tasks --mode all` |
 | Abrir de nuevo el panel de configuracion | `mcp-moodle run` |
 
 Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el asistente con `setup`. Cursor tambien detecta la configuracion incluida en [.cursor/mcp.json](.cursor/mcp.json) al abrir este repositorio. Los comandos manuales y las herramientas MCP estan explicados en [MCP.md](docs/MCP.md).
