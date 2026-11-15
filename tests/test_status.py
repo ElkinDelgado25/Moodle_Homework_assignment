@@ -10,9 +10,23 @@ import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.status import main
 from moodle_tasks.storage import save_credentials
+from moodle_tasks.updates import UpdateStatus
 
 
 class StatusTests(unittest.TestCase):
+    def setUp(self):
+        # status consulta la API de GitHub y guarda release-check.json: las pruebas no salen a la red.
+        patcher = patch("moodle_tasks.status.check_for_updates", return_value=UpdateStatus("0.0.0"))
+        self.check_for_updates = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_status_checks_for_updates_without_contacting_github(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True), \
+                patch("moodle_tasks.updates.urlopen") as urlopen, redirect_stdout(io.StringIO()):
+            main(["--env-file", str(Path(directory) / "missing.env")])
+        self.check_for_updates.assert_called_once_with()
+        urlopen.assert_not_called()
+
     def test_explicit_credentials_path_does_not_require_a_home_directory(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             path = Path(directory) / "credentials.env"
