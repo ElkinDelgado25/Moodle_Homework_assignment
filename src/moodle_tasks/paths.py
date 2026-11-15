@@ -20,12 +20,20 @@ SIGNATURES = {
     ".pdf": (b"%PDF-",),
     **{suffix: (b"PK\x03\x04",) for suffix in (".docx", ".xlsx", ".pptx", ".odt", ".ods", ".odp", ".zip")},
 }
+# Nombres de dispositivo que Windows no deja usar como archivo, tengan la extensión que tengan.
+WINDOWS_RESERVED_NAMES = frozenset({"CON", "PRN", "AUX", "NUL",
+                                    *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")})
 # /run queda fuera: /run/media contiene memorias USB y discos externos del usuario.
 SYSTEM_ROOTS = ("/proc", "/sys", "/dev", "/etc", "/boot")
 
 
 class UnsafePathError(ValueError):
     """La ruta apunta a datos que no deben salir del equipo."""
+
+
+def windows_reserved(name: str) -> bool:
+    """True si Windows trataría el nombre (p. ej. «con.pdf» o «COM1.txt») como un dispositivo."""
+    return name.split(".", 1)[0].upper() in WINDOWS_RESERVED_NAMES
 
 
 def _inside(path: Path, root: Path) -> bool:

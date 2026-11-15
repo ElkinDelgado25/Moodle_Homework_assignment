@@ -21,7 +21,7 @@ from docx.text.paragraph import Paragraph
 
 from .document_model import (COVER_FIELDS, MAX_STUDENTS, CoverFields, DeliveryDocument, figure_size_cm,
                              parse_inline, reference_key)
-from .paths import resolve_local_file
+from .paths import resolve_local_file, windows_reserved
 from .storage import user_cache_dir
 
 
@@ -29,7 +29,6 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 TEMPLATE = ASSETS / "academic-cover.docx"
 PLACEHOLDER = re.compile(r"\{\{[a-z_0-9]+\}\}")
 HYPERLINK = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
-RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")}
 EXPORT_TIMEOUT_SECONDS = 120
 _export_lock = threading.Lock()
 
@@ -53,7 +52,7 @@ def safe_file_name(value: str) -> str:
         name = name[:-1].rstrip(" .")
     if not name:
         name = "Entrega"
-    if name.split(".", 1)[0].upper() in RESERVED:
+    if windows_reserved(name):
         name = "_" + name
     return name
 

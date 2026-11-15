@@ -10,6 +10,7 @@ from playwright.sync_api import Page
 
 from .errors import MoodleAuthenticationError, MoodleHTTPError
 from .main import Config, login
+from .paths import windows_reserved
 from .urls import moodle_path, same_origin
 
 
@@ -41,7 +42,7 @@ def attachment_name(url: str) -> str:
         name = stem.rstrip(" .") + ("." + suffix if suffix else "")
     if not name:
         name = "anexo"
-    if name.split(".", 1)[0].upper() in {"CON", "PRN", "AUX", "NUL", *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")}:
+    if windows_reserved(name):
         name = "_" + name
     return name
 

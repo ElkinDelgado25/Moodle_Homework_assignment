@@ -87,6 +87,18 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(attachment_name("https://moodle.test/pluginfile.php/%2E%2E%2Fsecret.pdf"), "_secret.pdf")
         self.assertEqual(attachment_name("https://moodle.test/pluginfile.php/CON.pdf"), "_CON.pdf")
 
+    def test_attachments_and_deliveries_reject_the_same_windows_device_names(self):
+        from moodle_tasks.document import safe_file_name
+
+        for name in ("con", "PRN", "Aux", "nul", "COM1", "lpt9", "COM\u00b9", "LPT\u00b3"):
+            with self.subTest(name=name):
+                self.assertEqual(attachment_name(f"https://moodle.test/pluginfile.php/{name}.pdf"), f"_{name}.pdf")
+                self.assertEqual(safe_file_name(name), f"_{name}")
+        for name in ("CONSOLA", "COM10"):
+            with self.subTest(name=name):
+                self.assertEqual(attachment_name(f"https://moodle.test/pluginfile.php/{name}.pdf"), f"{name}.pdf")
+                self.assertEqual(safe_file_name(name), name)
+
     def test_real_playwright_download_uses_browser_session_cookies(self):
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
