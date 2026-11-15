@@ -41,10 +41,21 @@ class Assignment:
     images: list[dict[str, str]] = field(default_factory=list)
 
 
+# Partes que Moodle añade al nombre completo del curso, sea cual sea la carrera:
+# el paralelo delante («A -- »), la carrera con el año de la malla («/ SOFTWARE 2024 - NS»)
+# y los códigos del curso y del periodo («--1208690--20262-1»).
+COURSE_SECTION = re.compile(r"^[A-Z0-9]{1,3}\s*--\s*")
+COURSE_SUFFIX = re.compile(r"\s*/\s*[^/]*\b(?:19|20)\d{2}\b[^/]*$|\s*--\s*\d.*$")
+
+
 def course_name(raw: str | None) -> str:
-    """Nombre de la materia sin el paralelo ni los códigos del periodo que Moodle le añade."""
-    name = re.sub(r"^[A-Z]\s*--\s*", "", clean_text(raw))
-    return re.split(r"\s*/\s*SOFTWARE\b|--\d", name, maxsplit=1, flags=re.I)[0].strip()
+    """Nombre de la materia sin el paralelo, la carrera ni los códigos del periodo que Moodle le añade.
+
+    Una barra dentro del nombre («ÉTICA / DEONTOLOGÍA») se conserva: solo se recorta si lo que sigue
+    lleva el año de la malla, como el segmento de la carrera.
+    """
+    name = COURSE_SECTION.sub("", clean_text(raw))
+    return COURSE_SUFFIX.sub("", name).strip()
 
 
 def is_pending(task: Assignment) -> bool:

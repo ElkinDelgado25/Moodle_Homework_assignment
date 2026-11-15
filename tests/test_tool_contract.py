@@ -104,6 +104,16 @@ class AssignmentPageTests(unittest.TestCase):
     def test_course_name_is_the_same_for_the_list_and_the_detail(self):
         self.assertEqual(course_name("A -- VISUALIZACIÓN DE DATOS / SOFTWARE 2024 - NS--20262-1"), "VISUALIZACIÓN DE DATOS")
         self.assertEqual(course_name("A -- VISUALIZACIÓN DE DATOS--1208690--20262-1"), "VISUALIZACIÓN DE DATOS")
+
+    def test_course_name_cleanup_does_not_depend_on_the_degree(self):
+        for raw, expected in (
+                ("B -- CÁLCULO DIFERENCIAL / MEDICINA 2019 - D--20262-1", "CÁLCULO DIFERENCIAL"),
+                ("C -- CONTABILIDAD GENERAL / ADMINISTRACIÓN DE EMPRESAS 2022 - V", "CONTABILIDAD GENERAL"),
+                ("A1 -- REDES II--4455--20262-1", "REDES II"),
+                ("ÉTICA / DEONTOLOGÍA PROFESIONAL", "ÉTICA / DEONTOLOGÍA PROFESIONAL"),
+                ("Desarrollo Móvil", "Desarrollo Móvil")):
+            with self.subTest(raw=raw):
+                self.assertEqual(course_name(raw), expected)
         self.assertEqual(course_name(""), "")
 
 
