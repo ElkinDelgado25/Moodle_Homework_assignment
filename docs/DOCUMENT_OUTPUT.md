@@ -38,7 +38,7 @@ Si ya existen archivos con ese nombre, se usa `nombre (1)`, `nombre (2)`... Nunc
 - **Un enlace a GitHub debe mostrar la URL exacta como texto.** `[mi repo](https://github.com/...)` se rechaza. Esa URL tiene que ser la confirmada del repositorio realmente trabajado (`git remote -v` y `gh repo view --json url,nameWithOwner`).
 - Las tablas se numeran («Tabla 1») y la primera fila es el encabezado. Las figuras se numeran («Figura 1»), deben ser PNG o JPEG con ruta absoluta y pesar menos de 20 MB.
 - `references` va en una hoja aparte, ordenada y con sangría francesa. Déjalo vacío en una práctica con repositorio, salvo que la consigna pida bibliografía.
-- Se eliminan los caracteres de control y los controles bidi que permiten disfrazar texto. Los campos de plantilla como `{{teacher}}` no se aceptan dentro del contenido de portada o del título. El código puede contener `{{ variable }}` sin problema.
+- Se eliminan los caracteres de control y los controles bidi que permiten disfrazar texto. Los campos de plantilla de la portada (`{{titulo}}`, `{{materia}}`, `{{nombre_docente}}`, `{{estudiantes}}`, `{{carrera}}`, `{{curso}}` y `{{anio}}`, con o sin espacios dentro de las llaves) no se aceptan dentro del contenido de portada o del título: escribe el dato real. El código puede contener `{{ variable }}` sin problema.
 - Límites: 800 bloques, 30 figuras y 400.000 caracteres en total.
 
 ## Portada (`cover`)
