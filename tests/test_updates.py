@@ -227,9 +227,10 @@ class UpdateTests(unittest.TestCase):
         self.assertIn((Path("/tmp/source"), "checkout", "--detach", "refs/tags/v0.3.0"),
                       [call.args for call in run.call_args_list])
         commands = [call.args[0] for call in step.call_args_list]
-        self.assertEqual(commands[0], ["uv", "sync", "--locked"])
-        self.assertIn("--locked", commands[1])
-        install = commands[2]
+        # El .venv del clon no se usa: se exportan las dependencias fijadas y se instala la herramienta.
+        self.assertEqual([command[:2] for command in commands], [["uv", "export"], ["uv", "tool"]])
+        self.assertIn("--locked", commands[0])
+        install = commands[1]
         self.assertIn("--force", install)
         self.assertEqual(install[install.index("--reinstall-package") + 1], updates.PROJECT_NAME)
-        self.assertEqual(install[install.index("--constraints") + 1], commands[1][-1])
+        self.assertEqual(install[install.index("--constraints") + 1], commands[0][-1])
