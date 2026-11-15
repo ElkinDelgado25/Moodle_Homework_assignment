@@ -567,16 +567,21 @@ def _result(assignment_id: int, title: str | None, status: str, *, files: list[d
     }
 
 
-def preflight_result(assignment_id: int, file_paths: list[str]) -> dict | None:
-    """Resultado bloqueado si algún archivo no es válido; None si todos se pueden subir."""
+def validate_upload(assignment_id: int, file_paths: list[str]) -> tuple[list[Path], dict | None]:
+    """(rutas validadas, resultado bloqueado). El resultado es None si todos los archivos se pueden subir."""
     paths, preflight_errors = _preflight_files(file_paths)
     if not file_paths:
         preflight_errors = [{"name": "archivo", "status": "failed", "error": "Indica al menos un archivo."}]
     if not preflight_errors:
-        return None
-    return _result(assignment_id, None, "blocked",
-                   files=preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
-                   errors=[item["error"] for item in preflight_errors])
+        return paths, None
+    return paths, _result(assignment_id, None, "blocked",
+                          files=preflight_errors + [{"name": path.name, "status": "not_uploaded"} for path in paths],
+                          errors=[item["error"] for item in preflight_errors])
+
+
+def preflight_result(assignment_id: int, file_paths: list[str]) -> dict | None:
+    """Resultado bloqueado si algún archivo no es válido; None si todos se pueden subir."""
+    return validate_upload(assignment_id, file_paths)[1]
 
 
 def upload_files(
@@ -587,12 +592,17 @@ def upload_files(
     *,
     replace_existing: bool = False,
     progress=None,
+    validated: list[Path] | None = None,
 ) -> dict:
-    """Agrega archivos y guarda la entrega sin enviarla para calificación."""
-    blocked = preflight_result(assignment_id, file_paths)
-    if blocked is not None:
-        return blocked
-    validated, _ = _preflight_files(file_paths)
+    """Agrega archivos y guarda la entrega sin enviarla para calificación.
+
+    validated son las rutas que ya devolvió validate_upload: así quien llama valida antes de abrir el navegador
+    y no se repite. Al copiar cada archivo se vuelve a comprobar, que es la validación que protege de cambios.
+    """
+    if validated is None:
+        validated, blocked = validate_upload(assignment_id, file_paths)
+        if blocked is not None:
+            return blocked
     # Se sube una copia privada tomada al validar: cambiar el archivo original después no cambia lo que se envía.
     with tempfile.TemporaryDirectory(prefix="moodle-upload-") as staging:
         try:
