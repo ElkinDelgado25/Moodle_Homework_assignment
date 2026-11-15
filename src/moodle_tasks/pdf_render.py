@@ -191,8 +191,17 @@ def render_cover(pdf: _Renderer, values: dict) -> None:
         y += gap
 
 
-def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) -> str:
-    """Escribe el PDF y devuelve la familia tipográfica usada."""
+def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
+               figure_paths: list[Path] | None = None) -> str:
+    """Escribe el PDF y devuelve la familia tipográfica usada.
+
+    figure_paths son las rutas ya resueltas de document.figure_files: el DOCX y el PDF dibujan la misma imagen.
+    Sin ellas se resuelven aquí, igual que en el DOCX (con ~/ expandido y rutas protegidas rechazadas).
+    """
+    if figure_paths is None:
+        from .document import figure_files
+
+        figure_paths = figure_files(content)
     family, files = find_serif_fonts()
     pdf = _Renderer(family, files)
     pdf.set_title(content.title)
@@ -290,14 +299,15 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path) 
                 pdf.ln(LINE)
         elif block.type == "figure":
             figures += 1
-            width_cm, height_cm = figure_size_cm(block.path, block.width_cm)
+            image = figure_paths[figures - 1]
+            width_cm, height_cm = figure_size_cm(image, block.width_cm)
             width, height = width_cm * 10, height_cm * 10
             pdf.keep_room(LINE * 2 + height)
             pdf.style(bold=True)
             pdf.cell(0, LINE, f"Figura {figures}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.style(italic=True)
             pdf.multi_cell(0, LINE, pdf.text(pdf.plain(block.title)), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.image(block.path, x=pdf.l_margin, w=width, h=height)
+            pdf.image(str(image), x=pdf.l_margin, w=width, h=height)
             if block.note:
                 pdf.set_x(pdf.l_margin)
                 pdf.style(italic=True)

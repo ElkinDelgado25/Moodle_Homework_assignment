@@ -417,7 +417,8 @@ def export_with_libreoffice(command: list[str], docx: Path, outdir: Path, timeou
     return expected
 
 
-def export_pdf(content: DeliveryDocument, values: dict[str, str], docx: Path, engine: str = "auto") -> tuple[Path, str, list[str]]:
+def export_pdf(content: DeliveryDocument, values: dict[str, str], docx: Path, engine: str = "auto",
+               files: list[Path] | None = None) -> tuple[Path, str, list[str]]:
     """LibreOffice si está instalado; si no, el renderizador integrado con la misma maquetación."""
     from .pdf_render import render_pdf
 
@@ -433,7 +434,7 @@ def export_pdf(content: DeliveryDocument, values: dict[str, str], docx: Path, en
             warnings.append(f"LibreOffice falló ({error}); se usó el renderizador integrado.")
     elif engine == "libreoffice":
         raise RuntimeError("No se encontró LibreOffice instalado.")
-    fonts, render_warnings = render_pdf(content, values, pdf)
+    fonts, render_warnings = render_pdf(content, values, pdf, files)
     if fonts != "Times New Roman":
         warnings.append(f"Times New Roman no está instalada; el PDF usa {fonts}.")
     warnings.extend(render_warnings)
@@ -447,8 +448,9 @@ def build_delivery(content: DeliveryDocument, values: dict[str, str], workspace:
     # El nombre interno es ASCII: evita problemas de rutas con tildes al exportar.
     staging = Path(tempfile.mkdtemp(prefix="build-", dir=workspace))
     docx = staging / "entrega.docx"
-    counts = build_docx(content, values, docx)
-    pdf, used, warnings = export_pdf(content, values, docx, engine)
+    files = figure_files(content)
+    counts = build_docx(content, values, docx, files)
+    pdf, used, warnings = export_pdf(content, values, docx, engine, files)
     final_docx, final_pdf = staging / f"{stem}.docx", staging / f"{stem}.pdf"
     os.replace(docx, final_docx)
     os.replace(pdf, final_pdf)
