@@ -2,17 +2,46 @@ import io
 import os
 import tempfile
 import unittest
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from moodle_tasks.agents import AGENTS, AgentDetection
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
-from moodle_tasks.main import load_config
-from moodle_tasks.setup import ask_agent, main, valid_username
+from moodle_tasks.main import Config, load_config
+from moodle_tasks.setup import ask_agent, main, valid_username, verify_credentials
 from moodle_tasks.storage import save_credentials
+
+
+class VerifyCredentialsTests(unittest.TestCase):
+    def test_login_uses_the_shared_page_without_the_saved_session(self):
+        page, calls = MagicMock(), []
+
+        @contextmanager
+        def fake_moodle_page(config, **options):
+            calls.append(options)
+            yield MagicMock(), page
+
+        config = Config("https://moodle.test", "student", "secret", True)
+        with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), \
+                patch("moodle_tasks.setup.login") as login, \
+                patch("moodle_tasks.setup.record_verified_profile", return_value={"student_1": "Ana", "courses": []}):
+            identity = verify_credentials(config)
+        self.assertEqual(calls, [{"fresh": True}])
+        login.assert_called_once_with(page, config)
+        self.assertEqual(identity["student_1"], "Ana")
+
+    def test_a_profile_failure_does_not_cancel_the_verified_access(self):
+        @contextmanager
+        def fake_moodle_page(config, **options):
+            yield MagicMock(), MagicMock()
+
+        config = Config("https://moodle.test", "student", "secret", True)
+        with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), patch("moodle_tasks.setup.login"), \
+                patch("moodle_tasks.setup.record_verified_profile", side_effect=RuntimeError("perfil")):
+            self.assertEqual(verify_credentials(config), {"student_1": "", "courses": []})
 
 
 class SetupTests(unittest.TestCase):

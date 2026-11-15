@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from rich.console import Console
 from rich.text import Text
 
@@ -16,6 +16,7 @@ from .agents import AGENTS, detect_agents, ordered_agents, synchronize_agents
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .main import Config, config_values, login
 from .profile import record_verified_profile
+from .session import moodle_page
 from .storage import atomic_write, save_credentials, user_config_dir
 from .system import describe_system
 from .ui import ConnectionState, show_agent_menu, show_dashboard, show_setup_menu
@@ -52,19 +53,14 @@ def prepare_browser(log_dir: Path | None = None) -> None:
 def verify_credentials(config: Config) -> dict[str, object]:
     """Comprueba el acceso y guarda el nombre y las materias que Moodle muestra."""
     identity: dict[str, object] = {"student_1": "", "courses": []}
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+    # Sin la sesión guardada: debe iniciar sesión con las credenciales, y deja guardada la nueva sesión.
+    with moodle_page(config, fresh=True) as (_, page):
+        login(page, config)
         try:
-            page = browser.new_page()
-            page.set_default_timeout(15_000)
-            login(page, config)
-            try:
-                identity = record_verified_profile(page, config)
-            except Exception:
-                # El acceso ya está comprobado; un fallo al leer el perfil no lo anula.
-                identity = {"student_1": "", "courses": []}
-        finally:
-            browser.close()
+            identity = record_verified_profile(page, config)
+        except Exception:
+            # El acceso ya está comprobado; un fallo al leer el perfil no lo anula.
+            identity = {"student_1": "", "courses": []}
     return identity
 
 
