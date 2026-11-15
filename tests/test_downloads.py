@@ -51,6 +51,20 @@ class DownloadTests(unittest.TestCase):
                     self.assertEqual(result["name"], "Taller Semana 6.pdf")
                     renew.assert_called_once_with(self.page, self.settings)
 
+    def test_a_resource_is_saved_with_the_name_of_the_file_it_redirects_to(self):
+        from moodle_tasks.downloads import authenticated_content
+
+        resource = "https://moodle.test/mod/resource/view.php?id=9"
+        self.page.context.request.get.side_effect = [self.response(status=303, location=self.url), self.response()]
+        body, content_type, final_url = authenticated_content(self.page, self.settings, resource)
+        self.assertTrue(body.startswith(b"%PDF-"))
+        self.assertEqual((content_type, final_url), ("application/pdf", self.url))
+        self.assertIn("redirecciones de Moodle", authenticated_content.__doc__)
+        self.page.context.request.get.side_effect = [self.response(status=303, location=self.url), self.response()]
+        with tempfile.TemporaryDirectory() as directory:
+            result = download_attachment(self.page, self.settings, resource, Path(directory))
+        self.assertEqual(result["name"], "Taller Semana 6.pdf")
+
     def test_persistent_login_page_is_never_saved(self):
         self.page.context.request.get.return_value = self.response(body=b"<html>Login</html>", content_type="text/html")
         with tempfile.TemporaryDirectory() as directory, patch("moodle_tasks.downloads.login") as renew:
