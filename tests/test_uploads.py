@@ -33,7 +33,7 @@ class AssignmentUploadTests(unittest.TestCase):
                       "require_login": False, "authenticated": False, "login_count": 0,
                       "drafts": True, "status_extra": "", "banner": False, "delayed_files": [], "hide_in_form": False,
                       "statement": False, "form_error": False, "form_cancel": False, "reject_without_cancel": False,
-                      "sanitize": False, "maxfiles_js": None, "maxfiles_attr": "2"}
+                      "sanitize": False, "maxfiles_js": None, "maxfiles_attr": "2", "late_delete_dialog": False}
         self.page.route("**/*", self.respond)
 
     def tearDown(self):
@@ -64,6 +64,8 @@ class AssignmentUploadTests(unittest.TestCase):
             if parse_qs(parts.query).get("action") == ["editsubmission"]:
                 return html_response(self.edit_html())
             return html_response(self.view_html())
+        if parts.path == "/delete-clicked":
+            return route.fulfill(status=204)
         return route.fulfill(status=404, body="Not found")
 
     def login_html(self):
@@ -159,9 +161,12 @@ class AssignmentUploadTests(unittest.TestCase):
               }};
             }};
             fm.querySelector('.fp-btn-delete').onclick = () => {{
-              const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog');
-              dialog.innerHTML = '<button type="button" id="delete">Sí</button>'; document.body.appendChild(dialog);
-              dialog.querySelector('#delete').onclick = () => {{ fm.querySelectorAll('.fp-file input:checked').forEach((input) => input.closest('.fp-file').remove()); dialog.remove(); }};
+              fetch('/delete-clicked');
+              setTimeout(() => {{
+                const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog');
+                dialog.innerHTML = '<button type="button" id="delete">Sí</button>'; document.body.appendChild(dialog);
+                dialog.querySelector('#delete').onclick = () => {{ fm.querySelectorAll('.fp-file input:checked').forEach((input) => input.closest('.fp-file').remove()); dialog.remove(); }};
+              }}, {1200 if self.state["late_delete_dialog"] else 0});
             }};
           }}
           </script></main></body></html>'''
@@ -268,6 +273,15 @@ class AssignmentUploadTests(unittest.TestCase):
         self.assertEqual(result["status"], "uploaded")
         self.assertEqual(result["replaced_files"], ["anterior.pdf"])
         self.assertEqual(self.state["saved_files"], ["entrega.docx", "entrega.pdf"])
+
+    def test_a_late_delete_confirmation_is_awaited_and_the_delete_control_is_not_pressed_again(self):
+        self.state["existing_files"] = ["anterior.pdf"]
+        self.state["late_delete_dialog"] = True
+        result = self.upload(replace_existing=True)
+        self.assertEqual(result["status"], "uploaded")
+        self.assertEqual(result["replaced_files"], ["anterior.pdf"])
+        # El botón «Eliminar» del gestor de archivos se pulsa una sola vez: la confirmación se busca solo en el diálogo.
+        self.assertEqual(sum(1 for _, path in self.state["requests"] if path == "/delete-clicked"), 1)
 
     def test_failed_replacement_preserves_the_previous_submission(self):
         self.state["existing_files"] = ["anterior.pdf"]
