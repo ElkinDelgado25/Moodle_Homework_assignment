@@ -303,6 +303,19 @@ class PdfTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_builtin_pdf_draws_a_figure_given_with_a_home_path(self):
+        home = self.root / "home"
+        home.mkdir()
+        make_png(home / "captura.png")
+        content = sample(blocks=[{"type": "figure", "title": "Pantalla", "path": "~/captura.png", "width_cm": 5}])
+        with patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
+            result = build_delivery(content, cover_values(COVER, PROFILE), self.root, "con figura")
+        self.assertEqual(result["engine"], "builtin")
+        self.assertEqual(result["figures"], 1)
+        with zipfile.ZipFile(result["docx"]) as archive:
+            self.assertTrue(any(name.startswith("word/media/") for name in archive.namelist()))
+        self.assertTrue(any(len(page.images) for page in PdfReader(str(result["pdf"])).pages))
+
     def test_builtin_pdf_matches_the_document(self):
         result = build_delivery(sample(), cover_values(COVER, PROFILE), self.root, "Informe: práctica 3")
         self.assertEqual(result["engine"], "builtin")
