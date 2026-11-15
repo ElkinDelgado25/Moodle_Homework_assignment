@@ -18,7 +18,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 from docx.text.paragraph import Paragraph
 
-from .document_model import (COVER_FIELDS, MAX_STUDENTS, REQUIRED_COVER_FIELDS, CoverFields, DeliveryDocument, figure_size_cm,
+from .document_model import (COVER_FIELDS, MAX_STUDENTS, CoverFields, DeliveryDocument, figure_size_cm,
                              parse_inline, reference_key)
 from .paths import resolve_local_file
 from .storage import user_cache_dir
@@ -91,7 +91,7 @@ def cover_values(cover: CoverFields, profile: dict, course: str | None = None, n
         saved_students = saved_students if isinstance(saved_students, list) else [profile.get("student_1"), profile.get("student_2")]
         students = [text(name) for name in saved_students if text(name)]
     values["estudiantes"] = students[:MAX_STUDENTS]
-    missing = [field for field in REQUIRED_COVER_FIELDS if not values[field]]
+    missing = [field for field in COVER_FIELDS if not values[field]]
     if missing:
         error = MissingCoverFields(missing)
         error.known = {field: value for field, value in values.items() if value}
