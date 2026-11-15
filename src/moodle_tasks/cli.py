@@ -11,7 +11,6 @@ from .ui import show_dashboard
 
 def main(argv: list[str] | None = None) -> None:
     configure_utf8_streams()
-    initialize_sentry(tasks.config_values())
     parser = argparse.ArgumentParser(prog="mcp-moodle", description=__doc__)
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("run", add_help=False, help="Configurar cuenta y agente con preguntas en la terminal")
@@ -21,6 +20,9 @@ def main(argv: list[str] | None = None) -> None:
     commands.add_parser("status", add_help=False, help="Ver cuenta y comprobar el estado de conexión")
     commands.add_parser("update", add_help=False, help="Actualizar Moodle MCP a la última release estable")
     args, options = parser.parse_known_args(argv)
+    if args.command != "serve":
+        # serve lee su propio --env-file y es quien inicia Sentry con ese archivo.
+        initialize_sentry(tasks.config_values())
     if args.command in ("run", "setup"):
         setup.main(options)
     elif args.command == "serve":
