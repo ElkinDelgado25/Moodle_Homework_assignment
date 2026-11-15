@@ -8,13 +8,15 @@ from xml.etree import ElementTree as ET
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
+from .document_model import TEMPLATE_TOKEN
+
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 HYPERLINK_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 # Solo los campos de la portada: un informe puede citar código con {{ variable }} (Vue, Jinja...).
-TEMPLATE_FIELDS = ("titulo", "materia", "nombre_docente", "estudiantes", "carrera", "curso", "anio")
-PLACEHOLDER = re.compile(r"\{\{\s*(?:" + "|".join(TEMPLATE_FIELDS) + r")\s*\}\}")
+# Es la misma expresión que usa el modelo, así que un campo nuevo no hay que añadirlo aquí.
+PLACEHOLDER = TEMPLATE_TOKEN
 THEME_ATTRIBUTES = ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme")
 EXPECTED_FONT = "Times New Roman"
 
