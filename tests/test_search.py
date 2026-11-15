@@ -56,7 +56,7 @@ class SearchTests(unittest.TestCase):
 
     def event(self, identifier):
         task = self.tasks[identifier]
-        action = (f'<a href="/mod/assign/view.php?id={identifier}&action=editsubmission">Agregar entrega</a>'
+        action = (f'<a href="/mod/assign/view.php?id={identifier}&action=editsubmission">{task.get("action_text", "Agregar entrega")}</a>'
                   if task['open'] <= 0 and task['grade'] == '-' and task['status'] != 'Enviado para calificar' else '')
         return (f'<div data-region="event-list-item"><div class="event-name-container">'
                 f'<a aria-label="Pendiente para {self.date(task["due"])}" href="/mod/assign/view.php?id={identifier}">Tarea {identifier}</a>'
@@ -121,6 +121,29 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(stats['index_pages_read'], 2)
         self.assertEqual(stats['detail_pages_read'], 0)
         self.assertFalse(any('/mod/assign/view.php' in url for url in self.visited))
+
+    def timeline_ids_found(self, **wording):
+        self.tasks[3].update(wording)
+        self.timeline_ids = (3,)
+        tasks, stats = self.query(mode='upcoming', limit=1, summary_only=True)
+        return [task.url.rsplit('=', 1)[1] for task in tasks], stats
+
+    def test_timeline_recognizes_other_wordings_of_the_add_submission_action(self):
+        for text in ("Añadir envío", "Add submission", "Agregar entrega"):
+            with self.subTest(text=text):
+                found, stats = self.timeline_ids_found(action_text=text)
+                self.assertEqual(found, ['3'])
+                self.assertNotIn('availability_unconfirmed', stats)
+
+    def test_timeline_keeps_a_task_whose_action_text_is_not_recognized_as_unconfirmed(self):
+        found, stats = self.timeline_ids_found(action_text="Hantar tugasan")
+        self.assertEqual(found, ['3'])
+        self.assertEqual(stats['availability_unconfirmed'], 1)
+        self.assertEqual(stats['unrecognized_action_texts'], ["Hantar tugasan"])
+
+    def test_timeline_still_skips_a_task_that_is_already_submitted(self):
+        found, _ = self.timeline_ids_found(action_text="Editar entrega")
+        self.assertNotIn('3', found)
 
     def test_surface_index_fallback_returns_tasks_with_unconfirmed_availability(self):
         self.context.unroute('**/*', self.respond)
