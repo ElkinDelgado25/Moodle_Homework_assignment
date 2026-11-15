@@ -105,7 +105,7 @@ def _is_save_control(control: Locator) -> bool:
     if not text or GRADING.search(text):
         return False
     name = (control.get_attribute("id") or "") + " " + (control.get_attribute("name") or "")
-    if "submitbutton" in name and not GRADING.search(text):
+    if "submitbutton" in name:
         return True
     return bool(SAVE.fullmatch(text))
 
