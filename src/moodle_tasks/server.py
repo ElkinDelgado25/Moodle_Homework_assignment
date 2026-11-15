@@ -47,7 +47,7 @@ from .paths import UnsafePathError, resolve_destination_directory
 from .profile import load_profile, remember_teacher, subject_key
 from .session import ensure_login, moodle_page
 from .storage import user_config_dir
-from .uploads import preflight_result, upload_files
+from .uploads import upload_files, validate_upload
 from .urls import ID_PATTERN, assignment_view_id, moodle_path, parse_id
 from .verification import DocumentCheckError, check_delivery_pair
 
@@ -682,12 +682,12 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         settings = config()
         resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
         # Los archivos se validan antes de abrir el navegador o iniciar sesión.
-        blocked = preflight_result(resolved_id, file_paths)
+        validated, blocked = validate_upload(resolved_id, file_paths)
         if blocked is not None:
             return blocked
         with moodle_page(settings) as (_, page):
             return upload_files(page, settings, resolved_id, file_paths, replace_existing=replace_existing,
-                                progress=progress)
+                                progress=progress, validated=validated)
 
     @server.tool(title="Subir archivos a una tarea", annotations=upload_annotations, structured_output=True)
     async def upload_assignment_files(

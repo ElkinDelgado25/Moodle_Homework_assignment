@@ -91,7 +91,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 patch("moodle_tasks.server.read_assignment", side_effect=failure), \
                 patch("moodle_tasks.server.ensure_login", side_effect=failure), \
                 patch("moodle_tasks.server.upload_files", side_effect=failure), \
-                patch("moodle_tasks.server.preflight_result", return_value=None):
+                patch("moodle_tasks.server.validate_upload", return_value=([], None)):
             async with Client(create_server()) as client:
                 for tool, arguments in (("list_assignments", {}), ("list_assignments", {"mode": "all"}),
                                         ("get_assignment", {"assignment_id": 1})):
