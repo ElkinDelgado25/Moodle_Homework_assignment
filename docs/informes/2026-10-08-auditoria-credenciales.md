@@ -1,5 +1,7 @@
 # Auditoría de credenciales — 8 de octubre de 2026
 
+> **Informe histórico.** Describe el proyecto el 8 de octubre de 2026 (commit `4c83a4d`), antes de la primera release, v0.1.0. El número de commits y las rutas citadas corresponden a ese momento. No es documentación de la versión actual.
+
 ## Resultado
 
 No se encontraron las credenciales reales de Moodle en los archivos versionados, los objetos de Git ni el paquete distribuible. No hizo falta eliminar credenciales de commits ni reescribir el historial.

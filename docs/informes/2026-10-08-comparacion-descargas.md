@@ -1,5 +1,7 @@
 # Comparación de descarga de anexos — 8 de octubre de 2026
 
+> **Informe histórico.** Describe el proyecto el 8 de octubre de 2026 (commit `0acc49a`), antes de la primera release, v0.1.0. El número de pruebas y las mediciones corresponden a ese momento. No es documentación de la versión actual.
+
 Se probó el anexo real `Taller Semana 6.pdf` de la tarea «Amenazas y vulnerabilidades comunes, enfocada en inyección SQL», en Moodle ULEAM, desde este equipo.
 
 | Método | Mediana de descarga | Resultado |
