@@ -20,7 +20,7 @@ from docx.shared import Cm, Pt
 from docx.text.paragraph import Paragraph
 
 from .document_model import (COVER_FIELDS, MAX_STUDENTS, CoverFields, DeliveryDocument, figure_size_cm,
-                             parse_inline, reference_key)
+                             paragraphs, parse_inline, reference_key)
 from .paths import resolve_local_file, windows_reserved
 from .storage import user_cache_dir
 
@@ -131,10 +131,6 @@ def _write_inline(paragraph, text: str, *, force_bold=False, force_italic=False)
             run = paragraph.add_run(segment["text"])
             run.bold = bold or None
             run.italic = italic or None
-
-
-def _paragraphs(text: str) -> list[str]:
-    return [" ".join(part.split()) for part in re.split(r"\n\s*\n", text) if part.strip()]
 
 
 def _fill_cover(document, values: dict) -> None:
@@ -283,10 +279,10 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path,
         elif block.type == "heading":
             _write_inline(new_paragraph(f"Heading {block.level}"), " ".join(block.text.split()))
         elif block.type == "paragraph":
-            for text in _paragraphs(block.text):
+            for text in paragraphs(block.text):
                 _write_inline(new_paragraph(), text)
         elif block.type == "quote":
-            for text in _paragraphs(block.text):
+            for text in paragraphs(block.text):
                 paragraph = new_paragraph()
                 paragraph.paragraph_format.left_indent = Cm(1.27)
                 paragraph.paragraph_format.first_line_indent = Cm(0)

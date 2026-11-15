@@ -2,7 +2,6 @@
 
 import logging
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -12,7 +11,7 @@ from pathlib import Path
 from fpdf import FPDF
 from fpdf.enums import TableBordersLayout, XPos, YPos
 
-from .document_model import DeliveryDocument, figure_size_cm, parse_inline, reference_key
+from .document_model import DeliveryDocument, figure_size_cm, paragraphs, parse_inline, reference_key
 
 
 # fontTools registra cada paso del subconjunto de fuentes en INFO: llenaría los registros del cliente MCP.
@@ -173,10 +172,6 @@ class _Renderer(FPDF):
         self.multi_cell(0, LINE, self.encode_text(self.plain(text)), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
-def _paragraphs(text: str) -> list[str]:
-    return [" ".join(part.split()) for part in re.split(r"\n\s*\n", text) if part.strip()]
-
-
 def render_cover(pdf: _Renderer, values: dict) -> None:
     y = MARGIN
     for index, (text, bold, position) in enumerate(COVER_LINES):
@@ -240,10 +235,10 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
                 pdf.segments(" ".join(block.text.split()), bold=True, italic=block.level == 3)
                 pdf.ln(LINE)
         elif block.type == "paragraph":
-            for text in _paragraphs(block.text):
+            for text in paragraphs(block.text):
                 pdf.paragraph(text)
         elif block.type == "quote":
-            for text in _paragraphs(block.text):
+            for text in paragraphs(block.text):
                 pdf.paragraph(text, indent=0, left=INDENT)
         elif block.type in ("bullets", "numbered"):
             for number, item in enumerate(block.items, start=1):

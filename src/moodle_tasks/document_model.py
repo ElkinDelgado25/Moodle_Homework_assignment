@@ -34,6 +34,11 @@ def no_template_tokens(value: str) -> str:
     return value
 
 
+def paragraphs(text: str) -> list[str]:
+    """Párrafos separados por una línea en blanco, cada uno en una sola línea: los mismos en el DOCX y el PDF."""
+    return [" ".join(part.split()) for part in re.split(r"\n\s*\n", text) if part.strip()]
+
+
 def clean_text(value: str) -> str:
     # Las tabulaciones se convierten en cuatro espacios: conserva la sangría del código.
     return INVALID_TEXT.sub("", value.replace("\t", "    ").replace("\r\n", "\n").replace("\r", "\n"))

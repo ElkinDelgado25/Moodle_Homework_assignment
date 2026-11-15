@@ -430,6 +430,13 @@ class PdfTests(unittest.TestCase):
                 patch("moodle_tasks.document.Path.is_file", return_value=False):
             self.assertIsNone(find_soffice())
 
+    def test_docx_and_pdf_split_paragraphs_with_the_same_function(self):
+        from moodle_tasks import document, document_model, pdf_render
+
+        self.assertIs(document.paragraphs, document_model.paragraphs)
+        self.assertIs(pdf_render.paragraphs, document_model.paragraphs)
+        self.assertEqual(document_model.paragraphs("Uno\ncontinúa\n\n  \nDos  "), ["Uno continúa", "Dos"])
+
     def test_the_renderer_keeps_the_text_method_of_fpdf(self):
         from fpdf import FPDF
 
