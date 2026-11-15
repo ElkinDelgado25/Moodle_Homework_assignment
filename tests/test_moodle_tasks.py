@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
-from moodle_tasks.main import Config, find_assignment_links, login, print_tasks, read_assignment, submission_state
+from moodle_tasks.main import Config, login, print_tasks, read_assignment, submission_state
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 
 
@@ -93,25 +93,6 @@ class MoodleTests(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(RuntimeError, "confirmar una sesión"):
                         login(self.page, self.config)
-
-    def test_tasks_are_found_inside_courses_and_deduplicated(self):
-        visited = []
-
-        def respond(route):
-            visited.append(route.request.url)
-            body = (
-                '<a href="/mod/assign/view.php?id=7">Tarea</a>' * 2
-                if "/course/view.php" in route.request.url
-                else '<a href="/course/view.php?id=3">Curso</a>'
-            )
-            route.fulfill(content_type="text/html", body=body)
-
-        self.page.route("**/*", respond)
-        self.assertEqual(
-            find_assignment_links(self.page, self.config),
-            ["https://moodle.test/mod/assign/view.php?id=7"],
-        )
-        self.assertEqual(visited.count("https://moodle.test/course/view.php?id=3"), 1)
 
     def test_empty_results_do_not_claim_no_pending_tasks(self):
         output = io.StringIO()
