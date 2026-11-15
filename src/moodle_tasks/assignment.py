@@ -5,7 +5,7 @@ import re
 from playwright.sync_api import Page
 
 from .core import (NO_DESCRIPTION, Assignment, Config, first_text, open_authenticated_page, open_page,
-                   read_submission_summary, submission_state)
+                   read_feedback, read_submission_summary, submission_state)
 from .linked_content import assignment_description, assignment_images, assignment_links
 from .search import parse_moodle_date
 
@@ -72,7 +72,12 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     closing = re.search(r"(?:Cierre|Due(?: date)?|Fecha de entrega):\s*([^\n]+)", dates, re.I)
     # inner_text conserva las filas de la tabla de calificaciones.
     grade_match = re.search(r"(?:^|\n)(?:Calificación|Grade)\s+([\d.,]+)\s*/\s*[\d.,]+", raw, re.I)
-    grade = grade_match.group(1) if grade_match else None
+    feedback = read_feedback(page)
+    if feedback and feedback.get("graded_at"):
+        feedback["graded_at"] = parse_moodle_date(feedback["graded_at"])
+    # Sin la fila en el texto, la nota numérica de la tabla de retroalimentación; una escala no cuenta como nota.
+    feedback_grade = re.match(r"([\d.,]*\d)\s*/", (feedback or {}).get("grade", ""))
+    grade = grade_match.group(1) if grade_match else feedback_grade.group(1) if feedback_grade else None
 
     no_upload = forbids_upload(content)
     attachments = page.locator(
@@ -82,6 +87,8 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
         "[data-region='activity-information'] .description a[href*='pluginfile.php'], "
         ".box.generalbox a[href*='pluginfile.php']"
     ).evaluate_all("aa => aa.map(a => ({name: (a.innerText || a.getAttribute('title') || '').trim(), url: a.href}))")
+    # Los archivos entregados y los corregidos no son anexos de la consigna.
+    attachments = [item for item in attachments if not re.search(r"/assign(?:feedback|submission)_", item["url"])]
     course = first_text(page, ".breadcrumb a[href*='/course/view.php']")
     links = assignment_links(page, content, attachments)
     return Assignment(title, page.url, content, closing.group(1) if closing else due_date, status, submitted,
@@ -90,4 +97,4 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
                       due_at=parse_moodle_date(closing.group(1)) if closing else None,
                       grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None,
                       group=summary.get("group"), grading_status=summary.get("grading_status"),
-                      rubric=summary.get("rubric"), images=assignment_images(page))
+                      rubric=summary.get("rubric"), images=assignment_images(page), feedback=feedback)

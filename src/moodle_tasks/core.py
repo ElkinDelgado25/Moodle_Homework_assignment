@@ -43,6 +43,7 @@ class Assignment:
     grading_status: str | None = None
     rubric: dict | None = None
     images: list[dict[str, str]] = field(default_factory=list)
+    feedback: dict | None = None
 
 
 def is_pending(task: Assignment) -> bool:
@@ -240,6 +241,47 @@ def read_submission_summary(page: Page) -> dict:
         summary["rubric"] = {"description": first_text(page, ".gradingform_rubric-description")[:2_000],
                              "criteria": criteria[:60]}
     return summary
+
+
+FEEDBACK_LABELS = {
+    "grade": r"^(?:calificaci[oó]n|grade)$",
+    "graded_at": r"calificado sobre|graded on",
+    "graded_by": r"calificado por|graded by",
+    "comments": r"comentarios de (?:la )?retroalimentaci[oó]n|feedback comments",
+}
+FEEDBACK_FILES = ("#region-main .feedback a[href*='/assignfeedback_file/'], "
+                  ".feedbacktable a[href*='/assignfeedback_file/']")
+MAX_FEEDBACK_COMMENTS = 5_000
+
+
+def multiline_text(value: str | None) -> str:
+    """Como clean_text, pero conserva los párrafos de un comentario."""
+    lines = (clean_text(line) for line in (value or "").splitlines())
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def read_feedback(page: Page) -> dict | None:
+    """Tabla «Comentario» de una tarea calificada: nota, fecha, docente, comentarios y archivos corregidos.
+
+    La fecha se devuelve como la muestra Moodle; quien la lee la convierte. Sin tabla ni archivos, None.
+    """
+    feedback: dict = {}
+    table = page.locator("#region-main .feedback table, .feedbacktable table").first
+    rows = table.evaluate(STATUS_ROWS) if table.count() else []
+    for label, value in rows:
+        label = clean_text(label)
+        for key, pattern in FEEDBACK_LABELS.items():
+            if key in feedback or not re.search(pattern, label, re.IGNORECASE):
+                continue
+            text = multiline_text(value) if key == "comments" else clean_text(value)
+            if text:
+                feedback[key] = text[:MAX_FEEDBACK_COMMENTS] if key == "comments" else text[:300]
+    files = page.locator(FEEDBACK_FILES).evaluate_all(
+        "aa => aa.map(a => ({name: (a.innerText || a.getAttribute('title') || '').trim(), url: a.href}))")
+    unique = list({item["url"]: item for item in files if item.get("url")}.values())
+    if unique:
+        feedback["files"] = unique
+    return feedback or None
 
 
 def open_authenticated_page(page: Page, url: str, config: Config) -> None:
