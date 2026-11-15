@@ -11,7 +11,7 @@ from pathlib import Path
 from fpdf import FPDF
 from fpdf.enums import TableBordersLayout, XPos, YPos
 
-from .document_model import DeliveryDocument, figure_size_cm, paragraphs, parse_inline, reference_key
+from .document_model import COVER_LINES, DeliveryDocument, figure_size_cm, paragraphs, parse_inline, reference_key
 
 
 # fontTools registra cada paso del subconjunto de fuentes en INFO: llenaría los registros del cliente MCP.
@@ -27,14 +27,6 @@ INDENT = 12.7
 LINE = 12 * 1.149 * 2 * PT          # interlineado doble de Times New Roman en Word y WPS
 SINGLE = 12 * 1.149 * PT
 LINK_COLOR = (5, 99, 193)
-# Posición (en puntos) de cada línea de la portada, igual que scripts/build_document_template.py.
-COVER_LINES = [
-    ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72), ("{{titulo}}", True, 120),
-    ("Materia:", True, 168), ("{{materia}}", False, 192), ("Docente:", True, 216), ("{{nombre_docente}}", False, 240),
-    ("Estudiantes:", True, 288), ("{{estudiantes}}", False, 312),
-    ("Carrera:", True, 360), ("{{carrera}}", False, 384), ("Curso:", True, 432), ("{{curso}}", False, 456),
-    ("Año:", True, 480), ("{{anio}}", False, 504),
-]
 TIMES_FILES = {
     "win32": ("times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf"),
     "darwin": ("Times New Roman.ttf", "Times New Roman Bold.ttf", "Times New Roman Italic.ttf",

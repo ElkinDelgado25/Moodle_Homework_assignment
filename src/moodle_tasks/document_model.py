@@ -23,6 +23,15 @@ INLINE = re.compile(
 # Campos de la portada en la plantilla: {{titulo}}, {{materia}}, {{nombre_docente}}, {{estudiantes}}...
 COVER_FIELDS = ("materia", "nombre_docente", "estudiantes", "carrera", "curso", "anio")
 TEMPLATE_FIELDS = ("titulo", *COVER_FIELDS)
+# Texto, negrita y posición vertical (en puntos) de cada línea de la portada. La usan el renderizador
+# PDF y scripts/build_document_template.py, que genera la plantilla DOCX: así ambas coinciden.
+COVER_LINES = (
+    ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72), ("{{titulo}}", True, 120),
+    ("Materia:", True, 168), ("{{materia}}", False, 192), ("Docente:", True, 216), ("{{nombre_docente}}", False, 240),
+    ("Estudiantes:", True, 288), ("{{estudiantes}}", False, 312),
+    ("Carrera:", True, 360), ("{{carrera}}", False, 384), ("Curso:", True, 432), ("{{curso}}", False, 456),
+    ("Año:", True, 480), ("{{anio}}", False, 504),
+)
 MAX_STUDENTS = 6
 MAX_TOTAL_CHARACTERS = 400_000
 TEMPLATE_TOKEN = re.compile(r"\{\{\s*(?:" + "|".join(TEMPLATE_FIELDS) + r")\s*\}\}")

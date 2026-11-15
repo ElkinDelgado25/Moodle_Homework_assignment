@@ -10,6 +10,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
+from moodle_tasks.document_model import COVER_LINES
+
 
 ASSETS = Path(__file__).resolve().parents[1] / "src/moodle_tasks/assets"
 FONT = "Times New Roman"
@@ -202,22 +204,8 @@ def build_cover(output: Path) -> None:
     page_number(first_paragraph)
     floating_logo(first_paragraph, ASSETS / "uleam-logo.png", width=Cm(3.75), left=Cm(2.54), top=Cm(1.27))
 
-    lines = [
-        ("Universidad Laica “Eloy Alfaro de Manabí”", True, 72),
-        ("{{titulo}}", True, 120),
-        ("Materia:", True, 168),
-        ("{{materia}}", False, 192),
-        ("Docente:", True, 216),
-        ("{{nombre_docente}}", False, 240),
-        ("Estudiantes:", True, 288),
-        ("{{estudiantes}}", False, 312),
-        ("Carrera:", True, 360),
-        ("{{carrera}}", False, 384),
-        ("Curso:", True, 432),
-        ("{{curso}}", False, 456),
-        ("Año:", True, 480),
-        ("{{anio}}", False, 504),
-    ]
+    # Las mismas posiciones que el renderizador PDF (moodle_tasks.document_model.COVER_LINES).
+    lines = COVER_LINES
     for index, (text, bold, position) in enumerate(lines):
         paragraph = document.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER

@@ -59,6 +59,28 @@ def all_text(path: Path) -> str:
 
 
 class TemplateTests(unittest.TestCase):
+    def test_docx_template_and_pdf_cover_use_the_same_lines(self):
+        import importlib.util
+
+        from docx import Document
+
+        from moodle_tasks import document_model, pdf_render
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "build_document_template.py"
+        spec = importlib.util.spec_from_file_location("build_document_template", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertIs(module.COVER_LINES, document_model.COVER_LINES)
+        self.assertIs(pdf_render.COVER_LINES, document_model.COVER_LINES)
+        expected = [(text, bold) for text, bold, _ in document_model.COVER_LINES]
+        with tempfile.TemporaryDirectory() as directory:
+            built = Path(directory) / "portada.docx"
+            module.build_cover(built)
+            for path in (built, TEMPLATE):
+                with self.subTest(template=path.name):
+                    cover = Document(path).paragraphs[:len(expected)]
+                    self.assertEqual([(item.text, bool(item.runs and item.runs[0].bold)) for item in cover], expected)
+
     def test_template_has_explicit_fonts_language_and_styles(self):
         with zipfile.ZipFile(TEMPLATE) as archive:
             styles = archive.read("word/styles.xml").decode()
