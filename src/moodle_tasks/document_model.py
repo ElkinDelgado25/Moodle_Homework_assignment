@@ -22,7 +22,6 @@ INLINE = re.compile(
 # Campos de la portada en la plantilla: {{titulo}}, {{materia}}, {{nombre_docente}}, {{estudiantes}}...
 COVER_FIELDS = ("materia", "nombre_docente", "estudiantes", "carrera", "curso", "anio")
 TEMPLATE_FIELDS = ("titulo", *COVER_FIELDS)
-REQUIRED_COVER_FIELDS = COVER_FIELDS
 MAX_STUDENTS = 6
 MAX_TOTAL_CHARACTERS = 400_000
 TEMPLATE_TOKEN = re.compile(r"\{\{\s*(?:" + "|".join(TEMPLATE_FIELDS) + r")\s*\}\}")
