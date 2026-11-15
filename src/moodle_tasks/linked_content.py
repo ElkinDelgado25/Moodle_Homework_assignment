@@ -13,6 +13,7 @@ from .errors import redact_credentials
 MAX_LINKS = 5
 MAX_CONTENT = 30_000          # total para todos los enlaces de una tarea
 MAX_BODY_BYTES = 2 * 1024 * 1024
+MAX_REDIRECTS = 6               # redirecciones seguidas, sin contar la petición inicial
 # Cualquier actividad o curso del mismo Moodle se lee con la sesión, salvo los archivos.
 MOODLE_READABLE = re.compile(r"^/(?:mod/[a-z0-9_]+/|course/view\.php)")
 MOODLE_FILE = re.compile(r"^/mod/(?:resource|folder)/|/pluginfile\.php/")
@@ -167,12 +168,12 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offse
     try:
         page = context.new_page()
         blocked = []
-        navigations = 0
+        redirects = 0
         resolved_url = link["url"]
         deadline = time.monotonic() + 15
 
         def route_document(route):
-            nonlocal navigations, resolved_url
+            nonlocal redirects, resolved_url
             request = route.request
             if request.resource_type != "document" or request.frame != page.main_frame:
                 route.abort()
@@ -180,9 +181,6 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offse
             try:
                 current = request.url
                 while True:
-                    navigations += 1
-                    if navigations > 6:
-                        raise ValueError("El enlace excedió el límite de redirecciones.")
                     validate_public_url(current)
                     timeout = max(1, int((deadline - time.monotonic()) * 1000))
                     response = route.fetch(url=current, max_redirects=0, timeout=timeout)
@@ -190,6 +188,9 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offse
                         location = response.headers.get("location")
                         if not location:
                             raise ValueError("El enlace devolvió una redirección sin destino.")
+                        redirects += 1
+                        if redirects > MAX_REDIRECTS:
+                            raise ValueError("El enlace excedió el límite de redirecciones.")
                         current = urljoin(current, location)
                         continue
                     resolved_url = current

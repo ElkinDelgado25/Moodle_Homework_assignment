@@ -169,6 +169,49 @@ class LinkedBudgetTests(unittest.TestCase):
         self.assertTrue(result["linked_content_incomplete"])
         self.assertIn("límite total", result["linked_resources"][-1]["error"])
 
+    def test_external_links_follow_up_to_six_redirects(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        from playwright.sync_api import sync_playwright
+
+        from moodle_tasks import linked_content
+
+        class Redirects(BaseHTTPRequestHandler):
+            def do_GET(self):
+                remaining = int(self.path.strip("/"))
+                if remaining:
+                    self.send_response(302)
+                    self.send_header("Location", f"/{remaining - 1}")
+                    self.end_headers()
+                    return
+                body = b"<html><body><p>Consigna final</p></body></html>"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Redirects)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        base = f"http://127.0.0.1:{server.server_port}"
+        self.assertEqual(linked_content.MAX_REDIRECTS, 6)
+        # El servidor de prueba es local: se omite solo la comprobación de dirección pública.
+        with patch("moodle_tasks.linked_content.validate_public_url"), sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                result = linked_content.read_link(browser, {"name": "", "url": f"{base}/6"})
+                self.assertIn("Consigna final", result["content"])
+                with self.assertRaisesRegex(ValueError, "límite de redirecciones"):
+                    linked_content.read_link(browser, {"name": "", "url": f"{base}/7"})
+            finally:
+                browser.close()
+
     def test_moodle_file_links_point_to_the_download_tool(self):
         from moodle_tasks import linked_content
         from moodle_tasks.main import Config
