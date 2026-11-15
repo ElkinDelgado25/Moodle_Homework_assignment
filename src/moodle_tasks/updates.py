@@ -165,7 +165,7 @@ def _read_cache() -> dict | None:
         error = data.get("error")
         return {"checked_at": checked_at, "release": release,
                 "error": error if isinstance(error, str) else None}
-    except (OSError, RuntimeError, ValueError, TypeError, KeyError, json.JSONDecodeError, UpdateError):
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError):
         return None
 
 
@@ -279,7 +279,7 @@ def _source_candidates() -> list[Path]:
         parsed = urlsplit(data.get("url", ""))
         if parsed.scheme == "file":
             candidates.append(Path(url2pathname(unquote(parsed.path))))
-    except (metadata.PackageNotFoundError, OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (metadata.PackageNotFoundError, OSError, TypeError, ValueError):
         pass
     # La carpeta del paquete solo es un clon en un checkout de desarrollo; en una instalación
     # con uv tool apunta al entorno virtual y no aporta nada al diagnóstico.
