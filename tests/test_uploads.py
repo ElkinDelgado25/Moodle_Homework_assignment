@@ -33,7 +33,8 @@ class AssignmentUploadTests(unittest.TestCase):
                       "require_login": False, "authenticated": False, "login_count": 0,
                       "drafts": True, "status_extra": "", "banner": False, "delayed_files": [], "hide_in_form": False,
                       "statement": False, "form_error": False, "form_cancel": False, "reject_without_cancel": False,
-                      "sanitize": False, "maxfiles_js": None, "maxfiles_attr": "2", "late_delete_dialog": False}
+                      "sanitize": False, "maxfiles_js": None, "maxfiles_attr": "2", "late_delete_dialog": False,
+                      "global_file_input": False, "late_filepicker": False}
         self.page.route("**/*", self.respond)
 
     def tearDown(self):
@@ -100,10 +101,12 @@ class AssignmentUploadTests(unittest.TestCase):
         save_control = self.state.get("save_control") or '<button type="submit">Guardar cambios</button>'
         cancel_control = '<button type="submit" name="cancel" value="1">Cancelar</button>' if self.state["form_cancel"] else ""
         initial = "fm-loading" if self.state["delayed_files"] else "fm-updating"
+        # Algunos temas dejan en el formulario un input de arrastrar y soltar que no es el del selector.
+        dnd = '<input type="file" id="dnd" style="display:none">' if self.state["global_file_input"] else ""
         maxfiles = f' data-maxfiles="{self.state["maxfiles_attr"]}"' if self.state["maxfiles_attr"] is not None else ""
         manager = f'''<div class="filemanager {initial}"{maxfiles} data-maxbytes="1000000">
           <button type="button" class="fp-vb-details">Detalles</button>{add_control}<button type="button" class="fp-btn-delete">Eliminar</button>
-          <div class="fp-content">{existing}</div></div>''' if self.state["has_filemanager"] else ""
+          {dnd}<div class="fp-content">{existing}</div></div>''' if self.state["has_filemanager"] else ""
         statement = '<input type="checkbox" name="submissionstatement" id="id_submissionstatement"><label for="id_submissionstatement">Declaro que este trabajo es original.</label>' if self.state["statement"] else ""
         feedback = '<div class="invalid-feedback" style="display:block">Debe aceptar la declaración.</div>' if error else ""
         init = f'<script>M = {{form_filemanager: {{init: function(){{}}}}}}; M.form_filemanager.init(Y, {{"maxfiles":{self.state["maxfiles_js"]},"maxbytes":1000000}});</script>' if self.state["maxfiles_js"] is not None else ""
@@ -138,7 +141,7 @@ class AssignmentUploadTests(unittest.TestCase):
             }}, delayed.length ? 600 : 50);
             fm.querySelector('.fp-vb-details').onclick = (event) => event.currentTarget.classList.add('checked');
             const add = fm.querySelector('.fp-btn-add a, .fp-btn-add');
-            add.onclick = () => {{
+            add.onclick = () => setTimeout(() => {{
               const dialog = document.createElement('div'); dialog.id = 'file-dialog'; dialog.setAttribute('role', 'dialog');
               dialog.innerHTML = '<button type="button" id="repo">Subir un archivo</button>'; document.body.appendChild(dialog);
               dialog.querySelector('#repo').onclick = () => {{
@@ -159,7 +162,7 @@ class AssignmentUploadTests(unittest.TestCase):
                   dialog.remove();
                 }};
               }};
-            }};
+            }}, {700 if self.state["late_filepicker"] else 0});
             fm.querySelector('.fp-btn-delete').onclick = () => {{
               fetch('/delete-clicked');
               setTimeout(() => {{
@@ -282,6 +285,13 @@ class AssignmentUploadTests(unittest.TestCase):
         self.assertEqual(result["replaced_files"], ["anterior.pdf"])
         # El botón «Eliminar» del gestor de archivos se pulsa una sola vez: la confirmación se busca solo en el diálogo.
         self.assertEqual(sum(1 for _, path in self.state["requests"] if path == "/delete-clicked"), 1)
+
+    def test_a_hidden_form_input_is_not_taken_for_the_picker_before_it_opens(self):
+        self.state["global_file_input"] = True
+        self.state["late_filepicker"] = True
+        result = self.upload()
+        self.assertEqual(result["status"], "uploaded")
+        self.assertEqual(self.state["saved_files"], ["entrega.docx", "entrega.pdf"])
 
     def test_failed_replacement_preserves_the_previous_submission(self):
         self.state["existing_files"] = ["anterior.pdf"]
