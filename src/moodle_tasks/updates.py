@@ -435,10 +435,11 @@ def _apply_release(release: Release, console: Console) -> None:
     console.print(f"[green]Moodle MCP quedó actualizado a {release.version}.[/green]")
 
 
-def update_latest(*, expected: Release | None = None, already_confirmed: bool = False,
+def update_latest(*, release: Release | None = None, already_confirmed: bool = False,
                   console: Console | None = None) -> bool:
+    """Actualiza a la última release estable. Con release no vuelve a consultar GitHub."""
     console = console or Console()
-    release = fetch_latest_release()
+    release = release or fetch_latest_release()
     current = installed_version()
     status = UpdateStatus(current, release)
     if not status.update_available:
@@ -446,10 +447,7 @@ def update_latest(*, expected: Release | None = None, already_confirmed: bool = 
         return False
 
     show_update_notice(status, console)
-    release_changed = expected is not None and expected.tag != release.tag
-    if release_changed:
-        console.print("La release cambió desde la última comprobación.")
-    if not already_confirmed or release_changed:
+    if not already_confirmed:
         if not sys.stdin.isatty():
             console.print("La actualización requiere confirmación en una terminal; no se modificó nada.")
             return False
@@ -502,7 +500,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         release = fetch_latest_release()
         if UpdateStatus(installed_version(), release).update_available:
-            if update_latest(expected=release, console=console):
+            if update_latest(release=release, console=console):
                 continue_with_updated_setup(["--sync-only"])
         else:
             from .setup import main as setup_main
