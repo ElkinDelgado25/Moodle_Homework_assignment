@@ -58,7 +58,7 @@ Esta operación declara `read_only_hint=false`, `destructive_hint=true` e `idemp
 
 `submitted` vale `true`, `false` o `null` (desconocido); los desconocidos se incluyen al pedir pendientes. Una actividad calificada o que indica no subir documentos no cuenta como pendiente. `reviewed_count`, `incomplete`, `errors` y `coverage` indican el alcance: una lista vacía o con errores no prueba que no haya tareas pendientes.
 
-La consulta `upcoming` lee el filtro actual de la línea de tiempo y carga más actividades si hace falta. Si la línea de tiempo no existe o falla, usa los índices de cada materia y marca `availability_confirmed=false`, porque los índices no muestran la apertura. Una línea de tiempo vacía se respeta y no dispara esa búsqueda. Cada fila trae `assignment_id`, `title`, `course`, `due_at`, `due_display`, `submitted` y `url`.
+La consulta `upcoming` lee el filtro actual de la línea de tiempo y carga más actividades si hace falta. Si la línea de tiempo no existe o falla, usa los índices de cada materia y marca `availability_confirmed=false`, porque los índices no muestran la apertura. Una línea de tiempo vacía se respeta: no dispara esa búsqueda y la respuesta es completa (`incomplete=false`, sin filas), tanto en el servidor MCP como en `mcp-moodle tasks`, que en ese caso informa de que no hay tareas próximas. Cada fila trae `assignment_id`, `title`, `course`, `due_at` y `submitted`; el enlace y el cierre legible van en la tabla de `response_markdown`.
 
 Si Moodle devuelve un error del servidor (5xx), las herramientas responden:
 
