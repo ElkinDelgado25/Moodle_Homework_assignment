@@ -252,7 +252,15 @@ def _note(document, note: str | None) -> None:
     _write_inline(paragraph, note)
 
 
-def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) -> dict:
+def figure_files(content: DeliveryDocument) -> list[Path]:
+    """Ruta resuelta y validada de cada figura, en orden: el DOCX y el PDF usan exactamente la misma."""
+    return [resolve_local_file(block.path) for block in content.blocks if block.type == "figure"]
+
+
+def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path,
+               files: list[Path] | None = None) -> dict:
+    """files son las rutas de figure_files(content); sin ellas se resuelven aquí."""
+    files = figure_files(content) if files is None else files
     document = Document(str(TEMPLATE))
     _fill_cover(document, {**values, "titulo": content.title})
 
@@ -311,7 +319,7 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path) 
             _note(document, block.note)
         elif block.type == "figure":
             figures += 1
-            image = resolve_local_file(block.path)
+            image = files[figures - 1]
             with image.open("rb") as handle:
                 head = handle.read(8)
             if not (head.startswith(b"\x89PNG\r\n\x1a\n") or head.startswith(b"\xff\xd8\xff")):
