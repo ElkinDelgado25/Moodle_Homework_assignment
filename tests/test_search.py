@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
-import helpers  # noqa: F401 - desactiva la caché de sesión
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.main import Config, collect_assignments, is_pending, read_assignment
 from moodle_tasks.search import assignment_url, parse_moodle_date, search_assignments
 

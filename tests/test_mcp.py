@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 from mcp import Client, StdioServerParameters
 
-import helpers  # noqa: F401 - desactiva la caché de sesión
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.main import Assignment, Config
 from moodle_tasks.server import INSTRUCTIONS, assignment_id_from_reference, create_server

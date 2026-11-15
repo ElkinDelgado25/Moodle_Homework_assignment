@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.agents import AGENTS, AgentDetection, AgentSyncResult
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import Config, load_config

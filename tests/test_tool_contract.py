@@ -12,7 +12,7 @@ from docx import Document
 from mcp import Client
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 
-import helpers  # noqa: F401 - desactiva la caché de sesión
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import linked_content
 from moodle_tasks.document import MissingCoverFields, cover_values
 from moodle_tasks.document_model import CoverFields

@@ -12,6 +12,7 @@ from xml.etree import ElementTree as ET
 from pydantic import ValidationError
 from pypdf import PdfReader
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.document import (MissingCoverFields, build_delivery, build_docx, cover_values, export_pdf,
                                    export_with_libreoffice, find_soffice, safe_file_name)
 from moodle_tasks.document_model import CoverFields, DeliveryDocument, parse_inline

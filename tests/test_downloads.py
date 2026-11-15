@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import sync_playwright
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.downloads import attachment_name, download_attachment
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import Config

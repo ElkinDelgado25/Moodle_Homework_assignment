@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
+
 
 def load_install_script():
     path = Path(__file__).resolve().parents[1] / "scripts" / "install_linux.py"

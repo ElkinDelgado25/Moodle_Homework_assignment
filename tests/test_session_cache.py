@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import sync_playwright
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import session
 from moodle_tasks.errors import MoodleAuthenticationError
 from moodle_tasks.main import Config

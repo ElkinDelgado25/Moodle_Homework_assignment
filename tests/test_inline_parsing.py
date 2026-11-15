@@ -1,5 +1,6 @@
 import unittest
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import document_model
 from moodle_tasks.document_model import parse_inline, reference_key
 

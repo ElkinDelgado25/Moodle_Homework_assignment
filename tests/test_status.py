@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.status import main
 from moodle_tasks.storage import save_credentials

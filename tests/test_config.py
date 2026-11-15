@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from dotenv import dotenv_values
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.main import load_config
 
 

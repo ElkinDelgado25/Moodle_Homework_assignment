@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import cli, server
 
 

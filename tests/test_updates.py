@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import updates
 
 

@@ -3,6 +3,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.cli import main
 
 

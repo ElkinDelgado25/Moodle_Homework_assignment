@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.system import describe_system
 
 

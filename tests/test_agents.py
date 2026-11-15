@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.agents import AGENTS, AgentDetection, detect_agents, ordered_agents, register_agent, synchronize_agents
 
 
