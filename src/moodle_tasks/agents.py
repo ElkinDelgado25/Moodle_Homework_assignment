@@ -55,11 +55,17 @@ def read_json_config(agent: str, path: Path) -> dict:
 
 def detect_agents() -> dict[str, AgentDetection]:
     """Inspeccionar comandos y configuración local sin ejecutar los agentes."""
-    commands = {"codex": ("codex",), "claude": ("claude",), "cursor": ("agent", "cursor-agent"),
+    commands = {"codex": ("codex",), "claude": ("claude",), "cursor": ("cursor-agent", "cursor"),
                 "antigravity": ("agy", "antigravity"), "copilot": ("code", "code-insiders")}
     detected = {}
     for agent, names in commands.items():
         installed = any(shutil.which(name) for name in names)
+        if agent == "cursor" and not installed and shutil.which("agent"):
+            # «agent» es un nombre muy genérico: solo es Cursor si existe su carpeta personal.
+            try:
+                installed = (Path.home() / ".cursor").is_dir()
+            except (OSError, RuntimeError):
+                installed = False
         availability = "Instalado" if installed else "No detectado"
         if agent == "copilot":
             try:
