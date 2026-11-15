@@ -1,10 +1,11 @@
-"""Instalacion interactiva de Moodle MCP."""
+"""Instalacion interactiva de Moodle MCP desde un clon, comun a Windows, macOS y Linux."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 from rich.console import Console
@@ -13,6 +14,7 @@ from rich.prompt import Confirm
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_NAME = "moodle-homework-assignment"
 console = Console()
 
 
@@ -20,14 +22,21 @@ def run(*command: str) -> None:
     subprocess.run(command, check=True)
 
 
-def tool_install_command(project_dir: Path) -> list[str]:
+def export_constraints_command(project_dir: Path, output: Path) -> list[str]:
+    """Versiones fijadas en uv.lock, las mismas que prueba el CI y que usa mcp-moodle update."""
+    return ["uv", "export", "-q", "--project", str(project_dir), "--locked", "--no-dev", "--no-emit-project",
+            "--no-hashes", "--format", "requirements.txt", "--output-file", str(output)]
+
+
+def tool_install_command(project_dir: Path, constraints: Path) -> list[str]:
     """Instala una copia aislada y sustituye una instalacion anterior del mismo equipo."""
-    return ["uv", "tool", "install", "-q", "--force", "--python", "3.11", str(project_dir)]
+    return ["uv", "tool", "install", "-q", "--force", "--python", "3.11", "--reinstall-package", PROJECT_NAME,
+            "--constraints", str(constraints), str(project_dir)]
 
 
 def tool_python() -> str:
     tool_root = Path(subprocess.check_output(["uv", "tool", "dir"], text=True).strip())
-    environment = tool_root / "moodle-homework-assignment"
+    environment = tool_root / PROJECT_NAME
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     return str(python)
 
@@ -36,7 +45,10 @@ def install_user_command(project_dir: Path) -> None:
     console.rule("[bold cyan]1 de 3 - Comando en el PATH")
     console.print("Se instalara mcp-moodle para ejecutarlo desde cualquier carpeta.")
     console.print("Tiempo estimado: 1 a 3 minutos.")
-    run(*tool_install_command(project_dir))
+    with tempfile.TemporaryDirectory(prefix="moodle-install-") as temporary:
+        constraints = Path(temporary) / "requirements.txt"
+        run(*export_constraints_command(project_dir, constraints))
+        run(*tool_install_command(project_dir, constraints))
     run("uv", "tool", "update-shell")
     console.print("[green]mcp-moodle quedo en el PATH. Las terminales que ya estaban abiertas hay que cerrarlas y abrirlas de nuevo.[/green]")
 
@@ -71,13 +83,14 @@ def main(argv: list[str] | None = None) -> None:
         "[bold red]MOODLE MCP[/bold red]\nInstalacion desde un repositorio clonado",
         border_style="red",
     ))
-    # El asistente debe ejecutarse con el comando instalado: asi el agente queda
-    # registrado con el Python de esa instalacion y no con el entorno del repositorio.
+    # El asistente debe ejecutarse con el Python de la herramienta instalada: asi el agente
+    # queda registrado con esa instalacion y no con el entorno del repositorio. No se busca
+    # mcp-moodle en el PATH, que en esta terminal puede no incluirla todavia o apuntar a otra.
     install_user_command(PROJECT_DIR)
     prepare_system_dependencies(args.family)
     console.rule("[bold cyan]3 de 3 - Configuracion de Moodle")
     console.print("Se abrira el asistente para configurar la cuenta y el agente.")
-    run("mcp-moodle", "setup")
+    run(tool_python(), "-m", "moodle_tasks.cli", "setup")
 
 
 if __name__ == "__main__":
