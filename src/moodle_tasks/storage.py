@@ -10,11 +10,11 @@ from dotenv import dotenv_values
 
 def user_config_dir() -> Path:
     if sys.platform == "win32":
-        root = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
+        root = Path(os.environ.get("APPDATA") or Path.home() / "AppData/Roaming")
     elif sys.platform == "darwin":
         root = Path.home() / "Library/Application Support"
     else:
-        root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        root = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
     return root / "moodle-homework-assignment"
 
 
@@ -25,11 +25,11 @@ def user_cache_dir() -> Path:
     Nunca guarda credentials.env.
     """
     if sys.platform == "win32":
-        root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData/Local")
     elif sys.platform == "darwin":
         root = Path.home() / "Library/Caches"
     else:
-        root = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+        root = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     return root / "moodle-homework-assignment"
 
 
