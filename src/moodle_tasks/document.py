@@ -26,7 +26,6 @@ from .storage import user_cache_dir
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 TEMPLATE = ASSETS / "academic-cover.docx"
-LOGO = ASSETS / "uleam-logo.png"
 PLACEHOLDER = re.compile(r"\{\{[a-z_0-9]+\}\}")
 HYPERLINK = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
 RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"{device}{digit}" for device in ("COM", "LPT") for digit in "123456789\u00b9\u00b2\u00b3")}
