@@ -42,7 +42,7 @@ from .main import (
     load_config,
     read_assignment,
 )
-from .paths import UnsafePathError, resolve_destination_directory
+from .paths import UnsafePathError, protect_credentials, resolve_destination_directory
 from .profile import load_profile, remember_teacher, subject_key
 from .session import ensure_login, moodle_page
 from .storage import user_config_dir
@@ -296,6 +296,9 @@ class MoodleServer(MCPServer):
 
 
 def create_server(env_file: Path = ENV_FILE) -> MCPServer:
+    # Las rutas protegidas ya cubren la carpeta de configuración predeterminada; un --env-file
+    # propio (p. ej. el de setup --config-dir) también debe quedar fuera de subidas y descargas.
+    protect_credentials(env_file)
     server = MoodleServer("moodle", instructions=INSTRUCTIONS)
     readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
     local_readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)

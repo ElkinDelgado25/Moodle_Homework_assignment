@@ -73,6 +73,27 @@ class UploadSafetyTests(unittest.TestCase):
         link.symlink_to(self.credentials)
         self.assertIn("configuración", self.rejected(str(link)))
 
+    def test_the_env_file_given_to_serve_is_protected_like_the_default_one(self):
+        from moodle_tasks import paths
+        from moodle_tasks.server import create_server
+
+        account = self.root / "otra-cuenta" / "credentials.env"
+        account.parent.mkdir()
+        account.write_text("MOODLE_PASSWORD=otra\n")
+        with patch.object(paths, "_credential_files", []):
+            self.assertEqual(paths.resolve_local_file(str(account)), account.resolve())
+            create_server(account)
+            with self.assertRaises(UnsafePathError):
+                paths.resolve_local_file(str(account))
+            if os.name != "nt":
+                link = self.work / "notas.txt"
+                os.link(account, link)
+                with self.assertRaises(UnsafePathError):
+                    check_upload_file(str(link))
+            # La carpeta que lo contiene sigue disponible para otros archivos.
+            make_pdf(account.parent / "entrega.pdf")
+            self.assertEqual(check_upload_file(str(account.parent / "entrega.pdf")), (account.parent / "entrega.pdf").resolve())
+
     def test_traversal_into_protected_paths_is_rejected(self):
         traversal = str(self.work / ".." / "config" / "moodle-homework-assignment" / "credentials.env")
         self.assertIn("configuración", self.rejected(traversal))

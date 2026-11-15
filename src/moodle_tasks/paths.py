@@ -44,13 +44,27 @@ def _inside(path: Path, root: Path) -> bool:
         return False
 
 
-def _protected_roots() -> list[Path]:
+# Archivos de credenciales que usa este proceso además del predeterminado: serve --env-file,
+# que es como queda registrada una cuenta creada con setup --config-dir.
+_credential_files: list[Path] = []
+
+
+def protect_credentials(env_file: Path) -> None:
+    """Impide adjuntar, leer o enlazar el archivo de credenciales con el que se inició el servidor."""
+    path = Path(env_file)
+    if path not in _credential_files:
+        _credential_files.append(path)
+
+
+def _credential_roots() -> list[Path]:
     # La sesión vive en la caché, junto a las carpetas de trabajo, pero contiene cookies de Moodle.
-    roots = [user_config_dir(), sessions_dir()]
+    return [user_config_dir(), sessions_dir(), default_env_file(), *_credential_files]
+
+
+def _protected_roots() -> list[Path]:
+    roots = _credential_roots()
     if sys.platform != "win32":
         roots += [Path(root) for root in SYSTEM_ROOTS]
-    env_file = default_env_file()
-    roots.append(env_file)
     resolved = []
     for root in roots:
         try:
@@ -82,8 +96,7 @@ def _expand(raw: str) -> Path:
 def _protected_inodes() -> set[tuple[int, int]]:
     """Identidad (dispositivo, inodo) de los archivos de configuración: detecta enlaces duros hacia ellos."""
     found = set()
-    roots = [user_config_dir(), sessions_dir(), default_env_file()]
-    for root in roots:
+    for root in _credential_roots():
         try:
             paths = [root] if root.is_file() else [path for path in root.rglob("*") if path.is_file()]
         except OSError:
