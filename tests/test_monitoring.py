@@ -1,3 +1,4 @@
+import base64
 import os
 import tempfile
 import unittest
@@ -5,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks import cli, server
+from moodle_tasks import cli, monitoring, server
 
 
 class SentryInitializationTests(unittest.TestCase):
@@ -29,6 +30,44 @@ class SentryInitializationTests(unittest.TestCase):
         with patch("moodle_tasks.cli.initialize_sentry") as initialize, patch.object(cli.status, "main"):
             cli.main(["status"])
         initialize.assert_called_once()
+
+
+class SentryScrubbingTests(unittest.TestCase):
+    def before_send(self, values):
+        with patch.object(monitoring, "_initialized", False), patch("sentry_sdk.init") as init:
+            monitoring.initialize_sentry(values)
+        init.assert_called_once()
+        return init.call_args.kwargs["before_send"]
+
+    def test_exception_and_log_messages_never_carry_the_credentials(self):
+        before_send = self.before_send({"SENTRY_DSN": "https://key@sentry.test/1",
+                                        "MOODLE_USERNAME": "estudiante@uleam.edu.ec",
+                                        "MOODLE_PASSWORD": "Clave-Secreta%9"})
+        pair = base64.b64encode(b"estudiante@uleam.edu.ec:Clave-Secreta%9").decode()
+        event = {
+            "exception": {"values": [{"type": "RuntimeError",
+                                      "value": "login https://moodle.test/?u=estudiante%40uleam.edu.ec&p=Clave-Secreta%259 falló",
+                                      "stacktrace": {"frames": [{"function": "login"}]}}]},
+            "logentry": {"message": "Authorization: Basic %s", "params": [pair]},
+            "message": "contraseña Clave-Secreta%9",
+            "extra": {"detalle": ("ESTUDIANTE@ULEAM.EDU.EC",)},
+            "request": {"data": "Clave-Secreta%9"}, "user": {"email": "estudiante@uleam.edu.ec"},
+            "level": "error",
+        }
+        scrubbed = before_send(event, {})
+        text = str(scrubbed)
+        for secret in ("Clave-Secreta", "estudiante", "ESTUDIANTE", pair):
+            self.assertNotIn(secret, text)
+        self.assertNotIn("request", scrubbed)
+        self.assertNotIn("user", scrubbed)
+        self.assertEqual(scrubbed["level"], "error")
+        self.assertEqual(scrubbed["exception"]["values"][0]["stacktrace"]["frames"][0]["function"], "login")
+        self.assertIn("[oculto]", scrubbed["exception"]["values"][0]["value"])
+
+    def test_events_without_configured_credentials_are_kept(self):
+        before_send = self.before_send({"SENTRY_DSN": "https://key@sentry.test/1"})
+        event = {"exception": {"values": [{"value": "Tiempo de espera agotado"}]}, "contexts": {"os": {}}}
+        self.assertEqual(before_send(event, {}), {"exception": {"values": [{"value": "Tiempo de espera agotado"}]}})
 
 
 if __name__ == "__main__":
