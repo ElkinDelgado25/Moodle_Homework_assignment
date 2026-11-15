@@ -17,8 +17,6 @@ mcp-moodle setup --connect-only --agent cursor
 
 Reinicia el agente después de configurarlo. En Antigravity, escribe `/mcp` para confirmar que el servidor `moodle` está conectado.
 
-> El comando correcto es `mcp-moodle`; `moodle-mcp` inicia el servidor MCP y no admite la opción `setup`.
-
 ## Usar Moodle MCP
 
 ```bash
