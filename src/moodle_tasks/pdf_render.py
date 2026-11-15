@@ -20,6 +20,7 @@ for _logger in ("fontTools", "fontTools.subset", "fpdf"):
     logging.getLogger(_logger).setLevel(logging.WARNING)
 
 ASSETS = Path(__file__).resolve().parent / "assets"
+LOGO = ASSETS / "uleam-logo.png"
 PT = 25.4 / 72
 MARGIN = 25.4
 HEADER_Y = 12.7
@@ -130,7 +131,7 @@ class _Renderer(FPDF):
         self.set_font(self.family_name, "", 12)
         self.set_text_color(0, 0, 0)
         if self.cover and self.page_no() == 1:
-            self.image(str(ASSETS / "uleam-logo.png"), x=MARGIN, y=HEADER_Y, w=37.5)
+            self.image(str(LOGO), x=MARGIN, y=HEADER_Y, w=37.5)
         self.set_xy(MARGIN, HEADER_Y)
         self.cell(0, SINGLE, str(self.page_no()), align="R")
         self.set_xy(MARGIN, MARGIN)
