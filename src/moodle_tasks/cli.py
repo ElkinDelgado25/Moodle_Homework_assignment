@@ -30,10 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "update":
         updates.main(options)
     elif args.command == "tasks":
-        if options:
-            tasks.main(options)
-        else:
-            tasks.main([])
+        tasks.main(options)
     else:
         if options:
             parser.error("Argumentos desconocidos: " + " ".join(options))
