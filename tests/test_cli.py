@@ -1,6 +1,6 @@
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
 from moodle_tasks.cli import main
@@ -26,8 +26,19 @@ class CLITests(unittest.TestCase):
 
     def test_tasks_forwards_search_options(self):
         with patch("moodle_tasks.cli.tasks.main") as tasks:
-            main(["tasks", "--mode", "recent", "--limit", "5", "--refresh"])
-            tasks.assert_called_once_with(["--mode", "recent", "--limit", "5", "--refresh"])
+            main(["tasks", "--mode", "all", "--limit", "5"])
+            tasks.assert_called_once_with(["--mode", "all", "--limit", "5"])
+
+    def test_recent_is_rejected_before_the_browser_is_opened(self):
+        from moodle_tasks import main as tasks
+
+        with patch("moodle_tasks.main.collect_assignments") as collect, patch("moodle_tasks.main.load_config") as load, \
+                redirect_stderr(io.StringIO()) as error, self.assertRaises(SystemExit) as caught:
+            tasks.main(["--mode", "recent"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("recent", error.getvalue())
+        collect.assert_not_called()
+        load.assert_not_called()
 
     def test_no_subcommand_displays_help(self):
         output = io.StringIO()
