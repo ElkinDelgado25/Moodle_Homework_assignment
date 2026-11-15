@@ -350,11 +350,15 @@ def collect_assignments(config: Config, *, mode: str = "all", limit: int | None 
 
 
 def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None,
-                summary_only: bool = False) -> None:
+                summary_only: bool = False, timeline_empty: bool = False) -> None:
     pending = [task for task in tasks if is_pending(task)]
     if summary_only and pending:
         from .server import pending_table
         print(pending_table(pending))
+        return
+    if not tasks and timeline_empty and not incomplete:
+        # Una línea de tiempo vacía es una consulta completa: Moodle no muestra actividades próximas.
+        print("\nNo hay tareas próximas en la línea de tiempo de Moodle.")
         return
     stamp = datetime.now().astimezone().strftime("%A, %d/%m/%Y %H:%M")
     print(f"\nConsulta de Moodle: {stamp}")
@@ -416,7 +420,8 @@ def main(argv: list[str] | None = None) -> None:
                                           only_pending=True, refresh=args.refresh, summary_only=True, stats=stats)
         for error in errors:
             print(redact_credentials(error, (config.username, config.password)), file=sys.stderr)
-        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"), summary_only=True)
+        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"), summary_only=True,
+                    timeline_empty=stats.get("timeline_status") == "empty")
         print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
         secrets = (config.username, config.password) if config else ()
