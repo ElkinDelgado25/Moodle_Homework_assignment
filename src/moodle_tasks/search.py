@@ -16,7 +16,7 @@ from .storage import atomic_write, user_config_dir
 from .urls import assignment_view_id, moodle_path, parse_id
 
 
-MODES = ("upcoming", "recent", "overdue", "all")
+MODES = ("upcoming", "overdue", "all")
 CACHE_SECONDS = 900
 MONTHS = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
@@ -196,8 +196,6 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                        stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
     if mode not in MODES or limit is not None and limit < 1:
         raise ValueError("Modo o límite de consulta inválido.")
-    if summary_only and mode == "recent":
-        raise ValueError("La vista superficial no consulta aperturas. Usa upcoming para ordenar por fecha y hora de cierre.")
     stats = stats if stats is not None else {}
     stats.update(mode=mode, source="course_indexes", dashboard_pages_read=0, dashboard_load_more=0,
                  index_pages_read=0, detail_pages_read=0, cached_details=0, candidates_checked=0)
@@ -242,8 +240,6 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                 due_text = candidate.get("deadline") or (cells[2] if len(cells) >= 3 else "")
                 due_at = parse_moodle_date(due_text)
                 available = candidate.get("available")
-                if mode == "recent" and available is not True:
-                    return
                 if mode == "upcoming" and available is False:
                     return
                 # Una fila de un índice de curso (available=None) se acepta con disponibilidad sin confirmar.
@@ -269,8 +265,6 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
                 return
             if mode == "overdue" and (due is None or due >= now):
                 return
-            if mode == "recent" and (opening is None or opening > now or due is not None and due < now):
-                return
             tasks.append(task)
             if unconfirmed:
                 stats["availability_unconfirmed"] = stats.get("availability_unconfirmed", 0) + 1
@@ -295,10 +289,7 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
         stats["source"] = "course_indexes" if not tasks else "dashboard_and_course_indexes"
         for candidate in index_candidates(page, config, stats, errors, progress):
             inspect(candidate)
-    if mode == "recent":
-        tasks.sort(key=lambda task: task.opens_at or "", reverse=True)
-    else:
-        tasks.sort(key=lambda task: task.due_at or "9999")
+    tasks.sort(key=lambda task: task.due_at or "9999")
     stats["matched_count"] = len(tasks)
     stats["summary_only"] = summary_only
     stats["coverage"] = (

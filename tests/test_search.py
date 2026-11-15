@@ -211,9 +211,7 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(stats['detail_pages_read'], 4)
         self.assertEqual(stats['candidates_checked'], 6)
 
-    def test_recent_excludes_future_openings_and_overdue_excludes_future_deadlines(self):
-        recent, _ = self.query(mode="recent", limit=5)
-        self.assertEqual([task.title for task in recent], ['Pendiente reciente', 'Pendiente anterior'])
+    def test_overdue_excludes_future_deadlines(self):
         overdue, _ = self.query(mode="overdue", limit=None)
         self.assertEqual([task.title for task in overdue], ['Vencida'])
 
