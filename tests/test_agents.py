@@ -154,3 +154,26 @@ class AgentTests(unittest.TestCase):
                 with self.subTest(agent=agent), self.assertRaises(Exception):
                     register_agent(agent, Path(directory) / "credentials.env", path)
                 self.assertEqual(path.read_text(), "invalid configuration")
+
+class CursorDetectionTests(unittest.TestCase):
+    def detect(self, commands, with_cursor_folder):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            if with_cursor_folder:
+                (root / ".cursor").mkdir()
+            with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / "sin-config" / agent), \
+                    patch("moodle_tasks.agents.shutil.which",
+                          side_effect=lambda name: "/bin/" + name if name in commands else None), \
+                    patch("pathlib.Path.home", return_value=root):
+                return detect_agents()["cursor"]
+
+    def test_a_generic_agent_command_alone_is_not_cursor(self):
+        self.assertFalse(self.detect({"agent"}, with_cursor_folder=False).installed)
+
+    def test_agent_counts_as_cursor_when_its_folder_exists(self):
+        self.assertTrue(self.detect({"agent"}, with_cursor_folder=True).installed)
+
+    def test_cursor_agent_and_cursor_are_enough_by_themselves(self):
+        for command in ("cursor-agent", "cursor"):
+            with self.subTest(command=command):
+                self.assertTrue(self.detect({command}, with_cursor_folder=False).installed)
