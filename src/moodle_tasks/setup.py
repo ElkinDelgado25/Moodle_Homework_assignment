@@ -166,7 +166,9 @@ def main(argv: list[str] | None = None) -> None:
         if args.sync_after_update:
             prepare_browser(env_file.parent)
             if env_file.is_file() and not args.sync_only:
-                sync_agent_configurations(env_file, selected_agent=args.agent, selected_config=args.agent_config)
+                # Un agente ajeno con la configuración dañada no debe impedir continuar con el asistente.
+                sync_agent_configurations(env_file, selected_agent=args.agent, selected_config=args.agent_config,
+                                          fatal=False)
         if args.sync_only:
             if not env_file.is_file():
                 print("No hay una cuenta guardada. Ejecuta mcp-moodle setup para configurarla.")
