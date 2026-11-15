@@ -97,6 +97,7 @@ class AgentTests(unittest.TestCase):
             (root / "codex").write_text('[mcp_servers.moodle]\ncommand="python"\n', encoding="utf-8")
             (root / "claude").write_text('{"mcpServers":{"moodle":{"command":"python"}}}', encoding="utf-8")
             (root / "antigravity").write_text('invalid json', encoding="utf-8")
+            (root / ".cursor").mkdir()  # «agent» solo cuenta como Cursor si existe su carpeta personal
             with patch("moodle_tasks.agents.agent_config_file", side_effect=lambda agent: root / agent), patch("moodle_tasks.agents.shutil.which", side_effect=lambda name: "/bin/" + name if name in ("codex", "agent", "agy") else None), patch("pathlib.Path.home", return_value=root):
                 result = detect_agents()
             self.assertEqual(result["codex"].availability, "Instalado")
