@@ -52,7 +52,7 @@ def prepare_browser(log_dir: Path | None = None) -> None:
 
 def verify_credentials(config: Config) -> dict[str, object]:
     """Comprueba el acceso y guarda el nombre y las materias que Moodle muestra."""
-    identity: dict[str, object] = {"student_1": "", "courses": []}
+    identity: dict[str, object] = {"nombre": "", "courses": []}
     # Sin la sesión guardada: debe iniciar sesión con las credenciales, y deja guardada la nueva sesión.
     with moodle_page(config, fresh=True) as (_, page):
         login(page, config)
@@ -60,7 +60,7 @@ def verify_credentials(config: Config) -> dict[str, object]:
             identity = record_verified_profile(page, config)
         except Exception:
             # El acceso ya está comprobado; un fallo al leer el perfil no lo anula.
-            identity = {"student_1": "", "courses": []}
+            identity = {"nombre": "", "courses": []}
     return identity
 
 
@@ -93,8 +93,8 @@ def ask_account(url: str) -> tuple[Config, bool]:
         except Exception as error:
             raise RuntimeError(redact_credentials(error, (username, password))) from None
         print("Cuenta verificada correctamente.")
-        if identity.get("student_1"):
-            print(f"Nombre en Moodle: {identity['student_1']}")
+        if identity.get("nombre"):
+            print(f"Nombre en Moodle: {identity['nombre']}")
         courses = identity.get("courses") or []
         if courses:
             print("Materias visibles: " + ", ".join(str(course) for course in courses))

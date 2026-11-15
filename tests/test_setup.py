@@ -29,11 +29,11 @@ class VerifyCredentialsTests(unittest.TestCase):
         config = Config("https://moodle.test", "student", "secret")
         with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), \
                 patch("moodle_tasks.setup.login") as login, \
-                patch("moodle_tasks.setup.record_verified_profile", return_value={"student_1": "Ana", "courses": []}):
+                patch("moodle_tasks.setup.record_verified_profile", return_value={"nombre": "Ana", "courses": []}):
             identity = verify_credentials(config)
         self.assertEqual(calls, [{"fresh": True}])
         login.assert_called_once_with(page, config)
-        self.assertEqual(identity["student_1"], "Ana")
+        self.assertEqual(identity["nombre"], "Ana")
 
     def test_a_profile_failure_does_not_cancel_the_verified_access(self):
         @contextmanager
@@ -43,7 +43,7 @@ class VerifyCredentialsTests(unittest.TestCase):
         config = Config("https://moodle.test", "student", "secret")
         with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), patch("moodle_tasks.setup.login"), \
                 patch("moodle_tasks.setup.record_verified_profile", side_effect=RuntimeError("perfil")):
-            self.assertEqual(verify_credentials(config), {"student_1": "", "courses": []})
+            self.assertEqual(verify_credentials(config), {"nombre": "", "courses": []})
 
 
 class SetupTests(unittest.TestCase):

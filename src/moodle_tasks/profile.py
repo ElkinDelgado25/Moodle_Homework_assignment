@@ -13,7 +13,10 @@ from .storage import atomic_write, user_config_dir
 
 TEXT_FIELDS = ("materia", "nombre_docente", "carrera", "curso", "anio",
                # Claves de versiones anteriores, que se siguen leyendo.
-               "subject", "teacher", "student_1", "student_2", "degree", "class_group", "year")
+               "subject", "teacher", "degree", "class_group", "year")
+# Hasta 0.4.4 los nombres se guardaban en student_1 (la cuenta verificada) y student_2.
+# Al leer el perfil se convierten en «estudiantes», la única clave que se escribe ahora.
+LEGACY_STUDENT_KEYS = ("student_1", "student_2")
 SKIP_COURSES = re.compile(r"^(?:mis cursos|all courses|cursos|courses)$", re.IGNORECASE)
 
 
@@ -46,10 +49,11 @@ def public_profile(data: object) -> dict:
         if value:
             result[key] = value
     students = data.get("estudiantes")
-    if isinstance(students, list):
-        cleaned_students = [text for text in (_profile_text(item) for item in students) if text]
-        if cleaned_students:
-            result["estudiantes"] = list(dict.fromkeys(cleaned_students))
+    if not isinstance(students, list):
+        students = [data.get(key) for key in LEGACY_STUDENT_KEYS]
+    cleaned_students = [text for text in (_profile_text(item) for item in students) if text]
+    if cleaned_students:
+        result["estudiantes"] = list(dict.fromkeys(cleaned_students))
     courses = data.get("courses")
     if isinstance(courses, list):
         cleaned = [text for text in (_profile_text(item) for item in courses) if text]
@@ -143,7 +147,11 @@ def read_identity(page: Page, config: Config) -> tuple[str, list[str]]:
 
 
 def record_verified_profile(page: Page, config: Config, directory: Path | None = None) -> dict:
-    """Actualiza nombre y materias. No escribe docente, curso ni año."""
+    """Actualiza nombre y materias. No escribe docente, curso ni año.
+
+    El nombre verificado es siempre el primero de «estudiantes»; los compañeros que sigan se conservan.
+    Devuelve {"nombre": ..., "courses": [...]}.
+    """
     name, courses = read_identity(page, config)
     path = profile_file(directory)
     current: dict = {}
@@ -154,9 +162,10 @@ def record_verified_profile(page: Page, config: Config, directory: Path | None =
         except (OSError, ValueError):
             current = {}
     if name:
-        current["student_1"] = name
+        partners = current.get("estudiantes", [])[1:]
+        current["estudiantes"] = list(dict.fromkeys([name, *partners]))
     if courses:
         current["courses"] = courses
     if name or courses:
         atomic_write(path, json.dumps(current, ensure_ascii=False, indent=2) + "\n")
-    return {"student_1": current.get("student_1", ""), "courses": list(current.get("courses", []))}
+    return {"nombre": name or (current.get("estudiantes") or [""])[0], "courses": list(current.get("courses", []))}

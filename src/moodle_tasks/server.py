@@ -556,7 +556,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             value = next((profile[key] for key in keys if profile.get(key)), None)
             if value:
                 defaults[field] = value
-        students = profile.get("estudiantes") or [profile.get(key) for key in ("student_1", "student_2") if profile.get(key)]
+        students = profile.get("estudiantes")
         if students:
             defaults["estudiantes"] = students
         if profile.get("teachers"):

@@ -30,8 +30,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(1) from None
     detail = "Acceso a Moodle verificado en esta consulta."
     if isinstance(identity, dict):
-        if identity.get("student_1"):
-            detail += f" Nombre: {identity['student_1']}."
+        if identity.get("nombre"):
+            detail += f" Nombre: {identity['nombre']}."
         courses = identity.get("courses") or []
         if courses:
             detail += f" Materias: {len(courses)}."

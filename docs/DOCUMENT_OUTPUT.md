@@ -63,7 +63,7 @@ Ejemplo para un grupo de tres:
  "carrera": "Ingeniería de Software", "curso": "Quinto A", "anio": "2026"}
 ```
 
-Si falta un dato obligatorio, la herramienta devuelve `status="missing_cover_fields"` con la lista y no escribe ningún archivo; el agente pregunta solo esos datos. El perfil `document_profile.json` acepta estas claves en español y también las de versiones anteriores (`student_1`, `teacher`, `year`...). Acepta números (por ejemplo `"anio": 2026`) y descarta solo los campos inválidos.
+Si falta un dato obligatorio, la herramienta devuelve `status="missing_cover_fields"` con la lista y no escribe ningún archivo; el agente pregunta solo esos datos. El perfil `document_profile.json` acepta estas claves en español y también las de versiones anteriores (`teacher`, `year`...); `student_1` y `student_2` se leen como `estudiantes`, la única clave donde se guarda ahora el nombre verificado. Acepta números (por ejemplo `"anio": 2026`) y descarta solo los campos inválidos.
 
 ## Formato APA 7
 

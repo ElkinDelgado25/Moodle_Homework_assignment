@@ -68,7 +68,7 @@ def cover_values(cover: CoverFields, profile: dict, course: str | None = None, n
     course es la materia de la tarea en Moodle: tiene prioridad sobre la materia guardada en el perfil, y el
     docente guardado solo se usa si corresponde a esa misma materia.
     """
-    from .profile import teacher_for
+    from .profile import public_profile, teacher_for
 
     def text(value):
         return " ".join(value.split()) if isinstance(value, str) else ""
@@ -87,8 +87,7 @@ def cover_values(cover: CoverFields, profile: dict, course: str | None = None, n
         values[field] = values[field] or saved(field)
     students = list(cover.estudiantes)
     if not students:
-        saved_students = profile.get("estudiantes")
-        saved_students = saved_students if isinstance(saved_students, list) else [profile.get("student_1"), profile.get("student_2")]
+        saved_students = public_profile(profile).get("estudiantes", [])
         students = [text(name) for name in saved_students if text(name)]
     values["estudiantes"] = students[:MAX_STUDENTS]
     missing = [field for field in COVER_FIELDS if not values[field]]

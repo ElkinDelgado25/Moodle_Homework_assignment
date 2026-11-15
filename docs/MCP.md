@@ -38,7 +38,7 @@ Después de instalar, el comando del servidor es `mcp-moodle serve`. Un cliente 
 | `build_delivery_document(document, cover, destination_directory=null, file_name=null, open_pdf=true, pdf_engine="auto")` | Genera el entregable: el agente envía el contenido estructurado (títulos, párrafos, listas, tablas, figuras, código, citas y referencias) y los datos de portada; el servidor arma la portada ULEAM, aplica APA 7, crea el DOCX editable (Word o WPS) y su PDF, los verifica, los copia sin sobrescribir y abre el PDF. Si faltan datos de portada devuelve `missing_cover_fields` sin escribir nada. Ver [DOCUMENT_OUTPUT.md](DOCUMENT_OUTPUT.md). |
 | `finish_delivery(docx_path, pdf_path, destination_directory, open_pdf=true)` | Solo para documentos hechos fuera de `build_delivery_document`: verifica el par (mismo nombre, sin campos `{{...}}`, PDF legible), lo copia sin sobrescribir y abre el PDF. |
 | `upload_assignment_files(file_paths, assignment_id=null, url=null, replace_existing=false)` | Adjunta archivos a una tarea y guarda la entrega, solo si el usuario lo pidió. Valida tipo, contenido y ubicación antes de abrir Moodle; todo o nada; nunca envía para calificar. |
-| `get_document_template()` | Datos de portada guardados (`student_1`, materias), formato APA 7 y política de contenido. No genera archivos. |
+| `get_document_template()` | Datos de portada guardados (`estudiantes`, materias), formato APA 7 y política de contenido. No genera archivos. |
 
 ### Sesión de Moodle
 
