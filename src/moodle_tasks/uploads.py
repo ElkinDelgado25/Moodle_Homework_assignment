@@ -154,9 +154,12 @@ def _has_control(root: Locator | Page, pattern: re.Pattern[str]) -> bool:
     return False
 
 
-def _upload_input(page: Page) -> Locator | None:
-    # Prefer the file input inside Moodle's active picker. A filemanager may also
-    # contain a separate hidden drag-and-drop input on the underlying form.
+def _upload_input(page: Page, *, any_input: bool = False) -> Locator | None:
+    """Input de archivo del selector activo de Moodle.
+
+    El gestor de archivos puede traer en el formulario otro input oculto de arrastrar y soltar, que no es el del
+    selector. Solo con any_input=True se acepta cualquier input de la página, como último recurso.
+    """
     for selector in (
         "[role='dialog']:not([data-mcp-foreign]) .fp-file input[type='file']",
         ".filepicker:not([data-mcp-foreign]) .fp-file input[type='file']",
@@ -168,6 +171,8 @@ def _upload_input(page: Page) -> Locator | None:
         inputs = page.locator(selector)
         if inputs.count():
             return inputs.last
+    if not any_input:
+        return None
     inputs = page.locator("input[type='file']")
     return inputs.last if inputs.count() else None
 
@@ -286,7 +291,9 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
             raise RuntimeError(f"Moodle no pudo abrir el selector de archivos: {error}")
         page.wait_for_timeout(POLL_SECONDS * 1000)
     else:
-        raise RuntimeError("Moodle no abrió el selector de archivos.")
+        # Temas sin un diálogo reconocible: solo ahora, agotada la espera, vale cualquier input de archivo.
+        if _upload_input(page, any_input=True) is None:
+            raise RuntimeError("Moodle no abrió el selector de archivos.")
 
     _find_dialog_action(page, UPLOAD_REPOSITORY)
 
@@ -298,6 +305,8 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
         if error := _upload_error_message(page):
             raise RuntimeError(f"Moodle no pudo preparar la subida: {error}")
         page.wait_for_timeout(POLL_SECONDS * 1000)
+    if upload_input is None:
+        upload_input = _upload_input(page, any_input=True)
     if upload_input is None:
         raise RuntimeError("El selector de Moodle no mostró el campo para elegir un archivo.")
     upload_input.set_input_files(str(path))
