@@ -104,14 +104,14 @@ class MoodleTests(unittest.TestCase):
     def test_empty_timeline_is_a_complete_answer(self):
         output = io.StringIO()
         with redirect_stdout(output):
-            print_tasks([], reviewed_count=0, summary_only=True, timeline_empty=True)
+            print_tasks([], reviewed_count=0, timeline_empty=True)
         self.assertIn("No hay tareas próximas", output.getvalue())
         self.assertNotIn("No se pudieron revisar", output.getvalue())
 
     def test_empty_timeline_with_errors_is_still_incomplete(self):
         output = io.StringIO()
         with redirect_stdout(output):
-            print_tasks([], incomplete=True, reviewed_count=0, summary_only=True, timeline_empty=True)
+            print_tasks([], incomplete=True, reviewed_count=0, timeline_empty=True)
         self.assertIn("No se pudieron revisar", output.getvalue())
 
     def test_zero_matches_after_review_reports_the_search_scope(self):

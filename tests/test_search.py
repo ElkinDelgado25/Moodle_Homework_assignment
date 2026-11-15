@@ -1,9 +1,7 @@
 import json
-import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from pathlib import Path
 from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
@@ -25,9 +23,6 @@ class SearchTests(unittest.TestCase):
         cls.playwright.stop()
 
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.cache_patch = patch("moodle_tasks.search.user_config_dir", return_value=Path(self.directory.name))
-        self.cache_patch.start()
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
         self.config = Config("https://moodle.test", "student", "password")
@@ -46,8 +41,6 @@ class SearchTests(unittest.TestCase):
 
     def tearDown(self):
         self.context.close()
-        self.cache_patch.stop()
-        self.directory.cleanup()
 
     def date(self, days):
         date = self.now + timedelta(days=days)
@@ -101,10 +94,8 @@ class SearchTests(unittest.TestCase):
 
     def test_surface_list_reads_no_activity_or_attachment_and_skips_future_tasks(self):
         self.timeline_ids = (1, 2, 5, 6, 3)
-        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
-            tasks, stats = self.query(mode='upcoming', limit=2, summary_only=True)
+        tasks, stats = self.query(mode='upcoming', limit=2)
         self.assertEqual([task.url.rsplit('=', 1)[1] for task in tasks], ['3', '4'])
-        self.assertEqual(stats['detail_pages_read'], 0)
         self.assertEqual(stats['dashboard_load_more'], 1)
         self.assertTrue(all(task.course == 'Materia A' and task.due_at for task in tasks))
         self.assertTrue(all(not task.content and not task.attachments for task in tasks))
@@ -115,19 +106,17 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(detail.attachments[0]['name'], 'guia.pdf')
 
     def test_surface_complete_search_uses_only_indexes_and_preserves_pending_count(self):
-        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
-            tasks, stats = self.query(mode='all', limit=None, summary_only=True)
+        tasks, stats = self.query(mode='all', limit=None)
         self.assertEqual([task.title for task in tasks], ['Vencida', 'Pendiente reciente', 'Pendiente anterior', 'Aún no abierta'])
         self.assertEqual(stats['courses_found'], 2)
         self.assertEqual(stats['index_pages_read'], 2)
         self.assertEqual(stats['candidates_checked'], 6)
-        self.assertEqual(stats['detail_pages_read'], 0)
         self.assertFalse(any('/mod/assign/view.php' in url for url in self.visited))
 
     def timeline_ids_found(self, **wording):
         self.tasks[3].update(wording)
         self.timeline_ids = (3,)
-        tasks, stats = self.query(mode='upcoming', limit=1, summary_only=True)
+        tasks, stats = self.query(mode='upcoming', limit=1)
         return [task.url.rsplit('=', 1)[1] for task in tasks], stats
 
     def test_timeline_recognizes_other_wordings_of_the_add_submission_action(self):
@@ -157,12 +146,12 @@ class SearchTests(unittest.TestCase):
                 self.respond(route)
 
         self.context.route('**/*', respond)
-        with patch('moodle_tasks.search.read_assignment', side_effect=AssertionError('No abrir detalles')):
-            tasks, stats = self.query(mode='upcoming', limit=5, summary_only=True)
+        tasks, stats = self.query(mode='upcoming', limit=5)
         self.assertEqual([task.title for task in tasks], ['Pendiente reciente', 'Pendiente anterior', 'Aún no abierta'])
         self.assertEqual(stats['availability_unconfirmed'], 3)
         self.assertEqual(stats['timeline_status'], 'missing')
         self.assertEqual(stats['source'], 'course_indexes')
+        self.assertFalse(any('/mod/assign/view.php' in url for url in self.visited))
 
     def test_empty_timeline_does_not_fall_back_to_course_indexes(self):
         self.context.unroute('**/*', self.respond)
@@ -174,7 +163,7 @@ class SearchTests(unittest.TestCase):
                 self.respond(route)
 
         self.context.route('**/*', respond)
-        tasks, stats = self.query(mode='upcoming', limit=5, summary_only=True)
+        tasks, stats = self.query(mode='upcoming', limit=5)
         self.assertEqual(tasks, [])
         self.assertEqual(stats['timeline_status'], 'empty')
         self.assertFalse(any('/mod/assign/index.php' in url or 'courses.php' in url for url in self.visited))
@@ -192,18 +181,17 @@ class SearchTests(unittest.TestCase):
             page.context.route('**/*', self.respond)
 
         with patch('moodle_tasks.session.ensure_login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
-            tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True,
-                                         summary_only=True).result()
+            tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
         self.assertEqual(errors, [])
         self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])
 
     def test_overdue_excludes_future_deadlines(self):
-        overdue, _ = self.query(mode="overdue", limit=None, summary_only=True)
+        overdue, _ = self.query(mode="overdue", limit=None)
         self.assertEqual([task.title for task in overdue], ['Vencida'])
 
     def test_timeline_loads_more_to_replace_a_task_that_is_not_yet_open(self):
         self.timeline_ids = (6, 3)
-        tasks, stats = self.query(mode='upcoming', limit=2, summary_only=True)
+        tasks, stats = self.query(mode='upcoming', limit=2)
         self.assertEqual([task.url.rsplit('=', 1)[1] for task in tasks], ['3', '4'])
         self.assertEqual(stats['dashboard_load_more'], 1)
 

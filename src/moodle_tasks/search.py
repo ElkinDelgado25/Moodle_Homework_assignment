@@ -1,23 +1,16 @@
 """Búsqueda por línea de tiempo o índices de tareas, con alcance explícito."""
 
-import hashlib
-import json
 import re
-import time
-from dataclasses import asdict, replace
 from datetime import datetime
-from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from .main import Assignment, Config, is_pending, open_page, read_assignment, submission_state
-from .storage import atomic_write, user_config_dir
+from .main import Assignment, Config, is_pending, open_page, submission_state
 from .urls import assignment_view_id, moodle_path, parse_id
 
 
 MODES = ("upcoming", "overdue", "all")
-CACHE_SECONDS = 900
 MONTHS = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
     "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
@@ -186,33 +179,19 @@ def candidate_pending(candidate: dict) -> bool:
     return not bool(re.fullmatch(r"\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)?", cells[-1]))
 
 
-def cache_path(config: Config) -> Path:
-    identity = hashlib.sha256((config.base_url + "\0" + config.username).encode()).hexdigest()
-    return user_config_dir() / "cache" / (identity + ".json")
-
-
 def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", limit: int | None = 5,
-                       only_pending: bool = True, refresh: bool = False, summary_only: bool = False,
-                       stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
+                       only_pending: bool = True, stats: dict | None = None,
+                       progress=None) -> tuple[list[Assignment], list[str]]:
+    """Tareas de la línea de tiempo o de los índices de cada curso, sin abrir la página de cada una."""
     if mode not in MODES or limit is not None and limit < 1:
         raise ValueError("Modo o límite de consulta inválido.")
     stats = stats if stats is not None else {}
     stats.update(mode=mode, source="course_indexes", dashboard_pages_read=0, dashboard_load_more=0,
-                 index_pages_read=0, detail_pages_read=0, cached_details=0, candidates_checked=0)
+                 index_pages_read=0, candidates_checked=0)
     errors = []
     tasks = []
     seen = set()
     now = datetime.now()
-    cache_file = cache_path(config)
-    try:
-        cache = {"version": 1, "entries": {}} if summary_only else json.loads(cache_file.read_text())
-        if not isinstance(cache, dict) or cache.get("version") != 1:
-            cache = {"version": 1, "entries": {}}
-    except (OSError, ValueError):
-        cache = {"version": 1, "entries": {}}
-    if not isinstance(cache.get("entries"), dict):
-        cache["entries"] = {}
-
     def inspect(candidate):
         url = candidate["url"]
         if url in seen:
@@ -222,46 +201,23 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
         unconfirmed = False
         if only_pending and not candidate_pending(candidate):
             return
-        fingerprint = candidate.get("row")
-        entry = cache.get("entries", {}).get(url, {})
-        if not isinstance(entry, dict):
-            entry = {}
         try:
-            # La caché solo se usa con un índice de entregas recién consultado.
-            cached_task = None
-            try:
-                if (not summary_only and not refresh and fingerprint and entry.get("row") == fingerprint
-                        and 0 <= time.time() - entry.get("time", 0) < CACHE_SECONDS):
-                    cached_task = Assignment(**entry["task"])
-            except (TypeError, ValueError, KeyError):
-                pass
-            if summary_only:
-                cells = candidate.get("cells", [])
-                due_text = candidate.get("deadline") or (cells[2] if len(cells) >= 3 else "")
-                due_at = parse_moodle_date(due_text)
-                available = candidate.get("available")
-                if mode == "upcoming" and available is False:
-                    return
-                # Una fila de un índice de curso (available=None) se acepta con disponibilidad sin confirmar.
-                unconfirmed = mode == "upcoming" and available is None
-                status = cells[-2] if len(cells) >= 5 else "Disponible para entregar" if available else "Estado desconocido"
-                task = Assignment(candidate["title"], url, "", due_text, status,
-                                  submission_state(status) if cells else False if available else None,
-                                  course=candidate.get("course", ""), due_at=due_at)
-            elif cached_task is not None:
-                task = cached_task
-                stats["cached_details"] += 1
-            else:
-                stats["detail_pages_read"] += 1
-                task = read_assignment(page, url, config)
-                task = replace(task, course=candidate.get("course") or task.course,
-                               title=candidate.get("title") or task.title)
-                cache.setdefault("entries", {})[url] = {"row": fingerprint, "time": time.time(), "task": asdict(task)}
+            cells = candidate.get("cells", [])
+            due_text = candidate.get("deadline") or (cells[2] if len(cells) >= 3 else "")
+            due_at = parse_moodle_date(due_text)
+            available = candidate.get("available")
+            if mode == "upcoming" and available is False:
+                return
+            # Una fila de un índice de curso (available=None) se acepta con disponibilidad sin confirmar.
+            unconfirmed = mode == "upcoming" and available is None
+            status = cells[-2] if len(cells) >= 5 else "Disponible para entregar" if available else "Estado desconocido"
+            task = Assignment(candidate["title"], url, "", due_text, status,
+                              submission_state(status) if cells else False if available else None,
+                              course=candidate.get("course", ""), due_at=due_at)
             if only_pending and not is_pending(task):
                 return
             due = datetime.fromisoformat(task.due_at) if task.due_at else None
-            opening = datetime.fromisoformat(task.opens_at) if task.opens_at else None
-            if mode == "upcoming" and (due is None or due < now or opening is not None and opening > now):
+            if mode == "upcoming" and (due is None or due < now):
                 return
             if mode == "overdue" and (due is None or due >= now):
                 return
@@ -291,15 +247,9 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             inspect(candidate)
     tasks.sort(key=lambda task: task.due_at or "9999")
     stats["matched_count"] = len(tasks)
-    stats["summary_only"] = summary_only
     stats["coverage"] = (
         "Línea de tiempo con su filtro actual; no incluye necesariamente tareas vencidas, sin fecha o fuera del filtro."
         if stats["source"] == "dashboard" else
         "Índices de tareas de los cursos visibles en Mis cursos; otras actividades o cursos ocultos pueden quedar fuera."
     )
-    try:
-        if not summary_only:
-            atomic_write(cache_file, json.dumps(cache, ensure_ascii=False))
-    except OSError:
-        errors.append("No se pudo actualizar la caché local; la consulta de Moodle sí se realizó.")
     return tasks[:limit] if limit is not None else tasks, errors

@@ -404,7 +404,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         settings = config()
         # Se pide una fila de más para saber si el límite dejó tareas fuera.
         tasks, errors = collect_assignments(settings, mode=mode, limit=None if limit is None else limit + 1,
-                                            only_pending=only_pending, summary_only=True, stats=stats, progress=progress)
+                                            only_pending=only_pending, stats=stats, progress=progress)
         checked_at = datetime.now().replace(microsecond=0)
         now = checked_at.isoformat()
         matching = [task for task in tasks if not only_pending or is_pending(task)]

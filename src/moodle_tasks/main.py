@@ -308,22 +308,20 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
 
 
 def collect_assignments(config: Config, *, mode: str = "all", limit: int | None = None,
-                        only_pending: bool = False, refresh: bool = False, summary_only: bool = False,
-                        stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
+                        only_pending: bool = False, stats: dict | None = None, progress=None) -> tuple[list[Assignment], list[str]]:
     from .search import search_assignments
     from .session import ensure_login, moodle_page
 
     with moodle_page(config) as (_, page):
         ensure_login(page, config)
         return search_assignments(page, config, mode=mode, limit=limit,
-                                  only_pending=only_pending, refresh=refresh, summary_only=summary_only, stats=stats,
-                                  progress=progress)
+                                  only_pending=only_pending, stats=stats, progress=progress)
 
 
 def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_count: int | None = None,
-                summary_only: bool = False, timeline_empty: bool = False) -> None:
+                timeline_empty: bool = False) -> None:
     pending = [task for task in tasks if is_pending(task)]
-    if summary_only and pending:
+    if pending:
         from .server import pending_table
         print(pending_table(pending))
         return
@@ -343,26 +341,10 @@ def print_tasks(tasks: list[Assignment], incomplete: bool = False, reviewed_coun
             print("\n⚠️ No se pudieron revisar tareas. No se puede confirmar si tienes entregas pendientes.")
         return
 
-    if not pending:
-        if incomplete:
-            print("\n⚠️ La consulta quedó incompleta; no se pueden descartar tareas pendientes.")
-        else:
-            print("\n✅ No se encontraron tareas pendientes entre las actividades revisadas.")
-        return
-
-    label = "pendientes o por confirmar" if any(task.submitted is None for task in pending) else "pendientes"
-    print(f"\n⚠️ Esta búsqueda encontró {len(pending)} tarea(s) {label}:\n")
-    for index, task in enumerate(pending, start=1):
-        print(f"{index}. {task.title}")
-        print(f"   Materia: {task.course or 'No identificada'}")
-        print(f"   Vence: {task.due_date}")
-        if task.opens_at and task.opens_at > datetime.now().isoformat():
-            print(f"   Aún no habilitada. Apertura: {task.opens_at}")
-        print(f"   Estado: {task.status}")
-        print(f"   Contenido: {task.content}")
-        for attachment in task.attachments:
-            print(f"   Anexo: {attachment['name']} — {attachment['url']}")
-        print(f"   Enlace: {task.url}\n")
+    if incomplete:
+        print("\n⚠️ La consulta quedó incompleta; no se pueden descartar tareas pendientes.")
+    else:
+        print("\n✅ No se encontraron tareas pendientes entre las actividades revisadas.")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -375,7 +357,6 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Consulta tareas de Moodle.")
     parser.add_argument("--mode", choices=MODES, default="upcoming")
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--refresh", action="store_true", help="Actualizar la consulta de Moodle")
     args = parser.parse_args(argv)
     if args.limit is not None and args.limit < 1:
         parser.error("El límite debe ser mayor que cero.")
@@ -385,10 +366,10 @@ def main(argv: list[str] | None = None) -> None:
         config = load_config()
         stats = {}
         tasks, errors = collect_assignments(config, mode=args.mode, limit=limit,
-                                          only_pending=True, refresh=args.refresh, summary_only=True, stats=stats)
+                                          only_pending=True, stats=stats)
         for error in errors:
             print(redact_credentials(error, (config.username, config.password)), file=sys.stderr)
-        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"), summary_only=True,
+        print_tasks(tasks, incomplete=bool(errors), reviewed_count=stats.get("candidates_checked"),
                     timeline_empty=stats.get("timeline_status") == "empty")
         print(f"Alcance: {stats.get('coverage', '')}")
     except Exception as error:
