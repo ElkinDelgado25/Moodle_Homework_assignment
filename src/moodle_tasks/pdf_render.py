@@ -36,21 +36,33 @@ STYLES = ("", "B", "I", "BI")
 FC_STYLES = ("Regular", "Bold", "Italic", "Bold Italic")
 
 
-def _fontconfig(family: str) -> list[Path] | None:
+def _fc_match(family: str, style: str) -> Path | None:
+    """Archivo TrueType u OpenType de esa familia y estilo según fontconfig.
+
+    None si fc-match no está, falla o propone otra familia (fontconfig siempre devuelve alguna).
+    """
     if not shutil.which("fc-match"):
         return None
+    try:
+        output = subprocess.run(["fc-match", "-f", "%{family}\t%{file}", f"{family}:style={style}"],
+                                capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    names, _, path = output.partition("\t")
+    if family.casefold() not in names.casefold() or not path.lower().endswith((".ttf", ".otf")):
+        return None
+    return Path(path) if Path(path).is_file() else None
+
+
+def _fontconfig(family: str) -> list[Path] | None:
+    """Los cuatro estilos de la familia, o None si falta alguno."""
     files = []
     for style in FC_STYLES:
-        try:
-            output = subprocess.run(["fc-match", "-f", "%{family}\t%{file}", f"{family}:style={style}"],
-                                    capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
-        except (OSError, subprocess.SubprocessError):
+        path = _fc_match(family, style)
+        if path is None:
             return None
-        names, _, path = output.partition("\t")
-        if family.casefold() not in names.casefold() or not path.lower().endswith((".ttf", ".otf")):
-            return None
-        files.append(Path(path))
-    return files if all(path.is_file() for path in files) else None
+        files.append(path)
+    return files
 
 
 def find_mono_font() -> Path | None:
@@ -63,16 +75,11 @@ def find_mono_font() -> Path | None:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    if shutil.which("fc-match"):
-        for family in ("Courier New", "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono"):
-            try:
-                output = subprocess.run(["fc-match", "-f", "%{family}\t%{file}", f"{family}:style=Regular"],
-                                        capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout
-            except (OSError, subprocess.SubprocessError):
-                return None
-            names, _, path = output.partition("\t")
-            if family.casefold() in names.casefold() and path.lower().endswith((".ttf", ".otf")) and Path(path).is_file():
-                return Path(path)
+    # Un fallo de fc-match con una familia no impide probar las siguientes.
+    for family in ("Courier New", "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono"):
+        path = _fc_match(family, "Regular")
+        if path:
+            return path
     return None
 
 

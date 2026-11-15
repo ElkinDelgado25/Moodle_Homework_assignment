@@ -110,14 +110,26 @@ def _is_save_control(control: Locator) -> bool:
     return bool(SAVE.fullmatch(text))
 
 
-def _click_control(root: Locator | Page, pattern: re.Pattern[str], selectors: str = "a, button, input[type='submit']") -> bool:
+CONTROLS = "a, button, input[type='submit']"
+
+
+def _matching_controls(root: Locator | Page, pattern: re.Pattern[str], selectors: str = CONTROLS):
+    """Controles visibles cuyo texto coincide con el patrón; los que fallan al inspeccionarse se omiten."""
     controls = root.locator(selectors)
     for index in range(controls.count()):
         control = controls.nth(index)
         try:
             if control.is_visible() and pattern.fullmatch(_control_text(control).strip()):
-                control.click()
-                return True
+                yield control
+        except Exception:
+            continue
+
+
+def _click_control(root: Locator | Page, pattern: re.Pattern[str], selectors: str = CONTROLS) -> bool:
+    for control in _matching_controls(root, pattern, selectors):
+        try:
+            control.click()
+            return True
         except Exception:
             continue
     return False
@@ -143,15 +155,7 @@ def _file_error(error: Exception, path: Path, config: Config) -> str:
 
 
 def _has_control(root: Locator | Page, pattern: re.Pattern[str]) -> bool:
-    controls = root.locator("a, button, input[type='submit']")
-    for index in range(controls.count()):
-        control = controls.nth(index)
-        try:
-            if control.is_visible() and pattern.fullmatch(_control_text(control).strip()):
-                return True
-        except Exception:
-            continue
-    return False
+    return next(_matching_controls(root, pattern), None) is not None
 
 
 def _upload_input(page: Page, *, any_input: bool = False) -> Locator | None:
@@ -397,16 +401,22 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
     return removed
 
 
-def _submission_file_names(page: Page) -> set[str]:
-    """Nombres normalizados de los archivos ya guardados en la entrega (texto del enlace y su URL)."""
-    names: set[str] = set()
+def _submission_links(page: Page) -> list[tuple[str, str]]:
+    """(texto, href) de cada enlace a un archivo ya guardado en la entrega."""
+    found = []
     links = page.locator("#region-main a[href*='assignsubmission_file']")
     for index in range(links.count()):
         try:
-            text = links.nth(index).inner_text().strip()
-            href = links.nth(index).get_attribute("href") or ""
+            found.append((links.nth(index).inner_text().strip(), links.nth(index).get_attribute("href") or ""))
         except Exception:
             continue
+    return found
+
+
+def _submission_file_names(page: Page) -> set[str]:
+    """Nombres normalizados de los archivos ya guardados en la entrega (texto del enlace y su URL)."""
+    names: set[str] = set()
+    for text, href in _submission_links(page):
         if text:
             names.add(moodle_name(text))
         segment = unquote(urlsplit(href).path.rsplit("/", 1)[-1])
@@ -416,16 +426,8 @@ def _submission_file_names(page: Page) -> set[str]:
 
 
 def _submission_files(page: Page) -> list[str]:
-    files: list[str] = []
-    links = page.locator("#region-main a[href*='assignsubmission_file']")
-    for index in range(links.count()):
-        try:
-            text = links.nth(index).inner_text().strip()
-        except Exception:
-            continue
-        if text and text not in files:
-            files.append(text)
-    return files
+    """Nombres visibles de los archivos ya guardados, en orden y sin repetir."""
+    return list(dict.fromkeys(text for text, _ in _submission_links(page) if text))
 
 
 def _limit(page: Page, filemanager: Locator, name: str) -> int | None:

@@ -452,6 +452,21 @@ class PdfTests(unittest.TestCase):
                 patch("moodle_tasks.document.Path.is_file", return_value=False):
             self.assertIsNone(find_soffice())
 
+    def test_mono_font_lookup_tries_the_next_family_when_fc_match_fails(self):
+        import subprocess
+
+        from moodle_tasks import pdf_render
+
+        font = self.root / "LiberationMono-Regular.ttf"
+        font.write_bytes(b"font")
+        outputs = [OSError("fc-match se colgó"), subprocess.CompletedProcess([], 0, f"Liberation Mono\t{font}", "")]
+        with patch("moodle_tasks.pdf_render.sys.platform", "linux"), \
+                patch("moodle_tasks.pdf_render.shutil.which", return_value="/usr/bin/fc-match"), \
+                patch("moodle_tasks.pdf_render.subprocess.run", side_effect=outputs) as run:
+            self.assertEqual(pdf_render.find_mono_font(), font)
+        self.assertEqual([call.args[0][-1] for call in run.call_args_list],
+                         ["Courier New:style=Regular", "Liberation Mono:style=Regular"])
+
     def test_docx_and_pdf_split_paragraphs_with_the_same_function(self):
         from moodle_tasks import document, document_model, pdf_render
 
