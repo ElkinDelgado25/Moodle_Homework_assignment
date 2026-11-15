@@ -422,7 +422,8 @@ def export_with_libreoffice(command: list[str], docx: Path, outdir: Path, timeou
         try:
             _, error = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.kill()
+            # Sin esto soffice.bin sobrevive, mantiene bloqueado el perfil y las siguientes exportaciones se cuelgan.
+            _kill_process_tree(process)
             process.communicate()
             raise RuntimeError("LibreOffice no terminó la exportación a PDF a tiempo.") from None
     if not expected.is_file() or expected.stat().st_size == 0:
