@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from moodle_tasks.agents import AGENTS, AgentDetection
+from moodle_tasks.agents import AGENTS, AgentDetection, AgentSyncResult
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 from moodle_tasks.main import Config, load_config
 from moodle_tasks.setup import ask_agent, main, valid_username, verify_credentials
@@ -107,6 +107,32 @@ class SetupTests(unittest.TestCase):
             ), patch("moodle_tasks.setup.show_agent_menu"), redirect_stdout(io.StringIO()):
                 main(["--skip-update", "--sync-after-update", "--config-dir", str(root)])
             self.assertEqual(events, ["browser", "sync", "menu"])
+
+    def test_a_failing_agent_sync_after_an_update_does_not_stop_the_wizard(self):
+        broken = next(iter(AGENTS))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            save_credentials(root / "credentials.env", "https://moodle.test", "saved", "secret")
+            events, errors = [], io.StringIO()
+            with patch("moodle_tasks.setup.prepare_browser"), patch(
+                "moodle_tasks.setup.synchronize_agents",
+                return_value=AgentSyncResult({}, {broken: "JSON inválido"}),
+            ), patch("moodle_tasks.setup.ask_setup_action", side_effect=lambda: events.append("menu") or "3"), patch(
+                "moodle_tasks.setup.show_dashboard"
+            ), patch("moodle_tasks.setup.show_agent_menu"), redirect_stdout(io.StringIO()), redirect_stderr(errors):
+                main(["--skip-update", "--sync-after-update", "--config-dir", str(root)])
+            self.assertEqual(events, ["menu"])
+            self.assertIn("JSON inválido", errors.getvalue())
+
+    def test_sync_only_still_fails_when_an_agent_cannot_be_synchronized(self):
+        broken = next(iter(AGENTS))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            save_credentials(root / "credentials.env", "https://moodle.test", "saved", "secret")
+            with patch("moodle_tasks.setup.synchronize_agents", return_value=AgentSyncResult({}, {broken: "JSON inválido"})), \
+                    redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+                main(["--skip-update", "--sync-only", "--config-dir", str(root)])
+            self.assertEqual(caught.exception.code, 1)
 
     def test_validate_saved_account_preserves_credentials_and_agents(self):
         failures = (
