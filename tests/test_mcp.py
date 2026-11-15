@@ -12,7 +12,7 @@ from mcp import Client, StdioServerParameters
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import MoodleHTTPError
-from moodle_tasks.main import Assignment, Config
+from moodle_tasks.core import Assignment, Config
 from moodle_tasks.server import INSTRUCTIONS, assignment_id_from_reference, create_server
 
 SETTINGS = Config("https://moodle.test", "test", "test")

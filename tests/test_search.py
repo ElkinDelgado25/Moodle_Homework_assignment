@@ -7,7 +7,9 @@ from unittest.mock import patch
 from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks.main import Config, collect_assignments, is_pending, read_assignment
+from moodle_tasks.assignment import read_assignment
+from moodle_tasks.core import Config, is_pending
+from moodle_tasks.main import collect_assignments
 from moodle_tasks.search import assignment_url, parse_moodle_date, search_assignments
 
 
@@ -180,7 +182,7 @@ class SearchTests(unittest.TestCase):
         def configure_routes(page, config):
             page.context.route('**/*', self.respond)
 
-        with patch('moodle_tasks.session.ensure_login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
+        with patch('moodle_tasks.main.ensure_login', side_effect=configure_routes), ThreadPoolExecutor(max_workers=1) as executor:
             tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
         self.assertEqual(errors, [])
         self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])

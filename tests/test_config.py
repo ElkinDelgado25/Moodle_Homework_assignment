@@ -7,7 +7,7 @@ from unittest.mock import patch
 from dotenv import dotenv_values
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks.main import load_config
+from moodle_tasks.core import load_config
 
 
 class ConfigTests(unittest.TestCase):
@@ -31,7 +31,7 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             path = Path(directory) / ".env"
             path.write_text("MOODLE_URL=https://moodle.test\nMOODLE_USERNAME=test\nMOODLE_PASSWORD=test\n")
-            with patch("moodle_tasks.main.dotenv_values", wraps=dotenv_values) as read:
+            with patch("moodle_tasks.core.dotenv_values", wraps=dotenv_values) as read:
                 load_config(path)
             self.assertEqual(read.call_count, 1)
 

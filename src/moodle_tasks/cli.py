@@ -3,6 +3,7 @@
 import argparse
 
 from . import main as tasks
+from .core import config_values
 from . import server, setup, status, updates
 from .console import configure_utf8_streams
 from .monitoring import initialize_sentry
@@ -22,7 +23,7 @@ def main(argv: list[str] | None = None) -> None:
     args, options = parser.parse_known_args(argv)
     if args.command != "serve":
         # serve lee su propio --env-file y es quien inicia Sentry con ese archivo.
-        initialize_sentry(tasks.config_values())
+        initialize_sentry(config_values())
     if args.command in ("run", "setup"):
         setup.main(options)
     elif args.command == "serve":
@@ -36,7 +37,7 @@ def main(argv: list[str] | None = None) -> None:
     else:
         if options:
             parser.error("Argumentos desconocidos: " + " ".join(options))
-        show_dashboard(tasks.config_values().get("MOODLE_USERNAME"))
+        show_dashboard(config_values().get("MOODLE_USERNAME"))
         parser.print_help()
 
 

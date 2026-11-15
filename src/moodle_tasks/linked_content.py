@@ -8,6 +8,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from .core import open_authenticated_page
 from .errors import redact_credentials
 
 MAX_LINKS = 5
@@ -230,8 +231,6 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offse
 
 def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
     """Página del mismo Moodle leída con la sesión iniciada (las anónimas piden login)."""
-    from .main import open_authenticated_page
-
     result = dict(link, kind="page", content="", truncated=False)
     page = session_page.context.new_page()
     try:

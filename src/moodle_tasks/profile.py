@@ -7,7 +7,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page
 
-from .main import Config, open_page
+from .core import Config, open_page
 from .storage import atomic_write, user_config_dir
 
 

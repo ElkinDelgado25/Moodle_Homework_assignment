@@ -4,7 +4,8 @@ from urllib.parse import quote
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import redact_credentials
-from moodle_tasks.main import Config, main
+from moodle_tasks.core import Config
+from moodle_tasks.main import main
 from moodle_tasks.setup import ask_account
 
 

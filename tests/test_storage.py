@@ -7,7 +7,7 @@ from unittest.mock import patch
 from dotenv import dotenv_values
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks.main import load_config
+from moodle_tasks.core import load_config
 from moodle_tasks.storage import (ConcurrentChangeError, atomic_write, default_env_file, save_credentials,
                                   user_cache_dir, user_config_dir)
 

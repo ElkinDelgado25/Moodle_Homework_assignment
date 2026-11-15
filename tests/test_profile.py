@@ -6,7 +6,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks.main import Config
+from moodle_tasks.core import Config
 from moodle_tasks.profile import load_profile, public_profile, record_verified_profile
 
 

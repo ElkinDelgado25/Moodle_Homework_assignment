@@ -2,8 +2,8 @@ import unittest
 from datetime import datetime, timedelta
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
-from moodle_tasks.main import Assignment
-from moodle_tasks.server import deadline_display, pending_table
+from moodle_tasks.core import Assignment
+from moodle_tasks.listing import deadline_display, pending_table
 
 
 class DeadlineDisplayTests(unittest.TestCase):

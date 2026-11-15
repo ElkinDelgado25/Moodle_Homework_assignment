@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import Page, sync_playwright
 
-from .main import Config, login, open_page
+from .core import OPT_OUT, Config, login, open_page
 from .storage import atomic_write, sessions_dir, user_config_dir
 
 
@@ -25,8 +25,6 @@ VERSION = 1
 
 def cache_enabled(config: Config | None = None) -> bool:
     """Desactivable con MOODLE_SESSION_CACHE=false en el entorno o en credentials.env."""
-    from .main import OPT_OUT
-
     if (os.environ.get("MOODLE_SESSION_CACHE") or "true").strip().lower() in OPT_OUT:
         return False
     return config is None or getattr(config, "session_cache", True)

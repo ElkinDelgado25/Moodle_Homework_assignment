@@ -160,7 +160,7 @@ class UploadSafetyTests(unittest.TestCase):
 
     def test_upload_tool_validates_before_launching_the_browser(self):
         from moodle_tasks.server import create_server
-        from moodle_tasks.main import Config
+        from moodle_tasks.core import Config
         import asyncio
         from mcp import Client
 
@@ -254,7 +254,7 @@ class VerifierRegressionTests(unittest.TestCase):
             resolve_destination_directory("~usuario-que-no-existe-xyz/Docs")
 
     def test_no_upload_wordings(self):
-        from moodle_tasks.uploads import forbids_upload
+        from moodle_tasks.assignment import forbids_upload
         for text in ("No subir archivos.", "No files should be uploaded for this activity.",
                      "No se deben subir documentos, solo se evalúa la participación."):
             self.assertTrue(forbids_upload(text), text)

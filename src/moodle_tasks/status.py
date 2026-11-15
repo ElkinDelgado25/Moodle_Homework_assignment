@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from .errors import redact_credentials
-from .main import config_values, load_config
+from .core import config_values, load_config
 from .setup import verify_credentials
 from .ui import ConnectionState, show_dashboard
 from .updates import check_for_updates, show_update_notice

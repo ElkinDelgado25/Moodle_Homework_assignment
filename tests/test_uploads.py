@@ -7,8 +7,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import sync_playwright
 
-from moodle_tasks.main import Config
-from moodle_tasks.uploads import forbids_upload, moodle_name, upload_files
+from moodle_tasks.core import Config
+from moodle_tasks.assignment import forbids_upload
+from moodle_tasks.uploads import moodle_name, upload_files
 
 from helpers import make_docx, make_pdf
 

@@ -5,7 +5,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import re
 import secrets
 import shutil
 import time
@@ -31,17 +30,10 @@ from .downloads import documents_directory
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .extract import MAX_FILE_CHARS, extract_text
 from .linked_content import read_linked_resources
-from .main import (
-    Assignment,
-    ENV_FILE,
-    NO_DESCRIPTION,
-    collect_assignments,
-    config_values,
-    course_name,
-    is_pending,
-    load_config,
-    read_assignment,
-)
+from .assignment import read_assignment
+from .core import ENV_FILE, NO_DESCRIPTION, Assignment, config_values, is_pending, load_config
+from .listing import course_name, deadline_display, pending_table
+from .main import collect_assignments
 from .paths import UnsafePathError, protect_credentials, resolve_destination_directory
 from .profile import load_profile, remember_teacher, subject_key
 from .session import ensure_login, moodle_page
@@ -711,53 +703,6 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         tool.fn_metadata.output_schema = schema
 
     return server
-
-
-def deadline_display(task: Assignment, now: datetime) -> str:
-    if not task.due_at:
-        return task.due_date
-    due = datetime.fromisoformat(task.due_at)
-    seconds = (due - now).total_seconds()
-    if seconds < 0:
-        remaining = "plazo vencido"
-    elif seconds == 0:
-        remaining = "vence ahora"
-    elif seconds < 60:
-        remaining = "queda menos de 1 minuto"
-    else:
-        minutes = int(seconds // 60)
-        days, minutes = divmod(minutes, 24 * 60)
-        hours, minutes = divmod(minutes, 60)
-        if days:
-            remaining = f"quedan {days} {'día' if days == 1 else 'días'} y {hours} {'hora' if hours == 1 else 'horas'}"
-        elif hours:
-            remaining = f"{'queda' if hours == 1 else 'quedan'} {hours} {'hora' if hours == 1 else 'horas'}"
-        else:
-            remaining = f"{'queda' if minutes == 1 else 'quedan'} {minutes} {'minuto' if minutes == 1 else 'minutos'}"
-    return f"{due:%d/%m/%Y %H:%M} ({remaining})"
-
-
-def pending_table(tasks: list[Assignment], *, now: datetime | None = None, mode: str = "upcoming",
-                  only_pending: bool = True, incomplete: bool = False) -> str:
-    """Tabla lista para mostrar; el encabezado dice qué se listó de verdad."""
-    now = now or datetime.now()
-    kind = "tareas pendientes" if only_pending else "tareas"
-    heading = {"overdue": "Estas son las tareas vencidas", "all": f"Estas son las {kind} de todas las materias"}.get(
-        mode, f"Estas son las {kind}")
-    if not tasks:
-        return ("No se pudo confirmar si hay tareas: la consulta quedó incompleta." if incomplete
-                else f"No se encontraron {kind} entre las actividades revisadas.")
-
-    def cell(value: str) -> str:
-        return " ".join(value.split()).replace("\\", "\\\\").replace("|", "\\|").replace("[", "\\[").replace("]", "\\]")
-
-    rows = [heading, "", "| Tarea | Materia | Cierre (fecha y hora) |",
-            "|---|---|---|"]
-    for task in tasks:
-        course = course_name(task.course)
-        due = deadline_display(task, now)
-        rows.append(f"| [{cell(task.title)}]({task.url}) | {cell(course) or 'Sin identificar'} | {cell(due)} |")
-    return "\n".join(rows)
 
 
 def main(argv: list[str] | None = None) -> None:

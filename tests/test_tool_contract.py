@@ -19,7 +19,9 @@ from moodle_tasks.document_model import CoverFields
 from moodle_tasks.downloads import download_attachment
 from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.extract import extract_text
-from moodle_tasks.main import Assignment, Config, course_name, read_assignment
+from moodle_tasks.assignment import read_assignment
+from moodle_tasks.core import Assignment, Config
+from moodle_tasks.listing import course_name
 from moodle_tasks.profile import load_profile, remember_teacher, teacher_for
 from moodle_tasks.server import create_server, slim_schema
 

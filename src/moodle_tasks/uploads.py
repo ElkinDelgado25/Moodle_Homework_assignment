@@ -13,22 +13,11 @@ from urllib.parse import unquote, urlsplit
 from playwright.sync_api import Locator, Page
 
 from .errors import redact_credentials
-from .main import Config, open_authenticated_page, read_assignment, submission_state
+from .assignment import forbids_upload, read_assignment
+from .core import Config, open_authenticated_page, submission_state
 from .paths import check_upload_file
 
 
-NO_UPLOAD = re.compile(
-    r"(?:no (?:se )?(?:debe|deben) (?:subir|entregar|presentar)|"
-    r"no (?:se )?(?:requiere|permite) (?:subir|entregar|presentar)|"
-    r"no (?:es necesario|hace falta) (?:subir|entregar|presentar)|"
-    r"do not (?:submit|upload)|don't (?:submit|upload)|"
-    r"you (?:do not|don't) need to (?:submit|upload)|"
-    r"no (?:files|documents) (?:are )?(?:required|allowed)|"
-    r"(?:files|documents) (?:are )?not required to (?:be )?(?:submitted|uploaded)|"
-    r"^\s*no (?:subir|entregar|enviar|adjuntar)\b|"
-    r"no (?:files|documents) (?:should|must|need to) be (?:submitted|uploaded))",
-    re.IGNORECASE,
-)
 CLOSED = re.compile(
     r"(?:(?:this )?assignment (?:is )?closed|submissions? (?:are |is )?closed|closed for submissions|"
     r"env[ií]os? cerrad[oa]s?|entregas? cerrad[oa]s?|no se permiten (?:env[ií]os|entregas)|"
@@ -38,17 +27,6 @@ CLOSED = re.compile(
     r"ya no se aceptan (?:env[ií]os|entregas)|no puedes realizar una entrega|"
     r"el per[ií]odo de entrega ha finalizado|el plazo de entrega ha finalizado|"
     r"se cerr[oó] el plazo de (?:entrega|env[ií]o))",
-    re.IGNORECASE,
-)
-# Una frase con matices (formato, compresión, plazo...) no prohíbe entregar el informe.
-UPLOAD_QUALIFIER = re.compile(
-    r"comprimid|\bzip\b|\brar\b|formato|tarde|late\b|captura|screenshot|c[oó]digo fuente|source code|"
-    r"\bsino\b|en lugar|instead|m[aá]s de|more than|\.\w{2,4}\b",
-    re.IGNORECASE,
-)
-UPLOAD_REQUEST = re.compile(
-    r"\b(?:s[uú]b(?:a|an|ir|e)|entreg(?:ue|uen|ar|a)|adjunt(?:e|en|ar|a)|upload|submit)\b.{0,60}?"
-    r"\b(?:pdf|docx?|archivo|archivos|informe|documento|file|files|report)\b",
     re.IGNORECASE,
 )
 MOODLE_FILE_CHARACTERS = re.compile("[\x00-\x1f\x7f&<>\"`|':\\\\/]")
@@ -64,16 +42,6 @@ DELETE = re.compile(r"^(?:yes|s[ií]|delete|eliminar|borrar)$", re.IGNORECASE)
 CANCEL = re.compile(r"^(?:cancel|cancelar|close|cerrar|ok|aceptar)$", re.IGNORECASE)
 POLL_SECONDS = 0.25
 TOTAL_BUDGET_SECONDS = 240  # por debajo del límite habitual de 300 s de los clientes MCP
-
-
-def forbids_upload(text: str) -> bool:
-    """Solo una prohibición sin matices, y sin otra frase que pida subir el trabajo, bloquea la entrega."""
-    if not text:
-        return False
-    sentences = [sentence for sentence in re.split(r"[.;:!?\n]+", text) if sentence.strip()]
-    if any(UPLOAD_REQUEST.search(sentence) and not NO_UPLOAD.search(sentence) for sentence in sentences):
-        return False
-    return any(NO_UPLOAD.search(sentence) and not UPLOAD_QUALIFIER.search(sentence) for sentence in sentences)
 
 
 def moodle_name(name: str) -> str:
