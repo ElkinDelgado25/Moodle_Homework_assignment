@@ -19,7 +19,11 @@ def user_config_dir() -> Path:
 
 
 def user_cache_dir() -> Path:
-    """Datos temporales del usuario: carpetas de trabajo y sesión, nunca credenciales."""
+    """Datos locales de este equipo: carpetas de trabajo, perfil de LibreOffice y sesión de Moodle.
+
+    En Windows es LOCALAPPDATA, que no viaja con el perfil a otros equipos del dominio.
+    Nunca guarda credentials.env.
+    """
     if sys.platform == "win32":
         root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
     elif sys.platform == "darwin":
@@ -27,6 +31,11 @@ def user_cache_dir() -> Path:
     else:
         root = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
     return root / "moodle-homework-assignment"
+
+
+def sessions_dir() -> Path:
+    """Cookies de Moodle guardadas entre herramientas; fuera de la configuración, que en Windows es Roaming."""
+    return user_cache_dir() / "sessions"
 
 
 def default_env_file() -> Path:

@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from playwright.sync_api import Page, sync_playwright
 
 from .main import Config, login, open_page
-from .storage import atomic_write, user_config_dir
+from .storage import atomic_write, sessions_dir, user_config_dir
 
 
 SESSION_MAX_AGE_SECONDS = 12 * 3600
@@ -32,9 +32,23 @@ def cache_enabled(config: Config | None = None) -> bool:
     return config is None or getattr(config, "session_cache", True)
 
 
-def session_file(config: Config) -> Path:
+def _session_name(config: Config) -> str:
     key = hashlib.sha256(f"{config.base_url.lower()}\0{config.username.casefold()}".encode()).hexdigest()[:32]
-    return user_config_dir() / "sessions" / f"{key}.json"
+    return f"{key}.json"
+
+
+def session_file(config: Config) -> Path:
+    return sessions_dir() / _session_name(config)
+
+
+def _remove_legacy_session(config: Config) -> None:
+    """Hasta 0.4.4 la sesión se guardaba en la carpeta de configuración (Roaming en Windows)."""
+    legacy = user_config_dir() / "sessions"
+    try:
+        (legacy / _session_name(config)).unlink(missing_ok=True)
+        legacy.rmdir()
+    except OSError:
+        pass
 
 
 def _host(config: Config) -> str:
@@ -89,6 +103,7 @@ def save_state(context, config: Config) -> bool:
                                    "cookies": cookies}))
     if sys.platform != "win32":
         os.chmod(path, 0o600)
+    _remove_legacy_session(config)
     return True
 
 
@@ -97,6 +112,7 @@ def clear_state(config: Config) -> None:
         session_file(config).unlink(missing_ok=True)
     except OSError:
         pass
+    _remove_legacy_session(config)
 
 
 def is_logged_in(page: Page) -> bool:

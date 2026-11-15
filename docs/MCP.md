@@ -33,7 +33,7 @@ Después de instalar, el comando del servidor es `mcp-moodle serve`. Un cliente 
 
 ### Sesión de Moodle
 
-Cada herramienta abre su propio navegador, pero reutiliza la sesión: las cookies del dominio de Moodle (nunca las de Microsoft) se guardan en la carpeta de configuración del usuario, en `sessions/`, con permisos `0600` y una vigencia de 12 horas. Si la sesión venció, se vuelve a iniciar una vez; si Moodle rechaza las credenciales, el archivo se borra. Para desactivarlo, define `MOODLE_SESSION_CACHE=false` (también `0`, `no` u `off`) en el entorno o en `credentials.env`; basta con que lo indique uno de los dos. Esa carpeta no se puede adjuntar a una entrega.
+Cada herramienta abre su propio navegador, pero reutiliza la sesión: las cookies del dominio de Moodle (nunca las de Microsoft) se guardan en la carpeta de caché local del usuario (`~/.cache/moodle-homework-assignment/sessions/` en Linux, `~/Library/Caches/...` en macOS y `%LOCALAPPDATA%\moodle-homework-assignment\sessions\` en Windows, que no viaja con el perfil), con permisos `0600` y una vigencia de 12 horas. Si la sesión venció, se vuelve a iniciar una vez; si Moodle rechaza las credenciales, el archivo se borra. Para desactivarlo, define `MOODLE_SESSION_CACHE=false` (también `0`, `no` u `off`) en el entorno o en `credentials.env`; basta con que lo indique uno de los dos. Esa carpeta no se puede adjuntar a una entrega.
 
 ### Anexos y enlaces
 

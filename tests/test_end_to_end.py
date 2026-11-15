@@ -33,6 +33,8 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
             *(patch(target, return_value=self.config_dir) for target in (
                 "moodle_tasks.server.user_config_dir", "moodle_tasks.session.user_config_dir",
                 "moodle_tasks.paths.user_config_dir")),
+            *(patch(target, return_value=self.root / "cache" / "sessions") for target in (
+                "moodle_tasks.session.sessions_dir", "moodle_tasks.paths.sessions_dir")),
             *(patch(target, return_value=self.root / "cache") for target in (
                 "moodle_tasks.paths.user_cache_dir", "moodle_tasks.delivery.user_cache_dir")),
             patch("moodle_tasks.paths.default_env_file", return_value=self.env_file),
@@ -115,7 +117,8 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
             result = await client.call_tool("get_assignment", {"assignment_id": FakeMoodle.ASSIGNMENT_ID})
         self.assertTrue(result.is_error)
         self.assertNotIn("incorrecta", str(result))
-        self.assertFalse((self.config_dir / "sessions").exists() and any((self.config_dir / "sessions").iterdir()))
+        sessions = self.root / "cache" / "sessions"
+        self.assertFalse(sessions.exists() and any(sessions.iterdir()))
 
 
 if __name__ == "__main__":

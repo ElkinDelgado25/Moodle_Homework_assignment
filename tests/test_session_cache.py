@@ -26,8 +26,12 @@ class SessionCacheTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.config_dir = Path(self.temporary.name) / "config"
-        for target in ("moodle_tasks.session.user_config_dir", "moodle_tasks.paths.user_config_dir"):
-            patcher = patch(target, return_value=self.config_dir)
+        self.sessions_dir = Path(self.temporary.name) / "cache" / "sessions"
+        for target, value in (("moodle_tasks.session.user_config_dir", self.config_dir),
+                              ("moodle_tasks.paths.user_config_dir", self.config_dir),
+                              ("moodle_tasks.session.sessions_dir", self.sessions_dir),
+                              ("moodle_tasks.paths.sessions_dir", self.sessions_dir)):
+            patcher = patch(target, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
         patcher = patch.dict(os.environ, {"MOODLE_SESSION_CACHE": "true"})
@@ -49,6 +53,15 @@ class SessionCacheTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
         self.assertEqual(session.load_state(CONFIG), {"cookies": [MOODLE_COOKIE], "origins": []})
+
+    def test_the_session_lives_in_the_local_cache_and_replaces_the_old_roaming_copy(self):
+        legacy = self.config_dir / "sessions" / session.session_file(CONFIG).name
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("{}")
+        session.save_state(self.context([MOODLE_COOKIE]), CONFIG)
+        self.assertEqual(session.session_file(CONFIG).parent, self.sessions_dir)
+        self.assertTrue(session.session_file(CONFIG).is_file())
+        self.assertFalse(legacy.parent.exists())
 
     def test_invalid_old_or_foreign_states_are_ignored(self):
         path = session.session_file(CONFIG)

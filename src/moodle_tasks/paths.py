@@ -5,7 +5,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
-from .storage import default_env_file, user_cache_dir, user_config_dir
+from .storage import default_env_file, sessions_dir, user_cache_dir, user_config_dir
 
 
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
@@ -37,7 +37,8 @@ def _inside(path: Path, root: Path) -> bool:
 
 
 def _protected_roots() -> list[Path]:
-    roots = [user_config_dir()]
+    # La sesión vive en la caché, junto a las carpetas de trabajo, pero contiene cookies de Moodle.
+    roots = [user_config_dir(), sessions_dir()]
     if sys.platform != "win32":
         roots += [Path(root) for root in SYSTEM_ROOTS]
     env_file = default_env_file()
@@ -73,7 +74,7 @@ def _expand(raw: str) -> Path:
 def _protected_inodes() -> set[tuple[int, int]]:
     """Identidad (dispositivo, inodo) de los archivos de configuración: detecta enlaces duros hacia ellos."""
     found = set()
-    roots = [user_config_dir(), default_env_file()]
+    roots = [user_config_dir(), sessions_dir(), default_env_file()]
     for root in roots:
         try:
             paths = [root] if root.is_file() else [path for path in root.rglob("*") if path.is_file()]
