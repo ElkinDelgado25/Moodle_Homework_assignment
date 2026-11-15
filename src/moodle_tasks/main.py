@@ -72,7 +72,9 @@ OPT_OUT = ("0", "false", "no", "off", "n")
 
 
 def load_config(env_file: Path | None = None) -> Config:
-    values = config_values(env_file)
+    # El archivo se lee una sola vez: el entorno gana sobre él, salvo en la opción de privacidad de abajo.
+    file_values = dotenv_values(env_file or default_env_file(), interpolate=False)
+    values = {**file_values, **os.environ}
     return Config(
         base_url=required_env("MOODLE_URL", values).rstrip("/"),
         username=required_env("MOODLE_USERNAME", values),
@@ -80,8 +82,7 @@ def load_config(env_file: Path | None = None) -> Config:
         headless=(values.get("MOODLE_HEADLESS") or "true").lower() != "false",
         # Desactivar la caché de sesión es una opción de privacidad: gana si lo indica el archivo o el entorno.
         session_cache=not any((value or "").strip().lower() in OPT_OUT for value in (
-            values.get("MOODLE_SESSION_CACHE"),
-            dotenv_values(env_file or default_env_file(), interpolate=False).get("MOODLE_SESSION_CACHE"))),
+            values.get("MOODLE_SESSION_CACHE"), file_values.get("MOODLE_SESSION_CACHE"))),
     )
 
 
