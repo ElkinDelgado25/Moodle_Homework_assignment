@@ -203,7 +203,7 @@ def _wait_for_filemanager_ready(page: Page, filemanager: Locator) -> None:
         ready = loaded_empty or loaded_with_files or _add_control(filemanager) is not None
         if "fm-updating" not in classes and "fm-loading" not in classes and ready:
             return
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     raise RuntimeError("Moodle no terminó de cargar el área de entrega.")
 
 
@@ -284,7 +284,7 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
             break
         if error := _upload_error_message(page):
             raise RuntimeError(f"Moodle no pudo abrir el selector de archivos: {error}")
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     else:
         raise RuntimeError("Moodle no abrió el selector de archivos.")
 
@@ -297,7 +297,7 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
             break
         if error := _upload_error_message(page):
             raise RuntimeError(f"Moodle no pudo preparar la subida: {error}")
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     if upload_input is None:
         raise RuntimeError("El selector de Moodle no mostró el campo para elegir un archivo.")
     upload_input.set_input_files(str(path))
@@ -307,7 +307,7 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
             break
         if error := _upload_error_message(page):
             raise RuntimeError(f"Moodle rechazó el archivo: {error}")
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     else:
         raise RuntimeError("Moodle no mostró el botón para subir el archivo.")
 
@@ -326,7 +326,7 @@ def _stage_file(page: Page, filemanager: Locator, path: Path) -> None:
             raise RuntimeError(f"Moodle rechazó el archivo: {error}")
         if expected in {moodle_name(name) for name in _file_names(filemanager)}:
             return
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     _dismiss_filepicker(page)
     raise RuntimeError("Moodle no confirmó el archivo en el área de entrega.")
 
@@ -345,7 +345,7 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
     for _ in range(40):
         if filemanager.locator("[data-togglegroup][data-toggle='slave']").count():
             break
-        page.wait_for_timeout(250)
+        page.wait_for_timeout(POLL_SECONDS * 1000)
     else:
         raise RuntimeError("Moodle no mostró la selección de archivos necesaria para reemplazarlos.")
 
@@ -375,7 +375,7 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
         for _ in range(40):
             if _find_dialog_action(page, DELETE, page_fallback=False):
                 break
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(POLL_SECONDS * 1000)
         else:
             raise RuntimeError("Moodle no mostró la confirmación para quitar un archivo existente.")
         after = before
@@ -383,7 +383,7 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
             after = _file_names(filemanager)
             if len(after) < len(before):
                 break
-            page.wait_for_timeout(250)
+            page.wait_for_timeout(POLL_SECONDS * 1000)
         if len(after) >= len(before):
             raise RuntimeError("Moodle no confirmó que quitó un archivo existente.")
         removed.extend(name for name in before if name not in after)
