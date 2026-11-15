@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
@@ -48,7 +49,16 @@ def check_url(url: str) -> str:
 
 
 def parse_inline(text: str) -> list[dict]:
-    """Divide **negrita**, *cursiva*, [texto](url) y URLs sueltas en segmentos con formato."""
+    """Divide **negrita**, *cursiva*, [texto](url) y URLs sueltas en segmentos con formato.
+
+    El mismo texto se analiza al validar, al escribir el DOCX, al dibujar el PDF y al ordenar las referencias:
+    el análisis se guarda y cada llamada recibe sus propias copias, que puede modificar sin afectar a las demás.
+    """
+    return [dict(segment) for segment in _parse_inline(text)]
+
+
+@lru_cache(maxsize=4096)
+def _parse_inline(text: str) -> tuple[dict, ...]:
     segments: list[dict] = []
 
     def add(value: str, *, bold=False, italic=False, link=None):
@@ -71,7 +81,7 @@ def parse_inline(text: str) -> list[dict]:
             inner = match.group("bolditalic") or match.group("bold") or match.group("italic")
             bold = match.group("bolditalic") is not None or match.group("bold") is not None
             italic = match.group("bolditalic") is not None or match.group("italic") is not None
-            for segment in parse_inline(inner):
+            for segment in _parse_inline(inner):
                 add(segment["text"], bold=bold or segment["bold"], italic=italic or segment["italic"], link=segment["link"])
         elif match.group("target") is not None:
             label, target = match.group("label"), check_url(match.group("target"))
@@ -90,7 +100,7 @@ def parse_inline(text: str) -> list[dict]:
             add(url, link=check_url(url))
             add(trailing)
     add(text[position:])
-    return segments
+    return tuple(segments)
 
 
 def reference_key(value: str) -> str:
