@@ -205,6 +205,44 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                     self.assertTrue(bad.is_error, destination)
                 self.assertEqual(session.call_count, calls)
 
+    async def test_a_graded_assignment_returns_its_feedback_and_downloads_the_corrected_file(self):
+        corrected = "https://moodle.test/pluginfile.php/7/assignfeedback_file/feedback_files/3/correccion.pdf"
+        feedback = {"grade": "8,50 / 10,00", "graded_at": "2026-11-10T14:05:00", "graded_by": "María Pérez",
+                    "comments": "Buen trabajo.\n\nFalta la conclusión.",
+                    "files": [{"name": "correccion.pdf", "url": corrected}]}
+        task = Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=9", "Consigna", "", "Enviado", True,
+                          attachments=[{"name": "guia.pdf", "url": "https://moodle.test/pluginfile.php/guia.pdf"}],
+                          grade="8,50", feedback=feedback)
+        linked = {"linked_resources": [], "links_omitted": 0, "linked_content_incomplete": False}
+        with tempfile.TemporaryDirectory() as directory, fake_browser(), patch(
+            "moodle_tasks.server.load_config", return_value=SETTINGS
+        ), patch("moodle_tasks.server.read_assignment", return_value=task), patch(
+            "moodle_tasks.server.read_linked_resources", return_value=linked
+        ), patch("moodle_tasks.server.download_attachment",
+                 side_effect=lambda page, settings, url, folder: {"name": url.rsplit("/", 1)[1]}) as download:
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_assignment", {"assignment_id": 9})
+                # El cliente MCP valida structured_content contra el esquema de salida.
+                self.assertFalse(result.is_error, text_of(result))
+                self.assertEqual(result.structured_content["feedback"], feedback)
+                self.assertEqual(result.structured_content["grade"], "8,50")
+                downloaded = await client.call_tool("download_assignment_attachments",
+                                                    {"assignment_id": 9, "destination_directory": directory})
+                self.assertFalse(downloaded.is_error, text_of(downloaded))
+                self.assertEqual([call.args[2] for call in download.call_args_list],
+                                 ["https://moodle.test/pluginfile.php/guia.pdf", corrected])
+
+    async def test_an_ungraded_assignment_has_no_feedback_key(self):
+        task = Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=9", "Consigna", "", "Sin entrega", False)
+        linked = {"linked_resources": [], "links_omitted": 0, "linked_content_incomplete": False}
+        with fake_browser(), patch("moodle_tasks.server.load_config", return_value=SETTINGS), \
+                patch("moodle_tasks.server.read_assignment", return_value=task), \
+                patch("moodle_tasks.server.read_linked_resources", return_value=linked):
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_assignment", {"assignment_id": 9})
+        self.assertFalse(result.is_error, text_of(result))
+        self.assertNotIn("feedback", result.structured_content)
+
     async def test_pending_filter_includes_unknown_and_reports_partial_results(self):
         tasks = [Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=4", "Texto", "Mañana", "Estado", state)
                  for state in (True, False, None)]

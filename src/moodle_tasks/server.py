@@ -58,7 +58,8 @@ INSTRUCTIONS = (
     "de la fila. La consigna está en description, rubric (criterios de calificación), images y linked_resources: "
     "léelos todos; si la descripción solo muestra una URL, esa página es la consigna. Un enlace con next_offset se "
     "continúa con resource_url y resource_offset. Si description_found=false o un enlace falla, dilo sin concluir que "
-    "no hay consigna. No explores archivos locales, código ni credenciales para buscar instrucciones.\n"
+    "no hay consigna. No explores archivos locales, código ni credenciales para buscar instrucciones. Nota y comentarios "
+    "del docente: feedback (si está calificada); sus archivos, con download_assignment_attachments.\n"
     "3) Si piden hacer o resolver la tarea, termina sin esperar recordatorios: download_assignment_attachments "
     "devuelve el texto de cada anexo en files[].text (abre path si falta o viene truncado); desarrolla cada requisito "
     "con material real (sin inventar resultados, capturas ni fuentes) y entrega con build_delivery_document y su "
@@ -241,7 +242,8 @@ OUTPUT_SCHEMAS: dict[str, dict[str, Any]] = {
         attachments=_OBJECTS, images=_OBJECTS,
         rubric=_object(description=_S, criteria=_array(criterion=_S, levels=_array(points=_S, definition=_S))),
         linked_resources=_array(url=_S, content=_S, truncated=_B, next_offset=_I, error=_S),
-        linked_content_incomplete=_B),
+        linked_content_incomplete=_B,
+        feedback=_object(grade=_S, graded_at=_SN, graded_by=_S, comments=_S, files=_array(name=_S, url=_S))),
     "download_assignment_attachments": _object(
         assignment_id=_I, destination_directory=_S, downloaded_count=_I, incomplete=_B,
         files=_array(name=_S, path=_S, reused=_B, text=_S, text_truncated=_B, text_error=_S),
@@ -468,9 +470,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "description": task.content, "description_found": description_found,
             "attachments": task.attachments, **linked,
         }
-        # Solo cuando Moodle los muestra: grupo, estado de calificación, rúbrica e imágenes de la consigna.
+        # Solo cuando Moodle los muestra: grupo, estado de calificación, rúbrica, imágenes y retroalimentación.
         for key, value in (("grading_status", task.grading_status), ("group", task.group),
-                           ("rubric", task.rubric), ("images", task.images)):
+                           ("rubric", task.rubric), ("images", task.images), ("feedback", task.feedback)):
             if value:
                 result[key] = value
         result["next_step"] = ("Para resolverla: download_assignment_attachments, redactar el desarrollo y "
@@ -484,7 +486,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         resource_url: Annotated[str | None, Field(min_length=1, max_length=2048, description="Solo para continuar un enlace truncado: su url en linked_resources.")] = None,
         resource_offset: Annotated[Annotated[int, Field(strict=True, ge=0, le=10_000_000)], BeforeValidator(_digits), Field(description="next_offset que devolvió ese enlace.")] = 0,
     ) -> Result:
-        """Lee UNA tarea: description, fechas, estado, grupo, rúbrica, anexos, imágenes y el texto de hasta cinco páginas enlazadas (linked_resources). No crea archivos ni sube entregas."""
+        """Lee UNA tarea: description, fechas, estado, grupo, rúbrica, anexos, imágenes, el texto de hasta cinco páginas enlazadas (linked_resources) y la retroalimentación del docente (feedback). No crea archivos ni sube entregas."""
         return await run("get_assignment", get_task, assignment_id, url, resource_url, resource_offset)
 
     def download_task(assignment_id: int | None, url: str | None, destination_directory: str | None,
@@ -503,12 +505,15 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 # Por defecto, una carpeta por tarea: los anexos no se mezclan en Documentos.
                 directory = resolve_destination_directory(str(attachments_directory(task.title)))
                 directory.mkdir(parents=True, exist_ok=True)
-            # Anexos de la descripción, sus imágenes y recursos enlazados (/mod/resource redirige al archivo con redirect=1).
+            # Anexos de la descripción, sus imágenes, recursos enlazados (/mod/resource redirige al archivo con
+            # redirect=1) y los archivos corregidos que devolvió el docente.
             resources = [link["url"].split("#", 1)[0] + ("&" if "?" in link["url"] else "?") + "redirect=1"
                          for link in task.links if moodle_path(link["url"], settings.base_url) == "/mod/resource/view.php"]
             images = [image["url"] for image in task.images
                       if "pluginfile.php" in (moodle_path(image["url"], settings.base_url) or "")]
-            urls = list(dict.fromkeys([*(attachment["url"] for attachment in task.attachments), *images, *resources]))
+            corrected = [item["url"] for item in (task.feedback or {}).get("files", [])]
+            urls = list(dict.fromkeys([*(attachment["url"] for attachment in task.attachments), *images, *resources,
+                                       *corrected]))
             for index, attachment_url in enumerate(urls):
                 if progress is not None:
                     progress(index, len(urls), f"Descargando anexo {index + 1} de {len(urls)}")
@@ -536,7 +541,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         destination_directory: Annotated[str | None, Field(min_length=1, max_length=4096, description="Carpeta absoluta; por defecto ~/Documentos/Moodle/<tarea>.")] = None,
         include_text: Annotated[bool, Field(description="Devuelve el texto de PDF, DOCX, PPTX y archivos de texto en files[].text.")] = True,
     ) -> Result:
-        """Descarga los anexos de UNA tarea con la sesión de Moodle y devuelve su texto (files[].text) para leerlos sin abrirlos. No sobrescribe ni duplica archivos idénticos; informa descargas parciales."""
+        """Descarga los anexos de UNA tarea y sus archivos de retroalimentación con la sesión de Moodle y devuelve su texto (files[].text) para leerlos sin abrirlos. No sobrescribe ni duplica archivos idénticos; informa descargas parciales."""
         return await run("download_assignment_attachments", download_task, assignment_id, url, destination_directory,
                          include_text, reporter(ctx))
 
