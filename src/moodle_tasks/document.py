@@ -4,6 +4,7 @@ import copy
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -393,6 +394,19 @@ def find_soffice() -> list[str] | None:
         if candidate.is_file():
             return [str(candidate)]
     return None
+
+
+def _kill_process_tree(process: subprocess.Popen) -> None:
+    """Mata el proceso y sus hijos: «soffice» solo lanza a «soffice.bin», que seguiría vivo con el perfil bloqueado."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(process.pid)], capture_output=True, timeout=15)
+        else:
+            # El proceso se lanzó con start_new_session=True: su grupo es el suyo y contiene a todos sus hijos.
+            os.killpg(process.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    process.kill()
 
 
 def export_with_libreoffice(command: list[str], docx: Path, outdir: Path, timeout: int = EXPORT_TIMEOUT_SECONDS) -> Path:
