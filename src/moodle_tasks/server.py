@@ -761,11 +761,13 @@ def pending_table(tasks: list[Assignment], *, now: datetime | None = None, mode:
 def main(argv: list[str] | None = None) -> None:
     from .monitoring import initialize_sentry
 
-    initialize_sentry(config_values())
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, default=ENV_FILE, help="Ruta al .env con la configuración de Moodle")
     args = parser.parse_args(argv)
-    create_server(args.env_file.resolve()).run(transport="stdio")
+    env_file = args.env_file.resolve()
+    # Sentry sale del mismo archivo que usa el servidor, no del que haya por defecto.
+    initialize_sentry(config_values(env_file))
+    create_server(env_file).run(transport="stdio")
 
 
 if __name__ == "__main__":
