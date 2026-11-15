@@ -651,7 +651,6 @@ def _upload_validated(page: Page, config: Config, assignment_id: int, paths: lis
         return _result(assignment_id, task.title, "blocked", files=pending(),
                        errors=["La actividad está cerrada para entregas."])
     view_files = _submission_files(page)
-    requested = {moodle_name(path.name) for path in paths}
 
     open_authenticated_page(page, f"{url}&action=editsubmission", config)
     managers = page.locator(".filemanager")
