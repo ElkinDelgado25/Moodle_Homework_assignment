@@ -35,7 +35,7 @@ class MicrosoftLoginTests(unittest.TestCase):
 
     def run_flow(self, rejected, keyboard_required=False, empty_submissions=0):
         page = self.browser.new_page()
-        config = Config("https://moodle.test", "student@live.uleam.edu.ec", "test-password", True)
+        config = Config("https://moodle.test", "student@live.uleam.edu.ec", "test-password")
         visited = []
         pages = {
             "https://moodle.test/login/index.php": '<a href="https://login.test/email">Microsoft 365 Uleam</a>',

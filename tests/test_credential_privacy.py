@@ -9,11 +9,11 @@ from moodle_tasks.setup import ask_account
 
 class CredentialPrivacyTests(unittest.TestCase):
     def test_config_repr_hides_password(self):
-        settings = Config('https://moodle.test', 'student', 'private-test-password', True)
+        settings = Config('https://moodle.test', 'student', 'private-test-password')
         self.assertNotIn(settings.password, repr(settings))
 
     def test_terminal_hides_credentials_in_partial_and_fatal_errors(self):
-        settings = Config('https://moodle.test', 'private-test-user', 'test/pass+word', True)
+        settings = Config('https://moodle.test', 'private-test-user', 'test/pass+word')
         failure = f'{settings.username} {settings.password} {quote(settings.password, safe="")}'
         for fatal in (False, True):
             with self.subTest(fatal=fatal):

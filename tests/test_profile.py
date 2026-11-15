@@ -31,7 +31,7 @@ class ProfileTests(unittest.TestCase):
                         <a href="/course/view.php?id=3">Metodología</a>''',
             ))
             try:
-                saved = record_verified_profile(page, Config("https://moodle.test", "student", "secret", True), root)
+                saved = record_verified_profile(page, Config("https://moodle.test", "student", "secret"), root)
             finally:
                 browser.close()
             self.assertEqual(saved["student_1"], "Carlos Mendoza Rivera")

@@ -24,7 +24,7 @@ class VerifyCredentialsTests(unittest.TestCase):
             calls.append(options)
             yield MagicMock(), page
 
-        config = Config("https://moodle.test", "student", "secret", True)
+        config = Config("https://moodle.test", "student", "secret")
         with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), \
                 patch("moodle_tasks.setup.login") as login, \
                 patch("moodle_tasks.setup.record_verified_profile", return_value={"student_1": "Ana", "courses": []}):
@@ -38,7 +38,7 @@ class VerifyCredentialsTests(unittest.TestCase):
         def fake_moodle_page(config, **options):
             yield MagicMock(), MagicMock()
 
-        config = Config("https://moodle.test", "student", "secret", True)
+        config = Config("https://moodle.test", "student", "secret")
         with patch("moodle_tasks.setup.moodle_page", fake_moodle_page), patch("moodle_tasks.setup.login"), \
                 patch("moodle_tasks.setup.record_verified_profile", side_effect=RuntimeError("perfil")):
             self.assertEqual(verify_credentials(config), {"student_1": "", "courses": []})

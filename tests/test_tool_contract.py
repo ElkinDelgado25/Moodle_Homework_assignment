@@ -23,7 +23,7 @@ from moodle_tasks.main import Assignment, Config, course_name, read_assignment
 from moodle_tasks.profile import load_profile, remember_teacher, teacher_for
 from moodle_tasks.server import create_server, slim_schema
 
-SETTINGS = Config("https://moodle.test", "test", "test", True)
+SETTINGS = Config("https://moodle.test", "test", "test")
 TASK_URL = "https://moodle.test/mod/assign/view.php?id=9"
 
 # Estructura de una tarea real de Moodle 4: descripción con árbol de anexos, tabla de estado con el formulario

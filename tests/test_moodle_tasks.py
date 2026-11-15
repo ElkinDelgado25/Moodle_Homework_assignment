@@ -24,7 +24,7 @@ class MoodleTests(unittest.TestCase):
         self.page = self.browser.new_page()
         # Comprobamos los resultados de Moodle, no el rendimiento del runner.
         self.page.set_default_timeout(15_000)
-        self.config = Config("https://moodle.test", "test", "test", True)
+        self.config = Config("https://moodle.test", "test", "test")
 
     def tearDown(self):
         self.page.close()

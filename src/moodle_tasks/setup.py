@@ -74,7 +74,7 @@ def ask_account(url: str) -> tuple[Config, bool]:
         if not password or "\n" in password or "\r" in password:
             print("La contraseña no puede estar vacía ni contener saltos de línea.")
             continue
-        config = Config(url, username, password, True)
+        config = Config(url, username, password)
         try:
             with Console().status("Comprobando el acceso a Moodle...", spinner="dots", spinner_style="#ff6555"):
                 identity = verify_credentials(config) or {}

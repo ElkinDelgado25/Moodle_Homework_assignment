@@ -15,7 +15,7 @@ from moodle_tasks.main import Config
 class DownloadTests(unittest.TestCase):
     def setUp(self):
         self.page = MagicMock()
-        self.settings = Config("https://moodle.test", "test", "test", True)
+        self.settings = Config("https://moodle.test", "test", "test")
         self.url = "https://moodle.test/pluginfile.php/7/mod_assign/introattachment/0/Taller%20Semana%206.pdf"
 
     def response(self, body=b"%PDF-1.7\nexample", status=200, content_type="application/pdf", location=None):
@@ -117,7 +117,7 @@ class DownloadTests(unittest.TestCase):
                 try:
                     page = browser.new_page()
                     page.goto(base + "/start")
-                    result = download_attachment(page, Config(base, "test", "test", True), base + "/pluginfile.php/Taller.pdf", Path(directory))
+                    result = download_attachment(page, Config(base, "test", "test"), base + "/pluginfile.php/Taller.pdf", Path(directory))
                     self.assertEqual(Path(result["path"]).read_bytes(), b"%PDF-1.7\nauthenticated attachment")
                 finally:
                     browser.close()
@@ -159,7 +159,7 @@ class LinkedBudgetTests(unittest.TestCase):
     def test_moodle_file_links_point_to_the_download_tool(self):
         from moodle_tasks import linked_content
         from moodle_tasks.main import Config
-        config = Config("https://moodle.test", "u", "p", True)
+        config = Config("https://moodle.test", "u", "p")
         result = linked_content.read_linked_resources(None, [{"name": "", "url": "https://moodle.test/mod/resource/view.php?id=3"}],
                                                       config=config)
         self.assertEqual(result["linked_resources"][0]["kind"], "file")

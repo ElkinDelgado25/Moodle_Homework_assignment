@@ -14,7 +14,7 @@ from moodle_tasks.errors import MoodleAuthenticationError
 from moodle_tasks.main import Config
 from moodle_tasks.paths import UnsafePathError, check_upload_file
 
-CONFIG = Config("https://moodle.test", "estudiante@uleam.edu.ec", "secreto", True)
+CONFIG = Config("https://moodle.test", "estudiante@uleam.edu.ec", "secreto")
 MOODLE_COOKIE = {"name": "MoodleSession", "value": "abc", "domain": "moodle.test", "path": "/",
                  "expires": -1, "httpOnly": True, "secure": True, "sameSite": "Lax"}
 FOREIGN_COOKIE = dict(MOODLE_COOKIE, name="ESTSAUTH", domain=".login.microsoftonline.com")
@@ -63,7 +63,7 @@ class SessionCacheTests(unittest.TestCase):
             self.assertIsNone(session.load_state(CONFIG), broken[:40])
 
     def test_each_account_has_its_own_file(self):
-        other = Config(CONFIG.base_url, "otra@uleam.edu.ec", "x", True)
+        other = Config(CONFIG.base_url, "otra@uleam.edu.ec", "x")
         self.assertNotEqual(session.session_file(CONFIG), session.session_file(other))
         session.save_state(self.context([MOODLE_COOKIE]), CONFIG)
         self.assertIsNone(session.load_state(other))

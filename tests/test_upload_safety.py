@@ -144,7 +144,7 @@ class UploadSafetyTests(unittest.TestCase):
         from mcp import Client
 
         async def run():
-            settings = Config("https://moodle.test", "u", "p", True)
+            settings = Config("https://moodle.test", "u", "p")
             with patch("moodle_tasks.server.load_config", return_value=settings), \
                     patch("moodle_tasks.server.moodle_page", side_effect=AssertionError("no debe abrir Chromium")):
                 async with Client(create_server()) as client:

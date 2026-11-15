@@ -27,7 +27,7 @@ class AssignmentUploadTests(unittest.TestCase):
     def setUp(self):
         self.page = self.browser.new_page()
         self.page.set_default_timeout(3000)
-        self.config = Config("https://moodle.test", "test", "private-password", True)
+        self.config = Config("https://moodle.test", "test", "private-password")
         self.state = {"existing_files": [], "saved_files": None, "closed": False, "description": "Subir los archivos finales.",
                       "has_filemanager": True, "reject_names": set(), "requests": [], "posts": [],
                       "require_login": False, "authenticated": False, "login_count": 0,

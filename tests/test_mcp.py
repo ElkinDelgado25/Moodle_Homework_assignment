@@ -15,7 +15,7 @@ from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.main import Assignment, Config
 from moodle_tasks.server import INSTRUCTIONS, assignment_id_from_reference, create_server
 
-SETTINGS = Config("https://moodle.test", "test", "test", True)
+SETTINGS = Config("https://moodle.test", "test", "test")
 
 
 @contextmanager
@@ -301,7 +301,7 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
             path.write_text("MOODLE_USERNAME=private-user\nMOODLE_PASSWORD=private/pass+word\n")
             leak = 'private/pass+word private%2Fpass%2Bword PRIVATE-USER "private\\/pass+word"'
             with patch("moodle_tasks.server.collect_assignments", side_effect=RuntimeError(leak)), \
-                    patch("moodle_tasks.server.load_config", return_value=Config("https://moodle.test", "private-user", "private/pass+word", True)):
+                    patch("moodle_tasks.server.load_config", return_value=Config("https://moodle.test", "private-user", "private/pass+word")):
                 async with Client(create_server(path)) as client:
                     result = await client.call_tool("list_assignments")
                     self.assertTrue(result.is_error)

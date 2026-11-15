@@ -30,7 +30,7 @@ class SearchTests(unittest.TestCase):
         self.cache_patch.start()
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
-        self.config = Config("https://moodle.test", "student", "password", True)
+        self.config = Config("https://moodle.test", "student", "password")
         self.visited = []
         self.now = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
         self.tasks = {

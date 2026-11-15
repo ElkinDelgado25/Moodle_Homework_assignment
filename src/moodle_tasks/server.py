@@ -10,7 +10,6 @@ import secrets
 import shutil
 import time
 from collections import OrderedDict
-from dataclasses import replace
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -310,7 +309,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     drafts: OrderedDict[str, DeliveryDocument] = OrderedDict()
 
     def config():
-        return replace(load_config(env_file), headless=True)
+        return load_config(env_file)
 
     @lru_cache(maxsize=4)
     def secrets_for(stamp: tuple) -> tuple[str | None, str | None]:

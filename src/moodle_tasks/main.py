@@ -18,7 +18,6 @@ class Config:
     base_url: str
     username: str
     password: str = field(repr=False)
-    headless: bool
     session_cache: bool = True
 
 
@@ -79,7 +78,6 @@ def load_config(env_file: Path | None = None) -> Config:
         base_url=required_env("MOODLE_URL", values).rstrip("/"),
         username=required_env("MOODLE_USERNAME", values),
         password=required_env("MOODLE_PASSWORD", values),
-        headless=(values.get("MOODLE_HEADLESS") or "true").lower() != "false",
         # Desactivar la caché de sesión es una opción de privacidad: gana si lo indica el archivo o el entorno.
         session_cache=not any((value or "").strip().lower() in OPT_OUT for value in (
             values.get("MOODLE_SESSION_CACHE"), file_values.get("MOODLE_SESSION_CACHE"))),
