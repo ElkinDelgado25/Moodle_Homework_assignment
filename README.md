@@ -94,8 +94,6 @@ mcp-moodle setup
 
 El asistente permite cambiar las credenciales o conectar otro agente.
 
-> **Importante:** el comando correcto es `mcp-moodle`, no `moodle-mcp`. `moodle-mcp` inicia el servidor MCP y no acepta la opción `setup`.
-
 ---
 
 
@@ -224,7 +222,7 @@ Para integrar Moodle con Codex, Claude, Cursor, Antigravity o Copilot, usa el as
 
 `setup` instala automáticamente una release estable más nueva y continúa con el código actualizado. Al conectar un agente, sincroniza también los agentes instalados y las conexiones existentes de Moodle, conservando la cuenta de cada conexión y las otras entradas MCP. Usa `--skip-update` para configurar sin buscar releases. Recarga el MCP en los clientes abiertos al terminar.
 
-> **Importante:** no sustituyas el orden del nombre. Para configurar usa `mcp-moodle setup`; `moodle-mcp` es el servidor y solo acepta opciones como `--env-file`. Actualiza con `mcp-moodle update`; las instrucciones están en [INSTALL.md](docs/INSTALL.md).
+Actualiza con `mcp-moodle update`; las instrucciones están en [INSTALL.md](docs/INSTALL.md).
 
 ## Entregables
 
