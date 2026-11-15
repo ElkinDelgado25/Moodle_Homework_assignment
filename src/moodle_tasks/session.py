@@ -114,14 +114,17 @@ def ensure_login(page: Page, config: Config) -> bool:
 
 
 @contextmanager
-def moodle_page(config: Config, *, timeout_ms: int = 15_000):
-    """(browser, page) con la sesión guardada; al terminar sin errores guarda las cookies vigentes."""
+def moodle_page(config: Config, *, timeout_ms: int = 15_000, fresh: bool = False):
+    """(browser, page) con la sesión guardada; al terminar sin errores guarda las cookies vigentes.
+
+    fresh=True ignora la sesión guardada y parte sin cookies: sirve para validar las credenciales de verdad.
+    """
     from .errors import MoodleAuthenticationError
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            state = load_state(config)
+            state = None if fresh else load_state(config)
             context = browser.new_context(storage_state=state) if state else browser.new_context()
             page = context.new_page()
             page.set_default_timeout(timeout_ms)

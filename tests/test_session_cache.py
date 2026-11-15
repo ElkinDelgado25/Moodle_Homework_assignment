@@ -124,6 +124,17 @@ class SessionCacheTests(unittest.TestCase):
         self.assertEqual(session.load_state(CONFIG)["cookies"][0]["value"], "nuevo")
         self.assertEqual(launch.close.call_count, 2)
 
+    def test_fresh_page_ignores_the_saved_session_but_still_saves_the_new_one(self):
+        session.save_state(self.context([MOODLE_COOKIE]), CONFIG)
+        playwright = MagicMock()
+        launch = playwright.__enter__.return_value.chromium.launch.return_value
+        launch.new_context.return_value.cookies.return_value = [dict(MOODLE_COOKIE, value="nuevo")]
+        with patch("moodle_tasks.session.sync_playwright", return_value=playwright):
+            with session.moodle_page(CONFIG, fresh=True):
+                pass
+        self.assertNotIn("storage_state", launch.new_context.call_args.kwargs)
+        self.assertEqual(session.load_state(CONFIG)["cookies"][0]["value"], "nuevo")
+
 
 class EnsureLoginTests(unittest.TestCase):
     @classmethod
