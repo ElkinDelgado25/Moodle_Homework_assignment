@@ -15,7 +15,12 @@ def alive(pid: int) -> bool:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    return True
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as stat:
+            # Sin un init que los recoja (contenedores de CI), un proceso ya muerto queda como zombi (Z).
+            return stat.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
 
 
 @unittest.skipIf(sys.platform == "win32", "Comprueba el grupo de procesos de POSIX")
