@@ -151,7 +151,7 @@ def record_verified_profile(page: Page, config: Config, directory: Path | None =
         try:
             loaded = json.loads(path.read_text(encoding="utf-8"))
             current = public_profile(loaded) if isinstance(loaded, dict) else {}
-        except (OSError, ValueError, json.JSONDecodeError):
+        except (OSError, ValueError):
             current = {}
     if name:
         current["student_1"] = name
