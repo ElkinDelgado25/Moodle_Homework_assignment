@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urljoin
 
 from dotenv import dotenv_values
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
 from .storage import default_env_file
