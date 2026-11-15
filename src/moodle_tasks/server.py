@@ -570,7 +570,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         assets = Path(__file__).resolve().parent / "assets"
         try:
             defaults = spanish_defaults(load_profile(user_config_dir()))
-        except (ValueError, OSError, json.JSONDecodeError):
+        except (ValueError, OSError):
             raise ValueError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato antes de generar el documento.") from None
         return {"template_path": str(assets / "academic-cover.docx"),
                 "fields": ["titulo", *COVER_FIELDS],
@@ -612,7 +612,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         warnings: list[str] = []
         try:
             profile = load_profile(user_config_dir())
-        except (ValueError, OSError, json.JSONDecodeError):
+        except (ValueError, OSError):
             profile = {}
             warnings.append("No se pudo leer document_profile.json; se usaron solo los datos indicados.")
         course = (known_tasks.get(assignment_id) or {}).get("course") if assignment_id is not None else None
