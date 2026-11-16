@@ -59,7 +59,8 @@ INSTRUCTIONS = (
     "léelos todos; si la descripción solo muestra una URL, esa página es la consigna. Un enlace con next_offset se "
     "continúa con resource_url y resource_offset. Si description_found=false o un enlace falla, dilo sin concluir que "
     "no hay consigna. No explores archivos locales, código ni credenciales para buscar instrucciones. Nota y comentarios "
-    "del docente: feedback (si está calificada); sus archivos, con download_assignment_attachments.\n"
+    "del docente: feedback (si está calificada); sus archivos, con download_assignment_attachments. due_at incluye "
+    "la prórroga (original_due_at: cierre previo; cutoff_at: límite de entregas tardías).\n"
     "3) Si piden hacer o resolver la tarea, termina sin esperar recordatorios: download_assignment_attachments "
     "devuelve el texto de cada anexo en files[].text (abre path si falta o viene truncado); desarrolla cada requisito "
     "con material real (sin inventar resultados, capturas ni fuentes) y entrega con build_delivery_document y su "
@@ -470,8 +471,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "description": task.content, "description_found": description_found,
             "attachments": task.attachments, **linked,
         }
-        # Solo cuando Moodle los muestra: grupo, estado de calificación, rúbrica, imágenes y retroalimentación.
-        for key, value in (("grading_status", task.grading_status), ("group", task.group),
+        # Solo cuando Moodle los muestra: cierre previo a una prórroga, fecha límite, grupo, estado de calificación,
+        # rúbrica, imágenes y retroalimentación.
+        for key, value in (("original_due_at", task.original_due_at), ("cutoff_at", task.cutoff_at),
+                           ("grading_status", task.grading_status), ("group", task.group),
                            ("rubric", task.rubric), ("images", task.images), ("feedback", task.feedback)):
             if value:
                 result[key] = value
