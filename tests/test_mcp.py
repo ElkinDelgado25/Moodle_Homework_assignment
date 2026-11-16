@@ -242,6 +242,26 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.call_tool("get_assignment", {"assignment_id": 9})
         self.assertFalse(result.is_error, text_of(result))
         self.assertNotIn("feedback", result.structured_content)
+        for key in ("original_due_at", "cutoff_at"):
+            self.assertNotIn(key, result.structured_content)
+
+    async def test_an_extended_assignment_returns_the_original_and_cutoff_dates(self):
+        task = Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=9", "Consigna",
+                          "jueves, 19 de noviembre de 2026, 23:59", "Sin entrega", False,
+                          due_at="2026-11-19T23:59:00", original_due_at="2026-11-12T09:00:00",
+                          cutoff_at="2026-11-20T23:59:00")
+        linked = {"linked_resources": [], "links_omitted": 0, "linked_content_incomplete": False}
+        with fake_browser(), patch("moodle_tasks.server.load_config", return_value=SETTINGS), \
+                patch("moodle_tasks.server.read_assignment", return_value=task), \
+                patch("moodle_tasks.server.read_linked_resources", return_value=linked):
+            async with Client(create_server()) as client:
+                result = await client.call_tool("get_assignment", {"assignment_id": 9})
+        # El cliente MCP valida structured_content contra el esquema de salida.
+        self.assertFalse(result.is_error, text_of(result))
+        data = result.structured_content
+        self.assertEqual((data["due_at"], data["original_due_at"], data["cutoff_at"]),
+                         ("2026-11-19T23:59:00", "2026-11-12T09:00:00", "2026-11-20T23:59:00"))
+        self.assertTrue(data["due_display"].startswith("19/11/2026 23:59"))
 
     async def test_pending_filter_includes_unknown_and_reports_partial_results(self):
         tasks = [Assignment("Tarea", "https://moodle.test/mod/assign/view.php?id=4", "Texto", "Mañana", "Estado", state)

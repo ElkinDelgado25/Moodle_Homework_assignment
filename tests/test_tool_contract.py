@@ -1,6 +1,7 @@
 """Contrato entre el servidor y el agente: datos limpios, errores con código y reintentos baratos."""
 
 import asyncio
+from datetime import datetime
 import json
 import tempfile
 import unittest
@@ -21,7 +22,7 @@ from moodle_tasks.errors import MoodleHTTPError
 from moodle_tasks.extract import extract_text
 from moodle_tasks.assignment import read_assignment
 from moodle_tasks.core import Assignment, Config
-from moodle_tasks.listing import course_name
+from moodle_tasks.listing import course_name, deadline_display
 from moodle_tasks.profile import load_profile, remember_teacher, teacher_for
 from moodle_tasks.server import create_server, slim_schema
 
@@ -75,6 +76,35 @@ GRADED_PAGE = """
   <tr><th>Archivos de retroalimentación</th><td><div class="box generalbox"><ul><li>
     <a href="/pluginfile.php/7/assignfeedback_file/feedback_files/3/correccion.pdf?forcedownload=1">correccion.pdf</a></li></ul></div></td></tr>
 </tbody></table></div></div></section>"""
+
+# Tarea con prórroga para el estudiante: la tabla de estado trae la fecha de entrega extendida y las fechas de la
+# actividad, la fecha límite para entregas tardías. «Tiempo restante» no se confunde con la prórroga.
+EXTENDED_PAGE = """
+<nav class="breadcrumb"><a href="/course/view.php?id=4">A -- SEGURIDAD--1208690--20262-1</a></nav>
+<section id="region-main"><h1>U3-A4: Auditoría</h1>
+<div class="activity-dates"><div><strong>Apertura:</strong> lunes, 9 de noviembre de 2026, 09:00</div>
+  <div><strong>Cierre:</strong> jueves, 12 de noviembre de 2026, 09:00</div>
+  <div><strong>Fecha límite:</strong> viernes, 20 de noviembre de 2026, 23:59</div></div>
+<div class="activity-description" id="intro"><div class="box generalbox"><div class="no-overflow">
+  <p>Entregue la auditoría en PDF.</p></div></div></div>
+<div class="submissionstatustable"><h3>Estado de la entrega</h3><table class="generaltable"><tbody>
+  <tr><th>Estado de la entrega</th><td>No se ha enviado nada en esta tarea</td></tr>
+  <tr><th>Estado de la calificación</th><td>Sin calificar</td></tr>
+  <tr><th>Fecha de entrega extendida</th><td>jueves, 19 de noviembre de 2026, 23:59</td></tr>
+  <tr><th>Tiempo restante</th><td>4 días 13 horas</td></tr>
+</tbody></table></div></section>"""
+
+EXTENDED_PAGE_EN = """
+<section id="region-main"><h1>U3-A4: Audit</h1>
+<div class="activity-dates"><div><strong>Opened:</strong> Monday, 9 November 2026, 9:00 AM</div>
+  <div><strong>Due:</strong> Thursday, 12 November 2026, 9:00 AM</div>
+  <div><strong>Cut-off date:</strong> Friday, 20 November 2026, 11:59 PM</div></div>
+<div class="activity-description" id="intro"><p>Submit the audit as a PDF.</p></div>
+<div class="submissionstatustable"><table class="generaltable"><tbody>
+  <tr><th>Submission status</th><td>No attempt</td></tr>
+  <tr><th>Extension due date</th><td>Thursday, 19 November 2026, 11:59 PM</td></tr>
+  <tr><th>Time remaining</th><td>4 days 13 hours</td></tr>
+</tbody></table></div></section>"""
 
 @contextmanager
 def fake_browser():
@@ -144,6 +174,30 @@ class AssignmentPageTests(unittest.TestCase):
         self.addCleanup(page.close)
         page.route("**/*", lambda route: route.fulfill(content_type="text/html; charset=utf-8", body=ASSIGNMENT_PAGE))
         self.assertIsNone(read_assignment(page, TASK_URL).feedback)
+
+    def read_page(self, body: str) -> Assignment:
+        page = self.browser.new_page()
+        self.addCleanup(page.close)
+        page.route("**/*", lambda route: route.fulfill(content_type="text/html; charset=utf-8", body=body))
+        return read_assignment(page, TASK_URL)
+
+    def test_an_extension_replaces_the_due_date_and_keeps_the_original(self):
+        for body in (EXTENDED_PAGE, EXTENDED_PAGE_EN):
+            with self.subTest(language="es" if body is EXTENDED_PAGE else "en"):
+                task = self.read_page(body)
+                self.assertEqual(task.due_at, "2026-11-19T23:59:00")
+                self.assertEqual(task.original_due_at, "2026-11-12T09:00:00")
+                self.assertEqual(task.cutoff_at, "2026-11-20T23:59:00")
+                self.assertIs(task.submitted, False)
+                # Entre el cierre original y la prórroga la tarea sigue abierta, no «plazo vencido».
+                self.assertEqual(deadline_display(task, datetime(2026, 11, 15, 10, 0)),
+                                 "19/11/2026 23:59 (quedan 4 días y 13 horas)")
+
+    def test_without_an_extension_the_due_date_is_unchanged(self):
+        task = self.read_page(ASSIGNMENT_PAGE)
+        self.assertEqual(task.due_at, "2026-11-12T09:00:00")
+        self.assertIsNone(task.original_due_at)
+        self.assertIsNone(task.cutoff_at)
 
     def test_course_name_is_the_same_for_the_list_and_the_detail(self):
         self.assertEqual(course_name("A -- VISUALIZACIÓN DE DATOS / SOFTWARE 2024 - NS--20262-1"), "VISUALIZACIÓN DE DATOS")
