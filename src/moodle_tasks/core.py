@@ -44,6 +44,9 @@ class Assignment:
     rubric: dict | None = None
     images: list[dict[str, str]] = field(default_factory=list)
     feedback: dict | None = None
+    # Con una prórroga, due_at es la fecha prorrogada y original_due_at el cierre que tenía la tarea.
+    original_due_at: str | None = None
+    cutoff_at: str | None = None
 
 
 def is_pending(task: Assignment) -> bool:
@@ -222,6 +225,7 @@ STATUS_LABELS = {
     "status": r"submission status|estado de (?:la )?entrega",
     "grading_status": r"grading status|estado de (?:la )?calificaci[oó]n",
     "group": r"^(?:group|grupo)$",
+    "extension_due": r"extension due date|fecha de entrega (?:extendida|ampliada)|pr[oó]rroga|extensi[oó]n",
 }
 
 

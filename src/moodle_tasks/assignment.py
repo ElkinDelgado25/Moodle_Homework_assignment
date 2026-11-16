@@ -70,6 +70,15 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     dates = date_region.inner_text() if date_region.count() else raw
     opening = re.search(r"(?:Apertura|Opened|Opens):\s*([^\n]+)", dates, re.I)
     closing = re.search(r"(?:Cierre|Due(?: date)?|Fecha de entrega):\s*([^\n]+)", dates, re.I)
+    cutoff = re.search(r"(?:Fecha l[ií]mite|Cut-off date):\s*([^\n]+)", dates, re.I)
+    due_at = parse_moodle_date(closing.group(1)) if closing else None
+    due_text = closing.group(1) if closing else due_date
+    # Una prórroga concedida al estudiante (o a su grupo) reemplaza el cierre; el original se conserva aparte.
+    extension_text = summary.get("extension_due", "")
+    extension_at = parse_moodle_date(extension_text)
+    original_due_at = None
+    if extension_at and extension_at != due_at:
+        original_due_at, due_at, due_text = due_at, extension_at, extension_text
     # inner_text conserva las filas de la tabla de calificaciones.
     grade_match = re.search(r"(?:^|\n)(?:Calificación|Grade)\s+([\d.,]+)\s*/\s*[\d.,]+", raw, re.I)
     feedback = read_feedback(page)
@@ -91,10 +100,11 @@ def read_assignment(page: Page, url: str, config: Config | None = None) -> Assig
     attachments = [item for item in attachments if not re.search(r"/assign(?:feedback|submission)_", item["url"])]
     course = first_text(page, ".breadcrumb a[href*='/course/view.php']")
     links = assignment_links(page, content, attachments)
-    return Assignment(title, page.url, content, closing.group(1) if closing else due_date, status, submitted,
+    return Assignment(title, page.url, content, due_text, status, submitted,
                       course=course, attachments=attachments, links=links,
                       opens_at=parse_moodle_date(opening.group(1)) if opening else None,
-                      due_at=parse_moodle_date(closing.group(1)) if closing else None,
+                      due_at=due_at, original_due_at=original_due_at,
+                      cutoff_at=parse_moodle_date(cutoff.group(1)) if cutoff else None,
                       grade=grade, requires_submission=False if grade or no_upload or submitted is True else True if submitted is False else None,
                       group=summary.get("group"), grading_status=summary.get("grading_status"),
                       rubric=summary.get("rubric"), images=assignment_images(page), feedback=feedback)
