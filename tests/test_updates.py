@@ -187,7 +187,7 @@ class UpdateTests(unittest.TestCase):
         result = subprocess.CompletedProcess([], 128, "", stderr)
         with patch.object(updates.subprocess, "run", return_value=result):
             with self.assertRaises(updates.UntrustedCheckoutError) as error:
-                updates._run_git(Path("/srv/Moodle_Homework_assignment/lib/python3.11"), "status")
+                updates._run_git(Path("/srv/Moodle_Homework_assignment/lib/python3.13"), "status")
         message = str(error.exception)
         self.assertIn('git config --global --add safe.directory "/srv/Moodle_Homework_assignment"', message)
         self.assertNotIn("Windows", message)
@@ -233,5 +233,7 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("--locked", commands[0])
         install = commands[1]
         self.assertIn("--force", install)
+        self.assertIn("--compile-bytecode", install)
+        self.assertEqual(install[install.index("--python") + 1], updates.PYTHON_VERSION)
         self.assertEqual(install[install.index("--reinstall-package") + 1], updates.PROJECT_NAME)
         self.assertEqual(install[install.index("--constraints") + 1], commands[0][-1])

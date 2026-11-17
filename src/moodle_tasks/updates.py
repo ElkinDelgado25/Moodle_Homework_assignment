@@ -22,6 +22,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from .storage import atomic_write, user_config_dir
+from . import PYTHON_VERSION
 
 
 PROJECT_NAME = "moodle-homework-assignment"
@@ -419,7 +420,7 @@ def _apply_release(release: Release, console: Console) -> None:
                 "la exportación de dependencias fijadas",
             )
             _run_step(
-                ["uv", "tool", "install", "--python", "3.11", "--force",
+                ["uv", "tool", "install", "--compile-bytecode", "--python", PYTHON_VERSION, "--force",
                  "--reinstall-package", PROJECT_NAME, "--constraints", str(requirements), str(root)],
                 root,
                 "la reinstalación del comando mcp-moodle",

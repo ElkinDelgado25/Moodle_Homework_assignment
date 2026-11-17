@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from moodle_tasks import PYTHON_VERSION
+
 
 def main() -> None:
     wheels = list(Path("dist").glob("*.whl"))
@@ -18,7 +20,7 @@ def main() -> None:
             "--format", "requirements.txt", "--output-file", str(requirements),
         ], check=True, stdout=subprocess.DEVNULL)
         subprocess.run([
-            "uv", "tool", "install", "--force", "--python", "3.11",
+            "uv", "tool", "install", "--force", "--compile-bytecode", "--python", PYTHON_VERSION,
             "--constraints", str(requirements), str(wheel.resolve()),
         ], check=True)
     tool_root = Path(subprocess.check_output(["uv", "tool", "dir"], text=True).strip())

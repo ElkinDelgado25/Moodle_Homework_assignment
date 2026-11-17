@@ -41,7 +41,7 @@ Compatible con **Codex, Claude Code, Cursor, Google Antigravity y Copilot**. Usa
 ## Requisitos
 
 - Windows 11 o Windows Server 2019+, macOS 14+, o Linux con las bibliotecas necesarias para Chromium. El CI comprueba Windows Server 2025, Ubuntu 24.04, Arch Linux y macOS 15 en Intel y Apple Silicon.
-- `uv`; obtiene Python 3.11 automáticamente si hace falta.
+- `uv`; obtiene Python 3.13 automáticamente si hace falta (se acepta 3.11 o posterior).
 - Una cuenta activa en Moodle, acceso a Internet y un agente compatible instalado.
 
 Los requisitos del navegador se basan en la [documentación oficial de Playwright](https://playwright.dev/python/docs/intro).
