@@ -11,11 +11,11 @@ from unittest.mock import patch
 
 from pydantic import ValidationError
 
-import helpers  # noqa: F401 - aísla las pruebas de la configuración real
+import helpers
 from moodle_tasks.document import MissingCoverFields, build_docx, cover_values, safe_file_name
 from moodle_tasks.document_model import TEMPLATE_TOKEN, CoverFields, DeliveryDocument, parse_inline
 from moodle_tasks.downloads import attachment_name
-from moodle_tasks.paths import UnsafePathError, check_upload_file, resolve_destination_directory
+from moodle_tasks.paths import check_upload_file, resolve_destination_directory
 from moodle_tasks.uploads import moodle_name
 from moodle_tasks.urls import assignment_view_id, parse_id
 

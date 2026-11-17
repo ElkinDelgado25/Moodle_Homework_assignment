@@ -58,7 +58,7 @@ def open_file(path: Path) -> bool:
         return False
     try:
         if sys.platform == "win32":
-            os.startfile(str(path))  # noqa: S606 - ruta local validada
+            os.startfile(str(path))
             return True
         command = ["open", str(path)] if sys.platform == "darwin" else ["xdg-open", str(path)]
         if not shutil.which(command[0]):

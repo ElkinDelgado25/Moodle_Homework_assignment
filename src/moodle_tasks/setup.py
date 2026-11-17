@@ -65,7 +65,7 @@ def verify_credentials(config: Config) -> dict[str, object]:
 
 
 def ask_account(url: str) -> tuple[Config, bool]:
-    for attempt in range(3):
+    for _ in range(3):
         username = input("Usuario o correo de Moodle: ").strip()
         if not valid_username(username):
             print("Introduce un usuario sin espacios o un correo con formato válido.")

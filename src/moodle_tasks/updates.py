@@ -11,7 +11,7 @@ import sys
 import tempfile
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -174,7 +174,7 @@ def _write_cache(release: Release | None, error: str | None) -> None:
     try:
         data = {
             "format": 1,
-            "checked_at": datetime.now(timezone.utc).timestamp(),
+            "checked_at": datetime.now(UTC).timestamp(),
             "release": ({"tag": release.tag, "url": release.url} if release else None),
             "error": error,
         }
@@ -199,7 +199,7 @@ def check_for_updates(*, force: bool = False) -> UpdateStatus:
         return UpdateStatus("desconocida", error=str(error))
 
     cache = _read_cache()
-    now = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(UTC).timestamp()
     interval = _check_hours() * 3600
     age = now - cache["checked_at"] if cache else None
     cache_interval = interval

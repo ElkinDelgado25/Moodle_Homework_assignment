@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fpdf import FPDF
@@ -109,7 +109,7 @@ class _Renderer(FPDF):
         self.set_auto_page_break(True, MARGIN)
         self.unicode = files is not None
         if files:
-            for style, path in zip(STYLES, files):
+            for style, path in zip(STYLES, files, strict=True):
                 self.add_font("Serif", style, str(path))
             self.family_name = "Serif"
         else:
@@ -207,7 +207,7 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
     pdf.set_subject(values.get("materia", ""))
     pdf.set_creator("moodle-homework-assignment")
     pdf.set_lang("es-EC")
-    pdf.set_creation_date(datetime.now(timezone.utc))
+    pdf.set_creation_date(datetime.now(UTC))
     pdf.add_page()
     render_cover(pdf, {**values, "titulo": content.title})
 
@@ -281,7 +281,7 @@ def render_pdf(content: DeliveryDocument, values: dict[str, str], output: Path,
                 pdf.warnings.append(f"La tabla {tables} tiene celdas demasiado largas para una página; en el PDF se muestra como lista.")
                 header = block.rows[0]
                 for row in block.rows[1:]:
-                    pdf.paragraph("; ".join(f"**{pdf.plain(name)}:** {value}" for name, value in zip(header, row)), indent=0)
+                    pdf.paragraph("; ".join(f"**{pdf.plain(name)}:** {value}" for name, value in zip(header, row, strict=False)), indent=0)
             else:
                 with pdf.table(borders_layout=TableBordersLayout.HORIZONTAL_LINES, line_height=SINGLE + 1,
                                text_align="LEFT", first_row_as_headings=True, padding=1) as table:

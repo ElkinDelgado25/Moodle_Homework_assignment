@@ -182,7 +182,7 @@ class AgentTests(unittest.TestCase):
             for agent in AGENTS:
                 path = Path(directory) / agent
                 path.write_text("invalid configuration")
-                with self.subTest(agent=agent), self.assertRaises(Exception):
+                with self.subTest(agent=agent), self.assertRaises(ValueError):
                     register_agent(agent, Path(directory) / "credentials.env", path)
                 self.assertEqual(path.read_text(), "invalid configuration")
 

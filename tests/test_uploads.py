@@ -45,7 +45,9 @@ class AssignmentUploadTests(unittest.TestCase):
         request = route.request
         parts = urlsplit(request.url)
         self.state["requests"].append((request.method, parts.path))
-        html_response = lambda body: route.fulfill(content_type="text/html; charset=utf-8", body=body)
+        def html_response(body):
+            return route.fulfill(content_type="text/html; charset=utf-8", body=body)
+
         if self.state["require_login"] and parts.path in ("/login/index.php", "/my/", "/mod/assign/view.php"):
             if parts.path == "/my/" and request.method == "POST":
                 self.state["authenticated"] = True
