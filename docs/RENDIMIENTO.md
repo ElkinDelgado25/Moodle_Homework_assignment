@@ -21,9 +21,9 @@ Equipo de referencia: Windows 11, Intel de 12 hilos, SSD, Python 3.13.7, entorno
 | Comando ligero (`mcp-moodle --help`) | ~1,7 s | 0,31–0,39 s |
 | Importación del servidor MCP en caliente | ~1,3–1,8 s | 1,24–1,84 s (sin cambio; depende del equipo) |
 | Primer arranque sin bytecode compilado | compilación en el primer uso | compilación durante la instalación |
-| Pruebas automatizadas (329 pruebas) | ~111 s | ~111 s (la suite no es el objetivo de la optimización) |
+| Pruebas automatizadas (329 pruebas) | ~102–111 s | ~102–111 s (la suite no es el objetivo de la optimización) |
 
-En la misma máquina, Python 3.13 fue entre un 4 % y un 8 % más rápido que 3.11 para el arranque del CLI y del servidor. La diferencia es pequeña para un comando suelto, pero se nota en cada herramienta MCP que el agente invoca durante una conversación.
+En la misma máquina, Python 3.13 fue alrededor de un 4 % más rápido que 3.11 para el arranque del CLI y del servidor. La diferencia es pequeña para un comando suelto, pero se nota en cada herramienta MCP que el agente invoca durante una conversación.
 
 La ganancia grande está en el punto 2: antes, `cli.py` importaba todos los módulos al cargarse, de modo que `status` pagaba el coste de `mcp`, Playwright y `fpdf2`. Ahora esos imports viven dentro de la rama del comando que los necesita y una prueba de arquitectura ([`tests/test_architecture.py`](../tests/test_architecture.py)) impide que vuelvan arriba.
 
