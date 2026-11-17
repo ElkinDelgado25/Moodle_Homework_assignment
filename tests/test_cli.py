@@ -9,24 +9,24 @@ from moodle_tasks.cli import main
 
 class CLITests(unittest.TestCase):
     def test_run_opens_interactive_setup_instead_of_stdio_server(self):
-        with patch("moodle_tasks.cli.setup.main") as setup, patch("moodle_tasks.cli.server.main") as server:
+        with patch("moodle_tasks.setup.main") as setup, patch("moodle_tasks.server.main") as server:
             main(["run", "--agent", "codex"])
             setup.assert_called_once_with(["--agent", "codex"])
             server.assert_not_called()
 
     def test_serve_forwards_the_credentials_path_without_running_setup(self):
-        with patch("moodle_tasks.cli.server.main") as server, patch("moodle_tasks.cli.setup.main") as setup:
+        with patch("moodle_tasks.server.main") as server, patch("moodle_tasks.setup.main") as setup:
             main(["serve", "--env-file", "/tmp/credentials.env"])
             server.assert_called_once_with(["--env-file", "/tmp/credentials.env"])
             setup.assert_not_called()
 
     def test_tasks_runs_the_terminal_consultation(self):
-        with patch("moodle_tasks.cli.tasks.main") as tasks:
+        with patch("moodle_tasks.main.main") as tasks:
             main(["tasks"])
             tasks.assert_called_once_with([])
 
     def test_tasks_forwards_search_options(self):
-        with patch("moodle_tasks.cli.tasks.main") as tasks:
+        with patch("moodle_tasks.main.main") as tasks:
             main(["tasks", "--mode", "all", "--limit", "5"])
             tasks.assert_called_once_with(["--mode", "all", "--limit", "5"])
 
