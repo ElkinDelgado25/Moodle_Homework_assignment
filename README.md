@@ -241,11 +241,13 @@ Antes de copiarlos, el servidor los verifica: campos de portada completos, PDF l
 - Las cuentas institucionales de ULEAM usan Microsoft 365 y la selección del mismo perfil cuando aparece «Use a different account». Si Microsoft exige CAPTCHA, códigos o verificación adicional, el programa no los resuelve ni afirma que la sesión esté validada.
 - Cuando una tarea ya está calificada, `get_assignment()` devuelve la nota, quién calificó y cuándo, y los comentarios del docente; `download_assignment_attachments()` descarga también los archivos corregidos. Consultarlos no modifica nada en Moodle.
 - El programa nunca envía una tarea para calificar. Solo cambia algo en Moodle cuando le pides subir archivos: entonces `upload_assignment_files` adjunta los archivos y guarda la entrega (como borrador si la tarea exige pulsar «Enviar tarea»; si no lo exige, Moodle puede mostrarla ya como enviada) y, si autorizas reemplazarlos (`replace_existing=true`), sustituye los archivos que ya estaban en esa entrega. Consultar tareas, descargar adjuntos y preparar documentos no modifica nada en Moodle.
+- Cada comando carga solo lo que necesita y el instalador deja el bytecode compilado, así que `status` o `tasks` responden en menos de medio segundo. Las mediciones y los ajustes por plataforma están en [Rendimiento](docs/RENDIMIENTO.md).
 
 ---
 
 <p align="center">
   <a href="docs/INSTALL.md">Instalación completa</a> ·
   <a href="docs/MCP.md">Conexión de agentes</a> ·
+  <a href="docs/RENDIMIENTO.md">Rendimiento</a> ·
   <a href="docs/assets/readme/SOURCES.md">Créditos visuales</a>
 </p>
