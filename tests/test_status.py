@@ -43,6 +43,29 @@ class StatusTests(unittest.TestCase):
             self.assertIn("Sin iniciar", output.getvalue())
             self.assertIn("Sin cuenta configurada", output.getvalue())
 
+    def test_the_update_check_runs_while_moodle_is_verified(self):
+        # Las dos consultas solapan: el estado no espera a GitHub y luego a Moodle una tras otra.
+        import threading
+
+        both_running = threading.Barrier(2, timeout=5)
+
+        def slow_check():
+            both_running.wait()
+            return UpdateStatus("0.0.0")
+
+        def slow_verify(config):
+            both_running.wait()
+            return {}
+
+        self.check_for_updates.side_effect = slow_check
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            path = Path(directory) / "credentials.env"
+            save_credentials(path, "https://moodle.test", "student", "private-password")
+            output = io.StringIO()
+            with patch("moodle_tasks.status.verify_credentials", side_effect=slow_verify), redirect_stdout(output):
+                main(["--env-file", str(path)])
+        self.assertIn("Conectado", output.getvalue())
+
     def test_connection_state_reflects_live_validation_and_never_shows_password(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
             path = Path(directory) / "credentials.env"
