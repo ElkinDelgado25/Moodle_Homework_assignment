@@ -249,13 +249,18 @@ class BrowserThread:
     def _finished(self, _future: Future) -> None:
         with self._lock:
             self._last_used = time.monotonic()
-            if self._timer is not None:
-                self._timer.cancel()
-            if self._executor is None:
-                return
-            self._timer = threading.Timer(self.idle_seconds, self._close_if_idle)
-            self._timer.daemon = True
-            self._timer.start()
+            self._arm_timer(self.idle_seconds)
+
+    def _arm_timer(self, delay: float) -> None:
+        """Programa la comprobación de inactividad; se llama con self._lock tomado."""
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+        if self._executor is None:
+            return
+        self._timer = threading.Timer(delay, self._close_if_idle)
+        self._timer.daemon = True
+        self._timer.start()
 
     def _close_if_idle(self) -> None:
         with self._lock:
@@ -265,8 +270,15 @@ class BrowserThread:
             self._executor.submit(self._close_session_if_idle)
 
     def _close_session_if_idle(self) -> None:
-        if time.monotonic() - self._last_used >= self.idle_seconds:
-            self.session.close()
+        with self._lock:
+            remaining = self.idle_seconds - (time.monotonic() - self._last_used)
+            if remaining > 0:
+                # El temporizador puede despertar unos milisegundos antes de lo que mide time.monotonic
+                # (en Windows redondea a ticks del sistema): se vuelve a programar para lo que falta en
+                # vez de dejar Chromium abierto hasta la siguiente herramienta.
+                self._arm_timer(remaining)
+                return
+        self.session.close()
 
     def close(self) -> None:
         """Cierra Chromium y el hilo; un submit posterior los vuelve a abrir."""

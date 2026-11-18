@@ -268,6 +268,16 @@ class BrowserThreadTests(unittest.TestCase):
         self.assertEqual(len(worker.session.threads), 1)
         self.assertTrue(next(iter(worker.session.threads)).startswith("moodle-browser"))
 
+    def test_a_timer_that_wakes_up_early_checks_again_instead_of_giving_up(self):
+        worker = self.browser_thread(0.3)
+        worker.submit(worker.session.use).result(timeout=5)
+        with worker._lock:
+            worker._timer.cancel()
+        # Comprobación antes de tiempo, como un temporizador que despierta unos milisegundos antes (Windows).
+        worker._executor.submit(worker._close_session_if_idle).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+        self.assertTrue(worker.session.closed.wait(timeout=5))
+
     def test_the_browser_closes_after_the_idle_time_and_reopens_on_demand(self):
         worker = self.browser_thread(0.2)
         worker.submit(worker.session.use).result(timeout=5)
