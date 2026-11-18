@@ -10,7 +10,7 @@ import sys
 import tempfile
 import threading
 import unicodedata
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from docx import Document
@@ -348,7 +348,7 @@ def build_docx(content: DeliveryDocument, values: dict[str, str], output: Path,
             _write_inline(paragraph, reference)
 
     properties = document.core_properties
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     # Las propiedades del paquete OOXML admiten como máximo 255 caracteres.
     properties.title = content.title[:255]
     properties.subject = values.get("materia", "")[:255]

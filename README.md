@@ -41,7 +41,7 @@ Compatible con **Codex, Claude Code, Cursor, Google Antigravity y Copilot**. Usa
 ## Requisitos
 
 - Windows 11 o Windows Server 2019+, macOS 14+, o Linux con las bibliotecas necesarias para Chromium. El CI comprueba Windows Server 2025, Ubuntu 24.04, Arch Linux y macOS 15 en Intel y Apple Silicon.
-- `uv`; obtiene Python 3.11 automáticamente si hace falta.
+- `uv`; obtiene Python 3.13 automáticamente si hace falta (se acepta 3.11 o posterior).
 - Una cuenta activa en Moodle, acceso a Internet y un agente compatible instalado.
 
 Los requisitos del navegador se basan en la [documentación oficial de Playwright](https://playwright.dev/python/docs/intro).
@@ -242,11 +242,13 @@ Antes de copiarlos, el servidor los verifica: campos de portada completos, PDF l
 - Si tienes una prórroga, `get_assignment()` usa la fecha prorrogada como cierre y devuelve aparte el cierre original y la fecha límite para entregas tardías.
 - Cuando una tarea ya está calificada, `get_assignment()` devuelve la nota, quién calificó y cuándo, y los comentarios del docente; `download_assignment_attachments()` descarga también los archivos corregidos. Consultarlos no modifica nada en Moodle.
 - El programa nunca envía una tarea para calificar. Solo cambia algo en Moodle cuando le pides subir archivos: entonces `upload_assignment_files` adjunta los archivos y guarda la entrega (como borrador si la tarea exige pulsar «Enviar tarea»; si no lo exige, Moodle puede mostrarla ya como enviada) y, si autorizas reemplazarlos (`replace_existing=true`), sustituye los archivos que ya estaban en esa entrega. Consultar tareas, descargar adjuntos y preparar documentos no modifica nada en Moodle.
+- Cada comando carga solo lo que necesita y el instalador deja el bytecode compilado, así que `status` o `tasks` responden en menos de medio segundo. Las mediciones y los ajustes por plataforma están en [Rendimiento](docs/RENDIMIENTO.md).
 
 ---
 
 <p align="center">
   <a href="docs/INSTALL.md">Instalación completa</a> ·
   <a href="docs/MCP.md">Conexión de agentes</a> ·
+  <a href="docs/RENDIMIENTO.md">Rendimiento</a> ·
   <a href="docs/assets/readme/SOURCES.md">Créditos visuales</a>
 </p>

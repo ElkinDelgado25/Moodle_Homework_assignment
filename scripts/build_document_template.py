@@ -1,6 +1,6 @@
 """Reconstruye la portada editable ULEAM con estilos APA 7 compatibles con Word, WPS y LibreOffice."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from docx import Document
@@ -227,7 +227,7 @@ def build_cover(output: Path) -> None:
     properties.comments = ""
     properties.keywords = ""
     properties.revision = 1
-    properties.created = properties.modified = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    properties.created = properties.modified = datetime(2026, 1, 1, tzinfo=UTC)
     properties.language = LANGUAGE
     output.parent.mkdir(parents=True, exist_ok=True)
     document.save(output)

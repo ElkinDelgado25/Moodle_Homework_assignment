@@ -59,18 +59,21 @@ class MoodleTests(unittest.TestCase):
         form = '''<form id="login" method="post" action="/login/index.php">
           <input name="username"><input name="password"><button type="submit">Acceder</button>
         </form>'''
+
+        def handler(status, body):
+            # Playwright inspecciona la firma: el manejador recibe solo la ruta.
+            def respond(route):
+                route.fulfill(content_type="text/html", status=status if route.request.method == "POST" else 200,
+                              body=body if route.request.method == "POST" else form)
+            return respond
+
         for status, body, expected in (
             (200, form, MoodleAuthenticationError),
             (502, "<h1>502 Bad Gateway</h1>", MoodleHTTPError),
         ):
             with self.subTest(status=status):
                 self.page.unroute("**/*")
-
-                def respond(route):
-                    route.fulfill(content_type="text/html", status=status if route.request.method == "POST" else 200,
-                                  body=body if route.request.method == "POST" else form)
-
-                self.page.route("**/*", respond)
+                self.page.route("**/*", handler(status, body))
                 with self.assertRaises(expected):
                     login(self.page, self.config)
 
@@ -78,19 +81,22 @@ class MoodleTests(unittest.TestCase):
         form = '''<form id="login" method="post" action="/my/">
           <input name="username"><input name="password"><button type="submit">Acceder</button>
         </form>'''
+
+        def handler(authenticated):
+            # Playwright inspecciona la firma: el manejador recibe solo la ruta.
+            def respond(route):
+                if route.request.method == "POST":
+                    route.fulfill(content_type="text/html", body=(
+                        '<a href="/login/logout.php">Salir</a>' if authenticated else '<h1>Error</h1>'
+                    ))
+                else:
+                    route.fulfill(content_type="text/html", body=form)
+            return respond
+
         for authenticated in (True, False):
             with self.subTest(authenticated=authenticated):
                 self.page.unroute("**/*")
-
-                def respond(route):
-                    if route.request.method == "POST":
-                        route.fulfill(content_type="text/html", body=(
-                            '<a href="/login/logout.php">Salir</a>' if authenticated else '<h1>Error</h1>'
-                        ))
-                    else:
-                        route.fulfill(content_type="text/html", body=form)
-
-                self.page.route("**/*", respond)
+                self.page.route("**/*", handler(authenticated))
                 if authenticated:
                     login(self.page, self.config)
                 else:

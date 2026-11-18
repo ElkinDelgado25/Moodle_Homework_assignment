@@ -12,6 +12,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
 
+from moodle_tasks import PYTHON_VERSION
+
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 PROJECT_NAME = "moodle-homework-assignment"
@@ -30,8 +32,10 @@ def export_constraints_command(project_dir: Path, output: Path) -> list[str]:
 
 def tool_install_command(project_dir: Path, constraints: Path) -> list[str]:
     """Instala una copia aislada y sustituye una instalacion anterior del mismo equipo."""
-    return ["uv", "tool", "install", "-q", "--force", "--python", "3.11", "--reinstall-package", PROJECT_NAME,
-            "--constraints", str(constraints), str(project_dir)]
+    # --compile-bytecode deja el código listo en la primera instalación: los arranques
+    # posteriores no compilan módulos y el comando responde antes en Windows y macOS.
+    return ["uv", "tool", "install", "-q", "--force", "--compile-bytecode", "--python", PYTHON_VERSION,
+            "--reinstall-package", PROJECT_NAME, "--constraints", str(constraints), str(project_dir)]
 
 
 def tool_python() -> str:

@@ -27,6 +27,14 @@ class ArchitectureTests(unittest.TestCase):
         importers = sorted(path.stem for path in PACKAGE.glob("*.py") if "main" in local_imports(path.stem))
         self.assertEqual(importers, ["cli", "server"])
 
+    def test_the_terminal_command_imports_each_tool_only_when_it_runs(self):
+        code = ("import sys\n"
+                "import moodle_tasks.cli\n"
+                "print(sorted(name for name in ('moodle_tasks.server', 'mcp', 'docx', 'fpdf', 'pypdf')"
+                " if name in sys.modules))")
+        output = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(output.strip(), "[]")
+
     def test_the_terminal_query_does_not_load_the_mcp_server_or_the_document_builders(self):
         # print_tasks con una tarea pendiente es lo que antes cargaba todo el servidor para pending_table.
         code = ("import contextlib, io, sys\n"

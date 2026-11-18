@@ -21,13 +21,13 @@ class SentryInitializationTests(unittest.TestCase):
         self.assertEqual(initialize.call_args.args[0]["SENTRY_DSN"], "https://perfil@sentry.test/2")
 
     def test_the_cli_leaves_serve_to_start_sentry_with_its_own_arguments(self):
-        with patch("moodle_tasks.cli.initialize_sentry") as initialize, patch.object(cli.server, "main") as serve:
+        with patch("moodle_tasks.cli.initialize_sentry") as initialize, patch.object(server, "main") as serve:
             cli.main(["serve", "--env-file", "/tmp/perfil.env"])
         initialize.assert_not_called()
         serve.assert_called_once_with(["--env-file", "/tmp/perfil.env"])
 
     def test_the_cli_starts_sentry_once_for_the_other_commands(self):
-        with patch("moodle_tasks.cli.initialize_sentry") as initialize, patch.object(cli.status, "main"):
+        with patch("moodle_tasks.cli.initialize_sentry") as initialize, patch("moodle_tasks.status.main"):
             cli.main(["status"])
         initialize.assert_called_once()
 

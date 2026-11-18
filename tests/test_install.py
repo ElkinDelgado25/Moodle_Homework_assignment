@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
+from moodle_tasks import PYTHON_VERSION
 
 
 def load_install_script():
@@ -26,7 +27,8 @@ class InstallCommandTests(unittest.TestCase):
         )
         self.assertEqual(
             module.tool_install_command(project, constraints),
-            ["uv", "tool", "install", "-q", "--force", "--python", "3.11", "--reinstall-package",
+            ["uv", "tool", "install", "-q", "--force", "--compile-bytecode", "--python", PYTHON_VERSION,
+             "--reinstall-package",
              "moodle-homework-assignment", "--constraints", str(constraints), str(project)],
         )
 

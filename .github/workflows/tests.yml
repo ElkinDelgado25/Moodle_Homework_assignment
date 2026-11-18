@@ -8,20 +8,57 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONUTF8: "1"
+
 jobs:
+  unit:
+    name: Pruebas en Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Instalar dependencias
+        run: uv sync --locked --python ${{ matrix.python }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - name: Preparar Chromium
+        run: uv run playwright install chromium
+      - name: Ejecutar la suite de pruebas
+        run: uv run python -m unittest discover -s tests -v
+
   tests:
     name: Ubuntu 24.04 (Debian)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+          enable-cache: true
       - name: Instalar dependencias
-        run: uv sync --locked --python 3.11
+        run: uv sync --locked --python 3.13
+      - name: Revisar el código con Ruff
+        run: uv run ruff check src tests scripts
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
       - name: Preparar Chromium y bibliotecas de Ubuntu
         run: uv run playwright install --with-deps chromium
       - name: Construir paquete
@@ -37,15 +74,19 @@ jobs:
       run:
         shell: pwsh
     env:
-      PYTHONUTF8: "1"
       UV_PYTHON_ARCH: x86_64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+          enable-cache: true
       - name: Instalar dependencias
-        run: uv sync --locked --python 3.11
+        run: uv sync --locked --python 3.13
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock') }}
       - name: Preparar Chromium en Windows
         run: uv run playwright install chromium
       - name: Construir paquete
@@ -63,14 +104,16 @@ jobs:
       image: archlinux:base
       options: --shm-size=1g
     timeout-minutes: 20
-    env:
-      PYTHONUTF8: "1"
     steps:
       - name: Preparar Arch y bibliotecas de Chromium
         run: pacman -Syu --noconfirm --needed git uv chromium
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Instalar Python y dependencias
-        run: uv sync --locked --python 3.11
+        run: uv sync --locked --python 3.13
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-arch-${{ hashFiles('uv.lock') }}
       - name: Preparar Chromium de Playwright
         run: uv run playwright install chromium
       - name: Construir paquete
@@ -92,15 +135,18 @@ jobs:
           - runner: macos-15-intel
             architecture: x86_64
             artifact: mcp-moodle-macos-intel
-    env:
-      PYTHONUTF8: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+          enable-cache: true
       - name: Instalar dependencias
-        run: uv sync --locked --python 3.11
+        run: uv sync --locked --python 3.13
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.architecture }}-${{ hashFiles('uv.lock') }}
       - name: Comprobar arquitectura nativa
         env:
           EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
