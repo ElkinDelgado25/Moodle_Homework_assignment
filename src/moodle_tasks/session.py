@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from playwright.sync_api import Page, sync_playwright
 
 from .auth import login
-from .config import OPT_OUT, Config
+from .config import Config, opted_out
 from .core import open_page
 from .storage import atomic_write, sessions_dir, user_config_dir
 
@@ -26,8 +26,12 @@ VERSION = 1
 
 
 def cache_enabled(config: Config | None = None) -> bool:
-    """Desactivable con MOODLE_SESSION_CACHE=false en el entorno o en credentials.env."""
-    if (os.environ.get("MOODLE_SESSION_CACHE") or "true").strip().lower() in OPT_OUT:
+    """Desactivable con MOODLE_SESSION_CACHE=false en el entorno o en credentials.env.
+
+    El entorno se vuelve a mirar aunque config ya lo tenga en cuenta: una Config creada sin
+    load_config tampoco puede saltarse la opción de privacidad.
+    """
+    if opted_out(os.environ.get("MOODLE_SESSION_CACHE")):
         return False
     return config is None or getattr(config, "session_cache", True)
 
