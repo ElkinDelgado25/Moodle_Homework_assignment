@@ -10,7 +10,6 @@ import shutil
 import time
 from collections import OrderedDict
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -267,11 +266,39 @@ OUTPUT_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
+SDK_CHANGED = ("El SDK de MCP cambió su API interna de herramientas (_tool_manager); esta versión de Moodle MCP "
+               "necesita la serie de mcp indicada en pyproject.toml.")
+
+
+def tool_manager(server: MCPServer) -> Any:
+    """Registro interno de herramientas del SDK.
+
+    Es la única API privada que se usa (para rechazar argumentos desconocidos y publicar esquemas
+    compactos): si una versión nueva del SDK la cambia, el servidor falla al arrancar con un
+    mensaje claro en vez de publicar esquemas incorrectos.
+    """
+    manager = getattr(server, "_tool_manager", None)
+    if manager is None or not callable(getattr(manager, "get_tool", None)):
+        raise RuntimeError(SDK_CHANGED)
+    return manager
+
+
+def publish_schemas(server: MCPServer) -> None:
+    """Esquemas publicados: entradas sin ruido autogenerado y salidas con sus campos reales."""
+    manager = tool_manager(server)
+    for name, schema in OUTPUT_SCHEMAS.items():
+        tool = manager.get_tool(name)
+        if tool is None or not isinstance(getattr(tool, "parameters", None), dict) or not hasattr(tool, "fn_metadata"):
+            raise RuntimeError(SDK_CHANGED)
+        tool.parameters = slim_schema(tool.parameters)
+        tool.fn_metadata.output_schema = schema
+
+
 class MoodleServer(MCPServer):
     """Rechaza argumentos desconocidos y devuelve los errores de validación en una forma corta y con código."""
 
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Any = None) -> Any:
-        tool = self._tool_manager.get_tool(name)
+        tool = tool_manager(self).get_tool(name)
         if tool is not None:
             known = list(tool.parameters.get("properties", {}))
             unknown = sorted(set(arguments or {}) - set(known))
@@ -290,62 +317,97 @@ class MoodleServer(MCPServer):
             raise
 
 
-def create_server(env_file: Path = ENV_FILE) -> MCPServer:
-    # Las rutas protegidas ya cubren la carpeta de configuración predeterminada; un --env-file
-    # propio (p. ej. el de setup --config-dir) también debe quedar fuera de subidas y descargas.
-    protect_credentials(env_file)
-    server = MoodleServer("moodle", instructions=INSTRUCTIONS)
-    readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
-    local_readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
-    download_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
-    upload_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True)
-    local_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
-    # Una sola operación de Moodle a la vez: las llamadas en paralelo no abren varios navegadores ni varios inicios de sesión.
-    moodle_lock = asyncio.Lock()
-    # Memoria del proceso: materia de las tareas vistas y documentos ya validados, para no pedirlos de nuevo.
-    known_tasks: dict[int, dict[str, str]] = {}
-    drafts: OrderedDict[str, DeliveryDocument] = OrderedDict()
+def reporter(context: Context | None):
+    """Avisos de progreso desde el hilo de trabajo; sin efecto si el cliente no los pidió."""
+    if context is None:
+        return None
+    loop = asyncio.get_running_loop()
 
-    def config():
-        return load_config(env_file)
+    def report(done: float, total: float | None, message: str) -> None:
+        try:
+            future = asyncio.run_coroutine_threadsafe(context.report_progress(done, total, message), loop)
+            future.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
+        except Exception:
+            pass
 
-    @lru_cache(maxsize=4)
-    def secrets_for(stamp: tuple) -> tuple[str | None, str | None]:
-        values = config_values(env_file)
-        return values.get("MOODLE_USERNAME"), values.get("MOODLE_PASSWORD")
+    return report
 
-    def safe_error(error: object) -> str:
+
+def spanish_defaults(profile: dict) -> dict[str, Any]:
+    """El perfil con los mismos nombres que cover, sea cual sea la versión que lo guardó."""
+    defaults: dict[str, Any] = {}
+    for field, keys in (("materia", ("materia", "subject")), ("nombre_docente", ("nombre_docente", "teacher")),
+                        ("carrera", ("carrera", "degree")), ("curso", ("curso", "class_group")),
+                        ("anio", ("anio", "year"))):
+        value = next((profile[key] for key in keys if profile.get(key)), None)
+        if value:
+            defaults[field] = value
+    students = profile.get("estudiantes")
+    if students:
+        defaults["estudiantes"] = students
+    if profile.get("teachers"):
+        defaults["docentes_por_materia"] = profile["teachers"]
+    if profile.get("courses"):
+        defaults["materias_verificadas"] = [course_name(course) for course in profile["courses"]]
+    return defaults
+
+
+def assignment_resources(task: Assignment, base_url: str) -> list[str]:
+    """Anexos de la descripción, sus imágenes, recursos enlazados (/mod/resource redirige al archivo con
+    redirect=1) y los archivos corregidos que devolvió el docente, sin repetir."""
+    resources = [link["url"].split("#", 1)[0] + ("&" if "?" in link["url"] else "?") + "redirect=1"
+                 for link in task.links if moodle_path(link["url"], base_url) == "/mod/resource/view.php"]
+    images = [image["url"] for image in task.images
+              if "pluginfile.php" in (moodle_path(image["url"], base_url) or "")]
+    corrected = [item["url"] for item in (task.feedback or {}).get("files", [])]
+    return list(dict.fromkeys([*(attachment["url"] for attachment in task.attachments), *images, *resources,
+                               *corrected]))
+
+
+class MoodleTools:
+    """Estado y lógica de las herramientas. create_server solo las publica en el SDK de MCP.
+
+    Cada método público devuelve el resultado como dict (o lanza la excepción): run() lo convierte en
+    la respuesta MCP con su error_code y su registro de duración.
+    """
+
+    def __init__(self, env_file: Path):
+        self.env_file = env_file
+        # Una sola operación de Moodle a la vez: las llamadas en paralelo no abren varios navegadores ni varios
+        # inicios de sesión.
+        self.moodle_lock = asyncio.Lock()
+        # Memoria del proceso: materia de las tareas vistas y documentos ya validados, para no pedirlos de nuevo.
+        self.known_tasks: dict[int, dict[str, str]] = {}
+        self.drafts: OrderedDict[str, DeliveryDocument] = OrderedDict()
+        self._secrets_stamp: tuple | None = None
+        self._secrets: tuple[str | None, str | None] = (None, None)
+
+    # ------------------------------------------------------------- comunes
+
+    def config(self):
+        return load_config(self.env_file)
+
+    def safe_error(self, error: object) -> str:
         try:
             # El contenido (no solo la fecha) decide si hay que releer las credenciales.
-            stamp = (str(env_file), hashlib.sha256(Path(env_file).read_bytes()).hexdigest())
+            stamp = (str(self.env_file), hashlib.sha256(Path(self.env_file).read_bytes()).hexdigest())
         except OSError:
-            stamp = (str(env_file), "")
-        return redact_credentials(error, secrets_for(stamp))
+            stamp = (str(self.env_file), "")
+        if stamp != self._secrets_stamp:
+            values = config_values(self.env_file)
+            self._secrets = (values.get("MOODLE_USERNAME"), values.get("MOODLE_PASSWORD"))
+            self._secrets_stamp = stamp
+        return redact_credentials(error, self._secrets)
 
-    def failure(error: Exception, tool: str) -> CallToolResult:
+    def failure(self, error: Exception, tool: str) -> CallToolResult:
         code, message, retryable = describe_error(error, tool)
-        return error_result(code, safe_error(message), retryable)
+        return error_result(code, self.safe_error(message), retryable)
 
-    def reporter(context: Context | None):
-        """Avisos de progreso desde el hilo de trabajo; sin efecto si el cliente no los pidió."""
-        if context is None:
-            return None
-        loop = asyncio.get_running_loop()
-
-        def report(done: float, total: float | None, message: str) -> None:
-            try:
-                future = asyncio.run_coroutine_threadsafe(context.report_progress(done, total, message), loop)
-                future.add_done_callback(lambda finished: finished.cancelled() or finished.exception())
-            except Exception:
-                pass
-
-        return report
-
-    async def run(tool: str, function, *args, moodle: bool = True) -> CallToolResult:
+    async def run(self, tool: str, function, *args, moodle: bool = True) -> CallToolResult:
         started = time.monotonic()
         try:
             if moodle:
-                async with moodle_lock:
+                async with self.moodle_lock:
                     payload = await asyncio.to_thread(function, *args)
             else:
                 payload = await asyncio.to_thread(function, *args)
@@ -353,53 +415,46 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             # status es un estado de la herramienta solo al generar o subir; en una tarea es texto de Moodle.
             outcome = str(payload.get("status")) if tool in ("build_delivery_document", "upload_assignment_files") else "ok"
         except Exception as error:
-            result = failure(error, tool)
+            result = self.failure(error, tool)
             outcome = result.structured_content["error_code"]
         # Registro local por llamada (stderr): duración y tamaño, nunca el contenido.
         logger.info("tool=%s outcome=%s ms=%d chars=%d", tool, outcome, (time.monotonic() - started) * 1000,
                     len(result.content[0].text))
         return result
 
-    def remember_task(identifier: int | None, task: Assignment) -> None:
+    def remember_task(self, identifier: int | None, task: Assignment) -> None:
         if identifier is not None:
-            known_tasks[identifier] = {"title": task.title, "course": course_name(task.course)}
-            while len(known_tasks) > 500:
-                known_tasks.pop(next(iter(known_tasks)))
+            self.known_tasks[identifier] = {"title": task.title, "course": course_name(task.course)}
+            while len(self.known_tasks) > 500:
+                self.known_tasks.pop(next(iter(self.known_tasks)))
 
     # ------------------------------------------------------------- configuración
 
-    @server.tool(title="Estado de la configuración", annotations=local_readonly, structured_output=True)
-    def configuration_status() -> Result:
-        """Verifica si las variables locales de Moodle están completas; no revela credenciales ni consulta la red."""
-        values = config_values(env_file)
+    def configuration_status(self) -> dict[str, Any]:
+        values = config_values(self.env_file)
         missing = [name for name in ("MOODLE_URL", "MOODLE_USERNAME", "MOODLE_PASSWORD")
                    if not (values.get(name) or "").strip()]
-        return compact({"configured": not missing, "missing_variables": missing})
+        return {"configured": not missing, "missing_variables": missing}
 
-    def check_connection() -> dict[str, Any]:
+    def check_connection(self) -> dict[str, Any]:
         try:
-            settings = config()
+            settings = self.config()
             # Misma sesión que el resto de herramientas: la reutiliza si sigue activa y la deja guardada.
             with moodle_page(settings) as (_, page):
                 ensure_login(page, settings)
             return {"connected": True}
         except Exception as error:
             code, message, _ = describe_error(error, "check_moodle_connection")
-            result = {"connected": False, "error": safe_error(message), "error_code": code}
+            result = {"connected": False, "error": self.safe_error(message), "error_code": code}
             if isinstance(error, MoodleHTTPError):
                 result["http_status"] = error.status
             return result
 
-    @server.tool(title="Comprobar la conexión con Moodle", annotations=readonly, structured_output=True)
-    async def check_moodle_connection() -> Result:
-        """Comprueba que Moodle responde y acepta el inicio de sesión. Si falla devuelve connected=false, error y error_code."""
-        return await run("check_moodle_connection", check_connection)
-
     # ------------------------------------------------------------- listas
 
-    def list_tasks(mode: str, limit: int | None, only_pending: bool, progress) -> dict[str, Any]:
+    def list_tasks(self, mode: str, limit: int | None, only_pending: bool, progress) -> dict[str, Any]:
         stats: dict = {}
-        settings = config()
+        settings = self.config()
         # Se pide una fila de más para saber si el límite dejó tareas fuera.
         tasks, errors = collect_assignments(settings, mode=mode, limit=None if limit is None else limit + 1,
                                             only_pending=only_pending, stats=stats, progress=progress)
@@ -415,7 +470,7 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         rows = []
         for task in assignments:
             identifier = assignment_view_id(task.url, settings.base_url)
-            remember_task(identifier, task)
+            self.remember_task(identifier, task)
             rows.append({"assignment_id": identifier, "title": task.title, "course": course_name(task.course),
                          "due_at": task.due_at, "submitted": task.submitted})
         return {
@@ -430,35 +485,25 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
             "has_more": has_more,
             "availability_confirmed": mode == "upcoming" and not stats.get("availability_unconfirmed"),
             "incomplete": incomplete,
-            "errors": [safe_error(error) for error in errors],
+            "errors": [self.safe_error(error) for error in errors],
             "coverage": stats.get("coverage", "Solo actividades revisadas; no garantiza cubrir todo Moodle."),
             "assignments": rows,
             "response_markdown": pending_table(assignments, now=checked_at, mode=mode, only_pending=only_pending,
                                                incomplete=incomplete),
         }
 
-    @server.tool(title="Listar tareas", annotations=readonly, structured_output=True)
-    async def list_assignments(
-        ctx: Context,
-        mode: Annotated[Literal["upcoming", "overdue", "all"], Field(description="upcoming: próximas abiertas (por defecto). overdue: solo si piden vencidas. all: solo si piden todas las materias, un total o una revisión completa.")] = "upcoming",
-        limit: Annotated[Annotated[int, Field(strict=True, ge=1, le=200)] | None, BeforeValidator(_digits), Field(description="Máximo de filas; 5 por defecto (sin límite en all).")] = None,
-        only_pending: Annotated[bool, Field(description="false incluye también las ya entregadas o calificadas.")] = True,
-    ) -> Result:
-        """Lista tareas de Moodle sin abrirlas. Para 'qué tareas pendientes tengo' úsala sin argumentos y muestra response_markdown tal cual."""
-        effective = limit if limit is not None else (None if mode == "all" else 5)
-        return await run("list_assignments", list_tasks, mode, effective, only_pending, reporter(ctx))
-
     # ------------------------------------------------------------- una tarea
 
-    def get_task(assignment_id: int | None, url: str | None, resource_url: str | None, resource_offset: int) -> dict[str, Any]:
-        settings = config()
+    def get_task(self, assignment_id: int | None, url: str | None, resource_url: str | None,
+                 resource_offset: int) -> dict[str, Any]:
+        settings = self.config()
         resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
         with moodle_page(settings) as (browser, page):
             task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={resolved_id}", settings)
             linked = read_linked_resources(browser, task.links, (settings.username, settings.password),
                                            session_page=page, config=settings, only_url=resource_url,
                                            offset=resource_offset)
-        remember_task(resolved_id, task)
+        self.remember_task(resolved_id, task)
         if resource_url is not None:
             # Continuación de un enlace truncado: solo ese texto, sin repetir la tarea.
             return {"assignment_id": resolved_id, "title": task.title, **linked}
@@ -482,19 +527,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                                "build_delivery_document. Para solo informar, responde con estos datos.")
         return result
 
-    @server.tool(title="Leer una tarea", annotations=readonly, structured_output=True)
-    async def get_assignment(
-        assignment_id: AssignmentId = None,
-        url: AssignmentUrl = None,
-        resource_url: Annotated[str | None, Field(min_length=1, max_length=2048, description="Solo para continuar un enlace truncado: su url en linked_resources.")] = None,
-        resource_offset: Annotated[Annotated[int, Field(strict=True, ge=0, le=10_000_000)], BeforeValidator(_digits), Field(description="next_offset que devolvió ese enlace.")] = 0,
-    ) -> Result:
-        """Lee UNA tarea: description, fechas, estado, grupo, rúbrica, anexos, imágenes, el texto de hasta cinco páginas enlazadas (linked_resources) y la retroalimentación del docente (feedback). No crea archivos ni sube entregas."""
-        return await run("get_assignment", get_task, assignment_id, url, resource_url, resource_offset)
-
-    def download_task(assignment_id: int | None, url: str | None, destination_directory: str | None,
+    def download_task(self, assignment_id: int | None, url: str | None, destination_directory: str | None,
                       include_text: bool, progress) -> dict[str, Any]:
-        settings = config()
+        settings = self.config()
         resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
         # Una carpeta indicada se valida y crea antes de abrir el navegador.
         directory = resolve_destination_directory(destination_directory) if destination_directory else None
@@ -503,27 +538,20 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         files, errors = [], []
         with moodle_page(settings) as (_, page):
             task = read_assignment(page, f"{settings.base_url}/mod/assign/view.php?id={resolved_id}", settings)
-            remember_task(resolved_id, task)
+            self.remember_task(resolved_id, task)
             if directory is None:
                 # Por defecto, una carpeta por tarea: los anexos no se mezclan en Documentos.
                 directory = resolve_destination_directory(str(attachments_directory(task.title)))
                 directory.mkdir(parents=True, exist_ok=True)
-            # Anexos de la descripción, sus imágenes, recursos enlazados (/mod/resource redirige al archivo con
-            # redirect=1) y los archivos corregidos que devolvió el docente.
-            resources = [link["url"].split("#", 1)[0] + ("&" if "?" in link["url"] else "?") + "redirect=1"
-                         for link in task.links if moodle_path(link["url"], settings.base_url) == "/mod/resource/view.php"]
-            images = [image["url"] for image in task.images
-                      if "pluginfile.php" in (moodle_path(image["url"], settings.base_url) or "")]
-            corrected = [item["url"] for item in (task.feedback or {}).get("files", [])]
-            urls = list(dict.fromkeys([*(attachment["url"] for attachment in task.attachments), *images, *resources,
-                                       *corrected]))
+            urls = assignment_resources(task, settings.base_url)
             for index, attachment_url in enumerate(urls):
                 if progress is not None:
                     progress(index, len(urls), f"Descargando anexo {index + 1} de {len(urls)}")
                 try:
                     files.append(download_attachment(page, settings, attachment_url, directory))
                 except Exception as error:
-                    errors.append({"url": attachment_url, "error": safe_error(describe_error(error, "download_assignment_attachments")[1])})
+                    message = describe_error(error, "download_assignment_attachments")[1]
+                    errors.append({"url": attachment_url, "error": self.safe_error(message)})
         if include_text:
             remaining = MAX_ATTACHMENT_TEXT
             for item in files:
@@ -536,44 +564,15 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 "attachment_count": len(urls), "downloaded_count": len(files), "files": files,
                 "incomplete": bool(errors), "errors": errors}
 
-    @server.tool(title="Descargar y leer anexos", annotations=download_annotations, structured_output=True)
-    async def download_assignment_attachments(
-        ctx: Context,
-        assignment_id: AssignmentId = None,
-        url: AssignmentUrl = None,
-        destination_directory: Annotated[str | None, Field(min_length=1, max_length=4096, description="Carpeta absoluta; por defecto ~/Documentos/Moodle/<tarea>.")] = None,
-        include_text: Annotated[bool, Field(description="Devuelve el texto de PDF, DOCX, PPTX y archivos de texto en files[].text.")] = True,
-    ) -> Result:
-        """Descarga los anexos de UNA tarea y sus archivos de retroalimentación con la sesión de Moodle y devuelve su texto (files[].text) para leerlos sin abrirlos. No sobrescribe ni duplica archivos idénticos; informa descargas parciales."""
-        return await run("download_assignment_attachments", download_task, assignment_id, url, destination_directory,
-                         include_text, reporter(ctx))
-
     # ------------------------------------------------------------- documento
 
-    def spanish_defaults(profile: dict) -> dict[str, Any]:
-        """El perfil con los mismos nombres que cover, sea cual sea la versión que lo guardó."""
-        defaults: dict[str, Any] = {}
-        for field, keys in (("materia", ("materia", "subject")), ("nombre_docente", ("nombre_docente", "teacher")),
-                            ("carrera", ("carrera", "degree")), ("curso", ("curso", "class_group")),
-                            ("anio", ("anio", "year"))):
-            value = next((profile[key] for key in keys if profile.get(key)), None)
-            if value:
-                defaults[field] = value
-        students = profile.get("estudiantes")
-        if students:
-            defaults["estudiantes"] = students
-        if profile.get("teachers"):
-            defaults["docentes_por_materia"] = profile["teachers"]
-        if profile.get("courses"):
-            defaults["materias_verificadas"] = [course_name(course) for course in profile["courses"]]
-        return defaults
-
-    def document_template() -> dict[str, Any]:
+    def document_template(self) -> dict[str, Any]:
         assets = Path(__file__).resolve().parent / "assets"
         try:
             defaults = spanish_defaults(load_profile(user_config_dir()))
         except (ValueError, OSError):
-            raise ValueError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato antes de generar el documento.") from None
+            raise ValueError("No se pudo leer el perfil local de portada document_profile.json. Corrige su formato "
+                             "antes de generar el documento.") from None
         return {"template_path": str(assets / "academic-cover.docx"),
                 "fields": ["titulo", *COVER_FIELDS],
                 "local_defaults": defaults,
@@ -586,19 +585,14 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                                  "La plantilla (campos {{campo}}) solo hace falta si el usuario pide editar un documento "
                                  "propio; en ese caso verifica y copia el resultado con finish_delivery.")}
 
-    @server.tool(title="Portada y formato del entregable", annotations=local_readonly, structured_output=True)
-    async def get_document_template() -> Result:
-        """Datos de portada guardados (estudiantes, materia, docentes por materia), formato APA 7 y política de contenido para el entregable. No genera archivos."""
-        return await run("get_document_template", document_template, moodle=False)
-
-    def keep_draft(document: DeliveryDocument) -> str:
+    def keep_draft(self, document: DeliveryDocument) -> str:
         identifier = secrets.token_hex(4)
-        drafts[identifier] = document
-        while len(drafts) > MAX_DRAFTS:
-            drafts.popitem(last=False)
+        self.drafts[identifier] = document
+        while len(self.drafts) > MAX_DRAFTS:
+            self.drafts.popitem(last=False)
         return identifier
 
-    def build_task(document: DeliveryDocument | None, cover: CoverFields | None, draft_id: str | None,
+    def build_task(self, document: DeliveryDocument | None, cover: CoverFields | None, draft_id: str | None,
                    assignment_id: int | None, destination_directory: str | None, file_name: str | None,
                    open_pdf: bool, pdf_engine: str) -> dict[str, Any]:
         # python-docx y fpdf2 solo se cargan al generar un entregable: el arranque de serve no los paga.
@@ -607,12 +601,13 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         if document is None:
             if not draft_id:
                 raise ValueError("Indica document (el contenido) o el draft_id de un intento anterior.")
-            document = drafts.get(draft_id)
+            document = self.drafts.get(draft_id)
             if document is None:
-                raise ValueError("Ese draft_id ya no está disponible (el servidor se reinició o es antiguo); envía document de nuevo.")
-            drafts.move_to_end(draft_id)
+                raise ValueError("Ese draft_id ya no está disponible (el servidor se reinició o es antiguo); envía "
+                                 "document de nuevo.")
+            self.drafts.move_to_end(draft_id)
         else:
-            draft_id = keep_draft(document)
+            draft_id = self.keep_draft(document)
         cover = cover or CoverFields()
         warnings: list[str] = []
         try:
@@ -620,9 +615,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         except (ValueError, OSError):
             profile = {}
             warnings.append("No se pudo leer document_profile.json; se usaron solo los datos indicados.")
-        course = (known_tasks.get(assignment_id) or {}).get("course") if assignment_id is not None else None
+        course = (self.known_tasks.get(assignment_id) or {}).get("course") if assignment_id is not None else None
         if assignment_id is not None and not course and not cover.materia:
-            warnings.append("No se conoce la materia de esa tarea en esta sesión; llama antes a get_assignment o indica cover.materia.")
+            warnings.append("No se conoce la materia de esa tarea en esta sesión; llama antes a get_assignment o "
+                            "indica cover.materia.")
         try:
             values = cover_values(cover, profile, course, warnings)
         except MissingCoverFields as error:
@@ -652,6 +648,85 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
                 "hyperlinks": checks["hyperlinks"], "tables": built["tables"], "figures": built["figures"],
                 "warnings": built["warnings"] + checks["warnings"] + warnings}
 
+    def finish_task(self, docx_path: str, pdf_path: str, destination_directory: str, open_pdf: bool) -> dict[str, Any]:
+        return copy_and_open_delivery(docx_path, pdf_path, destination_directory, open_pdf=open_pdf)
+
+    # ------------------------------------------------------------- subida
+
+    def upload_task(self, assignment_id: int | None, url: str | None, file_paths: list[str], replace_existing: bool,
+                    progress) -> dict[str, Any]:
+        settings = self.config()
+        resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
+        # Los archivos se validan antes de abrir el navegador o iniciar sesión.
+        validated, blocked = validate_upload(resolved_id, file_paths)
+        if blocked is not None:
+            return blocked
+        with moodle_page(settings) as (_, page):
+            return upload_files(page, settings, resolved_id, file_paths, replace_existing=replace_existing,
+                                progress=progress, validated=validated)
+
+
+def create_server(env_file: Path = ENV_FILE) -> MCPServer:
+    """Publica las herramientas de MoodleTools con sus anotaciones, descripciones y esquemas."""
+    # Las rutas protegidas ya cubren la carpeta de configuración predeterminada; un --env-file
+    # propio (p. ej. el de setup --config-dir) también debe quedar fuera de subidas y descargas.
+    protect_credentials(env_file)
+    server = MoodleServer("moodle", instructions=INSTRUCTIONS)
+    tools = MoodleTools(env_file)
+    readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
+    local_readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
+    download_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
+    upload_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=True)
+    local_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False)
+
+    @server.tool(title="Estado de la configuración", annotations=local_readonly, structured_output=True)
+    def configuration_status() -> Result:
+        """Verifica si las variables locales de Moodle están completas; no revela credenciales ni consulta la red."""
+        return compact(tools.configuration_status())
+
+    @server.tool(title="Comprobar la conexión con Moodle", annotations=readonly, structured_output=True)
+    async def check_moodle_connection() -> Result:
+        """Comprueba que Moodle responde y acepta el inicio de sesión. Si falla devuelve connected=false, error y error_code."""
+        return await tools.run("check_moodle_connection", tools.check_connection)
+
+    @server.tool(title="Listar tareas", annotations=readonly, structured_output=True)
+    async def list_assignments(
+        ctx: Context,
+        mode: Annotated[Literal["upcoming", "overdue", "all"], Field(description="upcoming: próximas abiertas (por defecto). overdue: solo si piden vencidas. all: solo si piden todas las materias, un total o una revisión completa.")] = "upcoming",
+        limit: Annotated[Annotated[int, Field(strict=True, ge=1, le=200)] | None, BeforeValidator(_digits), Field(description="Máximo de filas; 5 por defecto (sin límite en all).")] = None,
+        only_pending: Annotated[bool, Field(description="false incluye también las ya entregadas o calificadas.")] = True,
+    ) -> Result:
+        """Lista tareas de Moodle sin abrirlas. Para 'qué tareas pendientes tengo' úsala sin argumentos y muestra response_markdown tal cual."""
+        effective = limit if limit is not None else (None if mode == "all" else 5)
+        return await tools.run("list_assignments", tools.list_tasks, mode, effective, only_pending, reporter(ctx))
+
+    @server.tool(title="Leer una tarea", annotations=readonly, structured_output=True)
+    async def get_assignment(
+        assignment_id: AssignmentId = None,
+        url: AssignmentUrl = None,
+        resource_url: Annotated[str | None, Field(min_length=1, max_length=2048, description="Solo para continuar un enlace truncado: su url en linked_resources.")] = None,
+        resource_offset: Annotated[Annotated[int, Field(strict=True, ge=0, le=10_000_000)], BeforeValidator(_digits), Field(description="next_offset que devolvió ese enlace.")] = 0,
+    ) -> Result:
+        """Lee UNA tarea: description, fechas, estado, grupo, rúbrica, anexos, imágenes, el texto de hasta cinco páginas enlazadas (linked_resources) y la retroalimentación del docente (feedback). No crea archivos ni sube entregas."""
+        return await tools.run("get_assignment", tools.get_task, assignment_id, url, resource_url, resource_offset)
+
+    @server.tool(title="Descargar y leer anexos", annotations=download_annotations, structured_output=True)
+    async def download_assignment_attachments(
+        ctx: Context,
+        assignment_id: AssignmentId = None,
+        url: AssignmentUrl = None,
+        destination_directory: Annotated[str | None, Field(min_length=1, max_length=4096, description="Carpeta absoluta; por defecto ~/Documentos/Moodle/<tarea>.")] = None,
+        include_text: Annotated[bool, Field(description="Devuelve el texto de PDF, DOCX, PPTX y archivos de texto en files[].text.")] = True,
+    ) -> Result:
+        """Descarga los anexos de UNA tarea y sus archivos de retroalimentación con la sesión de Moodle y devuelve su texto (files[].text) para leerlos sin abrirlos. No sobrescribe ni duplica archivos idénticos; informa descargas parciales."""
+        return await tools.run("download_assignment_attachments", tools.download_task, assignment_id, url,
+                               destination_directory, include_text, reporter(ctx))
+
+    @server.tool(title="Portada y formato del entregable", annotations=local_readonly, structured_output=True)
+    async def get_document_template() -> Result:
+        """Datos de portada guardados (estudiantes, materia, docentes por materia), formato APA 7 y política de contenido para el entregable. No genera archivos."""
+        return await tools.run("get_document_template", tools.document_template, moodle=False)
+
     @server.tool(title="Generar el entregable", annotations=local_annotations, structured_output=True)
     async def build_delivery_document(
         document: Annotated[DeliveryDocument | None, Field(description="Contenido del informe; omítelo solo al reintentar con draft_id.")] = None,
@@ -664,11 +739,8 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         pdf_engine: Literal["auto", "builtin", "libreoffice"] = "auto",
     ) -> Result:
         """Genera el entregable: DOCX editable (Word/WPS) y su PDF con portada ULEAM y APA 7. Tú redactas el contenido real en document; el servidor pone portada y formato. Pasa assignment_id para usar la materia de la tarea. Verifica el resultado y no sobrescribe archivos. Si devuelve missing_cover_fields, pide esos datos y reintenta con draft_id y cover, sin reenviar document. Práctica con repositorio: sin citas ni referencias salvo que se pidan; el enlace de GitHub es la URL confirmada (gh repo view --json url) escrita tal cual. No inventes resultados ni fuentes."""
-        return await run("build_delivery_document", build_task, document, cover, draft_id, assignment_id,
-                         destination_directory, file_name, open_pdf, pdf_engine, moodle=False)
-
-    def finish_task(docx_path: str, pdf_path: str, destination_directory: str, open_pdf: bool) -> dict[str, Any]:
-        return copy_and_open_delivery(docx_path, pdf_path, destination_directory, open_pdf=open_pdf)
+        return await tools.run("build_delivery_document", tools.build_task, document, cover, draft_id, assignment_id,
+                               destination_directory, file_name, open_pdf, pdf_engine, moodle=False)
 
     @server.tool(title="Verificar un documento propio", annotations=local_annotations, structured_output=True)
     async def finish_delivery(
@@ -678,21 +750,8 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         open_pdf: Annotated[bool, Field(description="Abre el PDF al terminar.")] = True,
     ) -> Result:
         """Solo para documentos hechos fuera de build_delivery_document: verifica el DOCX y su PDF (mismo nombre, sin campos {{...}}, PDF legible), los copia sin sobrescribir y abre el PDF."""
-        return await run("finish_delivery", finish_task, docx_path, pdf_path, destination_directory, open_pdf, moodle=False)
-
-    # ------------------------------------------------------------- subida
-
-    def upload_task(assignment_id: int | None, url: str | None, file_paths: list[str], replace_existing: bool,
-                    progress) -> dict[str, Any]:
-        settings = config()
-        resolved_id = assignment_id_from_reference(assignment_id, url, settings.base_url)
-        # Los archivos se validan antes de abrir el navegador o iniciar sesión.
-        validated, blocked = validate_upload(resolved_id, file_paths)
-        if blocked is not None:
-            return blocked
-        with moodle_page(settings) as (_, page):
-            return upload_files(page, settings, resolved_id, file_paths, replace_existing=replace_existing,
-                                progress=progress, validated=validated)
+        return await tools.run("finish_delivery", tools.finish_task, docx_path, pdf_path, destination_directory,
+                               open_pdf, moodle=False)
 
     @server.tool(title="Subir archivos a una tarea", annotations=upload_annotations, structured_output=True)
     async def upload_assignment_files(
@@ -704,15 +763,10 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
         replace_existing: Annotated[bool, Field(description="true solo si el usuario pidió reemplazar los archivos ya entregados.")] = False,
     ) -> Result:
         """Adjunta archivos a UNA tarea y guarda la entrega, solo si el usuario lo pidió. Valida tipo y ubicación antes de abrir Moodle; todo o nada; no reemplaza archivos salvo replace_existing=true autorizado. Nunca envía para calificar: devuelve status, submission.state y submission.note."""
-        return await run("upload_assignment_files", upload_task, assignment_id, url, file_paths, replace_existing,
-                         reporter(ctx))
+        return await tools.run("upload_assignment_files", tools.upload_task, assignment_id, url, file_paths,
+                               replace_existing, reporter(ctx))
 
-    # Esquemas publicados: entradas sin ruido autogenerado y salidas con sus campos reales.
-    for name, schema in OUTPUT_SCHEMAS.items():
-        tool = server._tool_manager.get_tool(name)
-        tool.parameters = slim_schema(tool.parameters)
-        tool.fn_metadata.output_schema = schema
-
+    publish_schemas(server)
     return server
 
 
