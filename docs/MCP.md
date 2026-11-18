@@ -138,7 +138,9 @@ El cliente descubre las herramientas por MCP; tener el repositorio en GitHub por
 ## Pruebas
 
 ```bash
-uv run python -m unittest discover -s tests -v
+uv run pytest -n auto
 ```
+
+`pytest -n auto` reparte las pruebas entre los núcleos del equipo (en uno de 16 hilos, ~20 s frente a ~100 s en serie). También funcionan sin dependencias de desarrollo con `uv run python -m unittest discover -s tests -v`, que es lo que usa la verificación de la instalación.
 
 Las pruebas incluyen descubrimiento de herramientas por `stdio`, un Moodle local simulado con el flujo completo (listar, leer, descargar, generar el entregable y subirlo con un solo inicio de sesión), una batería de entradas fuera de rango, la seguridad de rutas, la verificación de DOCX y PDF y la ocultación de credenciales.

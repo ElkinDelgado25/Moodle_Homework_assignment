@@ -2,7 +2,7 @@
   "mcpServers": {
     "moodle": {
       "command": "uv",
-      "args": ["run", "mcp-moodle", "serve"]
+      "args": ["run", "--frozen", "mcp-moodle", "serve"]
     }
   }
 }

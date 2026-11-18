@@ -3,7 +3,7 @@
     "moodle": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--directory", "${workspaceFolder}", "run", "mcp-moodle", "serve"]
+      "args": ["--directory", "${workspaceFolder}", "run", "--frozen", "mcp-moodle", "serve"]
     }
   }
 }

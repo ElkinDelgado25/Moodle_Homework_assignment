@@ -21,7 +21,7 @@ Equipo de referencia: Windows 11, Intel de 12 hilos, SSD, Python 3.13.7, entorno
 | Comando ligero (`mcp-moodle --help`) | ~1,7 s | 0,31–0,39 s |
 | Importación del servidor MCP en caliente | ~1,3–1,8 s | 1,24–1,84 s (sin cambio; depende del equipo) |
 | Primer arranque sin bytecode compilado | compilación en el primer uso | compilación durante la instalación |
-| Pruebas automatizadas (329 pruebas) | ~102–111 s | ~102–111 s (la suite no es el objetivo de la optimización) |
+| Pruebas automatizadas (345 pruebas, Linux, 16 hilos) | ~100 s en serie (`unittest`) | ~20 s con `pytest -n auto` |
 
 En la misma máquina, Python 3.13 fue alrededor de un 4 % más rápido que 3.11 para el arranque del CLI y del servidor. La diferencia es pequeña para un comando suelto, pero se nota en cada herramienta MCP que el agente invoca durante una conversación.
 

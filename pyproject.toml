@@ -22,7 +22,11 @@ dependencies = [
 mcp-moodle = "moodle_tasks.cli:main"
 
 [dependency-groups]
-dev = ["ruff>=0.17.5"]
+dev = [
+    "pytest>=9",
+    "pytest-xdist>=3.8",
+    "ruff>=0.17.5",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -30,6 +34,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/moodle_tasks"]
+
+[tool.pytest.ini_options]
+# Las pruebas son de unittest; pytest las ejecuta en paralelo con -n auto (pytest-xdist).
+# Cada proceso importa tests/helpers.py y trabaja con su propia carpeta personal temporal.
+testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py311"

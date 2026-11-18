@@ -39,7 +39,8 @@ jobs:
       - name: Preparar Chromium
         run: uv run playwright install chromium
       - name: Ejecutar la suite de pruebas
-        run: uv run python -m unittest discover -s tests -v
+        # En paralelo y con la salida capturada: el registro solo muestra las pruebas que fallan.
+        run: uv run pytest -n auto
 
   tests:
     name: Ubuntu 24.04 (Debian)
