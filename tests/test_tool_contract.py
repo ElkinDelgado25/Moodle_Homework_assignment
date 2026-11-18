@@ -482,10 +482,10 @@ class LinkedContinuationTests(unittest.TestCase):
     def test_continuation_only_reads_a_link_of_the_assignment(self):
         links = [{"name": "", "url": "https://example.com/guia"}]
 
-        def fake_read(browser, link, max_chars=linked_content.MAX_CONTENT, offset=0):
-            return dict(link, content=f"desde {offset}", truncated=False)
+        def fake_fetch(browser, links):
+            return [{"resolved_url": link["url"], "title": "", "text": "a" * 30_000 + "desde 30000"} for link in links]
 
-        with patch("moodle_tasks.linked_content.read_link", side_effect=fake_read):
+        with patch("moodle_tasks.linked_content.fetch_link_texts", side_effect=fake_fetch):
             result = linked_content.read_linked_resources(None, links, only_url="https://example.com/guia#parte", offset=30_000)
             self.assertEqual(result["linked_resources"][0]["content"], "desde 30000")
             with self.assertRaisesRegex(ValueError, "resource_url"):

@@ -161,22 +161,41 @@ def _slice(result: dict, text: str, offset: int, max_chars: int) -> None:
         result["next_offset"] = end
 
 
-def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
-    result = dict(link, kind="page", content="", truncated=False)
-    validate_public_url(link["url"])
-    # Sin cookies de Moodle ni ejecución de scripts de los sitios enlazados.
+REDIRECT_STATUSES = (301, 302, 303, 307, 308)
+PAGE_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
+LINK_SECONDS = 15
+OPEN_LINK = "url => { window.location.href = url; }"
+
+
+def fetch_link_texts(browser, links: list[dict[str, str]]) -> list[dict | Exception]:
+    """Texto completo de varias páginas públicas, cargadas a la vez; cada elemento es el texto o su error.
+
+    Un único contexto sin cookies de Moodle ni scripts de los sitios enlazados. Cada navegación pasa
+    por route.fetch, que valida la dirección de cada redirección, y todas comparten un plazo de
+    LINK_SECONDS: cinco enlaces lentos cuestan lo que el más lento, no la suma de todos.
+    """
+    outcomes: list[dict | Exception | None] = []
+    for link in links:
+        try:
+            validate_public_url(link["url"])
+            outcomes.append(None)
+        except Exception as error:
+            outcomes.append(error)
+    if all(outcome is not None for outcome in outcomes):
+        return outcomes
     context = browser.new_context(java_script_enabled=False, service_workers="block")
     try:
-        page = context.new_page()
-        blocked = []
-        redirects = 0
-        resolved_url = link["url"]
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + LINK_SECONDS
+        states: dict = {}
 
         def route_document(route):
-            nonlocal redirects, resolved_url
             request = route.request
-            if request.resource_type != "document" or request.frame != page.main_frame:
+            try:
+                frame = request.frame
+                state = states.get(frame.page) if frame.parent_frame is None else None
+            except Exception:
+                state = None  # sin frame (p. ej. un service worker): nunca es la página enlazada
+            if state is None or request.resource_type != "document" or state["done"]:
                 route.abort()
                 return
             try:
@@ -185,53 +204,88 @@ def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offse
                     validate_public_url(current)
                     timeout = max(1, int((deadline - time.monotonic()) * 1000))
                     response = route.fetch(url=current, max_redirects=0, timeout=timeout)
-                    if response.status in (301, 302, 303, 307, 308):
+                    if response.status in REDIRECT_STATUSES:
                         location = response.headers.get("location")
                         if not location:
                             raise ValueError("El enlace devolvió una redirección sin destino.")
-                        redirects += 1
-                        if redirects > MAX_REDIRECTS:
+                        state["redirects"] += 1
+                        if state["redirects"] > MAX_REDIRECTS:
                             raise ValueError("El enlace excedió el límite de redirecciones.")
                         current = urljoin(current, location)
                         continue
-                    resolved_url = current
+                    if response.status >= 400:
+                        raise ValueError(f"No se pudo leer el enlace (HTTP {response.status}).")
+                    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                    disposition = response.headers.get("content-disposition", "").lower()
+                    # Un archivo se detecta antes de llegar al navegador: no hay que esperar una descarga.
+                    if content_type not in PAGE_TYPES or disposition.startswith("attachment"):
+                        raise ValueError("El enlace no contiene una página de texto compatible; puede requerir "
+                                         "descargar un archivo.")
                     if len(response.body()) > MAX_BODY_BYTES:
                         raise ValueError("La página enlazada es demasiado grande para leerla (más de 2 MB).")
+                    state["resolved_url"] = current
                     route.fulfill(response=response)
+                    state["fulfilled"] = True
                     return
             except Exception as error:
-                blocked.append(str(error))
+                state["error"] = str(error)
                 route.abort()
-                return
+            finally:
+                state["done"] = True
 
         context.route("**/*", route_document)
-        try:
-            response = page.goto(link["url"], wait_until="domcontentloaded", timeout=15_000)
-        except Exception as error:
-            if blocked:
-                raise ValueError(blocked[0]) from None
-            if "Download is starting" in str(error):
-                raise ValueError("El enlace descarga un archivo, no es una página; ábrelo o descárgalo aparte.") from None
-            raise
-        if response is None or response.status >= 400:
-            raise ValueError(f"No se pudo leer el enlace (HTTP {response.status if response else 'sin respuesta'}).")
-        if response.headers.get("content-type", "").split(";", 1)[0] not in ("text/html", "application/xhtml+xml", "text/plain"):
-            raise ValueError("El enlace no contiene una página de texto compatible; puede requerir descargar un archivo.")
-        if page.locator("input[type='password']").count() or "/login/" in urlsplit(resolved_url).path:
+        for index, link in enumerate(links):
+            if outcomes[index] is None:
+                page = context.new_page()
+                states[page] = {"index": index, "redirects": 0, "done": False, "fulfilled": False, "error": None,
+                                "resolved_url": link["url"]}
+                # Navegación iniciada sin esperarla: las demás páginas cargan mientras tanto.
+                page.evaluate(OPEN_LINK, link["url"])
+        pages = list(states)
+        while not all(state["done"] for state in states.values()) and time.monotonic() < deadline:
+            pages[0].wait_for_timeout(25)
+        for page, state in states.items():
+            outcomes[state["index"]] = _page_text(page, state, deadline)
+    finally:
+        context.close()
+    return outcomes
+
+
+def _page_text(page, state: dict, deadline: float) -> dict | Exception:
+    if state["error"] is not None:
+        return ValueError(state["error"])
+    if not state["fulfilled"]:
+        return PlaywrightTimeoutError("Se agotó el tiempo de lectura del enlace.")
+    try:
+        remaining = max(1, int((deadline - time.monotonic()) * 1000))
+        page.wait_for_url(lambda url: not url.startswith("about:"), wait_until="domcontentloaded", timeout=remaining)
+        if page.locator("input[type='password']").count() or "/login/" in urlsplit(state["resolved_url"]).path:
             raise ValueError("El enlace requiere iniciar sesión; no se pudieron leer las instrucciones.")
         text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
         if not text:
             raise ValueError("La página no contiene instrucciones legibles sin ejecutar JavaScript.")
-        result.update(resolved_url=resolved_url, title=page.title())
-        _slice(result, text, offset, max_chars)
-        return result
-    finally:
-        context.close()
+        return {"resolved_url": state["resolved_url"], "title": page.title(), "text": text}
+    except Exception as error:
+        return error
 
 
-def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
-    """Página del mismo Moodle leída con la sesión iniciada (las anónimas piden login)."""
+def _page_resource(link: dict[str, str], page: dict, max_chars: int, offset: int) -> dict:
     result = dict(link, kind="page", content="", truncated=False)
+    result.update(resolved_url=page["resolved_url"], title=page["title"])
+    _slice(result, page["text"], offset, max_chars)
+    return result
+
+
+def read_link(browser, link: dict[str, str], max_chars: int = MAX_CONTENT, offset: int = 0) -> dict:
+    """Una sola página pública; read_linked_resources lee varias a la vez con fetch_link_texts."""
+    page = fetch_link_texts(browser, [link])[0]
+    if isinstance(page, Exception):
+        raise page
+    return _page_resource(link, page, max_chars, offset)
+
+
+def moodle_link_text(session_page, config, link: dict[str, str]) -> dict:
+    """Página del mismo Moodle leída con la sesión iniciada (las anónimas piden login)."""
     page = session_page.context.new_page()
     try:
         page.set_default_timeout(15_000)
@@ -239,9 +293,7 @@ def read_moodle_link(session_page, config, link: dict[str, str], max_chars: int 
         text = _normalize_page_text(page.locator("body").evaluate(EXTRACT_TEXT))
         if not text:
             raise ValueError("La página de Moodle no tiene texto legible.")
-        result.update(resolved_url=page.url, title=page.title())
-        _slice(result, text, offset, max_chars)
-        return result
+        return {"resolved_url": page.url, "title": page.title(), "text": text}
     finally:
         page.close()
 
@@ -258,24 +310,31 @@ def read_linked_resources(browser, links: list[dict[str, str]], credentials: tup
             raise ValueError("resource_url debe ser uno de los enlaces de linked_resources de esta tarea.")
     else:
         offset = 0
+    selected = links[:MAX_LINKS]
+    paths = [moodle_path(link["url"], config.base_url) if config is not None else None for link in selected]
+    is_file = [path is not None and bool(MOODLE_FILE.search(path)) for path in paths]
+    in_moodle = [path is not None and session_page is not None and bool(MOODLE_READABLE.match(path)) for path in paths]
+    # Las páginas externas se cargan todas a la vez antes de repartir el texto en el orden de la consigna.
+    web = [index for index in range(len(selected)) if not is_file[index] and not in_moodle[index]]
+    fetched = dict(zip(web, fetch_link_texts(browser, [selected[index] for index in web]), strict=True))
     resources = []
     remaining = MAX_CONTENT
-    for link in links[:MAX_LINKS]:
+    for index, link in enumerate(selected):
         if remaining <= 0:
             resources.append(dict(link, error="Se alcanzó el límite total de texto de los enlaces.", truncated=True))
             continue
-        path = moodle_path(link["url"], config.base_url) if config is not None else None
         try:
-            if path is not None and MOODLE_FILE.search(path):
+            if is_file[index]:
+                path = paths[index] or ""
                 downloadable = path.startswith("/mod/resource/") or "/pluginfile.php/" in path
                 resources.append(dict(link, kind="file", error=(
                     "Es un archivo de Moodle; descárgalo con download_assignment_attachments." if downloadable
                     else "Es una carpeta de Moodle; ábrela en Moodle para ver sus archivos.")))
                 continue
-            if path is not None and session_page is not None and MOODLE_READABLE.match(path):
-                resource = read_moodle_link(session_page, config, link, remaining, offset)
-            else:
-                resource = read_link(browser, link, remaining, offset)
+            page = moodle_link_text(session_page, config, link) if in_moodle[index] else fetched[index]
+            if isinstance(page, Exception):
+                raise page
+            resource = _page_resource(link, page, remaining, offset)
             remaining -= len(resource.get("content", ""))
             resources.append(resource)
         except PlaywrightTimeoutError:

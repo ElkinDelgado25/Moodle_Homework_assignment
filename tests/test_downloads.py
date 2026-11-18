@@ -172,11 +172,11 @@ class LinkedBudgetTests(unittest.TestCase):
         from unittest.mock import patch
         from moodle_tasks import linked_content
 
-        def fake_read(browser, link, max_chars=linked_content.MAX_CONTENT, offset=0):
-            return dict(link, content="x" * min(20_000, max_chars), truncated=max_chars < 20_000)
+        def fake_fetch(browser, links):
+            return [{"resolved_url": link["url"], "title": "", "text": "x" * 20_000} for link in links]
 
         links = [{"name": "", "url": f"https://example.com/{index}"} for index in range(4)]
-        with patch("moodle_tasks.linked_content.read_link", side_effect=fake_read):
+        with patch("moodle_tasks.linked_content.fetch_link_texts", side_effect=fake_fetch):
             result = linked_content.read_linked_resources(None, links)
         sizes = [len(item.get("content", "")) for item in result["linked_resources"]]
         self.assertEqual(sum(sizes), linked_content.MAX_CONTENT)
@@ -225,6 +225,74 @@ class LinkedBudgetTests(unittest.TestCase):
                     linked_content.read_link(browser, {"name": "", "url": f"{base}/7"})
             finally:
                 browser.close()
+
+    def slow_server(self, delay: float):
+        import threading
+        import time
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class Slow(BaseHTTPRequestHandler):
+            def do_GET(self):
+                time.sleep(delay)
+                if self.path == "/archivo":
+                    body = b"%PDF-1.7"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/pdf")
+                else:
+                    body = f"<html><body><p>Consigna {self.path}</p></body></html>".encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Slow)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return f"http://127.0.0.1:{server.server_port}"
+
+    def test_external_links_load_at_the_same_time_and_keep_their_order(self):
+        import time
+
+        from playwright.sync_api import sync_playwright
+
+        from moodle_tasks import linked_content
+
+        base = self.slow_server(1.0)
+        links = [{"name": "", "url": f"{base}/{index}"} for index in range(4)]
+        with patch("moodle_tasks.linked_content.validate_public_url"), sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                started = time.monotonic()
+                result = linked_content.read_linked_resources(browser, links)
+                elapsed = time.monotonic() - started
+            finally:
+                browser.close()
+        self.assertEqual([item["content"] for item in result["linked_resources"]],
+                         [f"Consigna /{index}" for index in range(4)])
+        # En serie serían más de 4 s; a la vez cuestan lo que el enlace más lento.
+        self.assertLess(elapsed, 3.0)
+
+    def test_a_file_link_is_rejected_without_waiting_for_a_download(self):
+        from playwright.sync_api import sync_playwright
+
+        from moodle_tasks import linked_content
+
+        base = self.slow_server(0)
+        with patch("moodle_tasks.linked_content.validate_public_url"), sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                result = linked_content.read_linked_resources(
+                    browser, [{"name": "", "url": f"{base}/archivo"}, {"name": "", "url": f"{base}/guia"}])
+            finally:
+                browser.close()
+        file, page = result["linked_resources"]
+        self.assertIn("descargar un archivo", file["error"])
+        self.assertEqual(page["content"], "Consigna /guia")
 
     def test_moodle_file_links_point_to_the_download_tool(self):
         from moodle_tasks import linked_content
