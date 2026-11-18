@@ -7,7 +7,8 @@ from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.assignment import read_assignment
-from moodle_tasks.core import login, submission_state
+from moodle_tasks.auth import login
+from moodle_tasks.core import submission_state
 from moodle_tasks.config import Config
 from moodle_tasks.main import print_tasks
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
@@ -203,7 +204,7 @@ class MoodleTests(unittest.TestCase):
             authenticated = True
 
         self.page.route("**/*", respond)
-        with patch("moodle_tasks.core.login", side_effect=renew) as login_again:
+        with patch("moodle_tasks.auth.login", side_effect=renew) as login_again:
             task = read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1", self.config)
         self.assertEqual(task.title, "Taller")
         self.assertEqual(task.content, "Instrucciones reales")
@@ -213,7 +214,7 @@ class MoodleTests(unittest.TestCase):
         self.page.route("**/*", lambda route: route.fulfill(
             content_type="text/html", body='<h1>Acceder</h1><input name="username">'
         ))
-        with patch("moodle_tasks.core.login") as renew:
+        with patch("moodle_tasks.auth.login") as renew:
             with self.assertRaises(MoodleAuthenticationError):
                 read_assignment(self.page, "https://moodle.test/mod/assign/view.php?id=1", self.config)
             renew.assert_called_once()

@@ -20,8 +20,11 @@ def local_imports(module: str) -> set[str]:
 
 
 class ArchitectureTests(unittest.TestCase):
-    def test_the_core_only_depends_on_errors_and_config(self):
-        self.assertLessEqual(local_imports("core"), {"errors", "config"})
+    def test_the_core_only_depends_on_errors(self):
+        self.assertLessEqual(local_imports("core"), {"errors"})
+
+    def test_the_login_only_depends_on_the_core_and_the_configuration(self):
+        self.assertLessEqual(local_imports("auth"), {"config", "core", "errors"})
 
     def test_the_configuration_only_depends_on_storage(self):
         self.assertLessEqual(local_imports("config"), {"storage"})

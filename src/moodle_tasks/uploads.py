@@ -14,7 +14,8 @@ from playwright.sync_api import Locator, Page
 
 from .errors import redact_credentials
 from .assignment import forbids_upload, read_assignment
-from .core import open_authenticated_page, submission_state
+from .auth import open_authenticated_page
+from .core import submission_state
 from .config import Config
 from .paths import check_upload_file
 

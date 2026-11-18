@@ -8,7 +8,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from .core import open_authenticated_page
+from .auth import open_authenticated_page
 from .errors import redact_credentials
 
 MAX_LINKS = 5

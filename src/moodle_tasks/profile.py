@@ -8,7 +8,6 @@ from pathlib import Path
 from playwright.sync_api import Page
 
 from .core import open_page
-
 from .config import Config
 from .storage import atomic_write, user_config_dir
 

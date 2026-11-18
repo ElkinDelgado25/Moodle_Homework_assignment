@@ -15,9 +15,9 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import Page, sync_playwright
 
-from .core import login, open_page
-
+from .auth import login
 from .config import OPT_OUT, Config
+from .core import open_page
 from .storage import atomic_write, sessions_dir, user_config_dir
 
 

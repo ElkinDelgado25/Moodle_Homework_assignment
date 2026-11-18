@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.errors import MoodleAuthenticationError
-from moodle_tasks.core import login
+from moodle_tasks.auth import login
 from moodle_tasks.config import Config
 
 
