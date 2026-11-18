@@ -3,7 +3,7 @@
 import argparse
 
 from .console import configure_utf8_streams
-from .core import config_values
+from .config import config_values
 from .monitoring import initialize_sentry
 
 

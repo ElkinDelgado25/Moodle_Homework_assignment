@@ -12,7 +12,7 @@ from rich.console import Console
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.agents import AGENTS, AgentDetection, AgentSyncResult
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
-from moodle_tasks.core import Config, load_config
+from moodle_tasks.config import Config, load_config
 from moodle_tasks.setup import ask_agent, main, valid_username, verify_credentials
 from moodle_tasks.storage import save_credentials
 

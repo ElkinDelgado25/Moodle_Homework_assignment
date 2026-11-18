@@ -4,8 +4,10 @@ import re
 
 from playwright.sync_api import Page
 
-from .core import (NO_DESCRIPTION, Assignment, Config, first_text, open_authenticated_page, open_page,
-                   read_feedback, read_submission_summary, submission_state)
+from .core import (NO_DESCRIPTION, Assignment, first_text, open_authenticated_page, open_page, read_feedback,
+                   read_submission_summary, submission_state)
+
+from .config import Config
 from .linked_content import assignment_description, assignment_images, assignment_links
 from .search import parse_moodle_date
 

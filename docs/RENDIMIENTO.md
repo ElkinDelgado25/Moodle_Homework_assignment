@@ -6,7 +6,7 @@ Este documento explica cómo arranca Moodle MCP, qué se midió en la auditoría
 
 `mcp-moodle` es un único punto de entrada con varios comandos. El arranque tiene tres costes distintos:
 
-1. **Intérprete y paquete.** Python importa `moodle_tasks.cli`, que solo carga `argparse`, la configuración y Sentry. Es el coste más pequeño.
+1. **Intérprete y paquete.** Python importa `moodle_tasks.cli`, que solo carga `argparse`, la configuración (`config.py`, sin Playwright) y Sentry. Es el coste más pequeño.
 2. **Comando elegido.** Cada comando se importa cuando se usa. `status` y `tasks` no cargan `mcp`, Playwright ni los generadores de documentos; `serve` carga el servidor MCP y Playwright.
 3. **Navegador.** El primer `chromium.launch()` de cada proceso abre Chromium y tarda más que todo lo anterior. Se paga una vez por ejecución, no por herramienta MCP.
 
@@ -30,6 +30,7 @@ La ganancia grande está en el punto 2: antes, `cli.py` importaba todos los mód
 ## Qué se cambió
 
 - **Imports por comando** en `src/moodle_tasks/cli.py`. Es la mejora que más se percibe.
+- **Configuración sin Playwright** en `src/moodle_tasks/config.py`. Leer `credentials.env` ya no importa Playwright (~110 ms): en Linux, importar el CLI pasó de ~160 ms a ~55 ms.
 - **Python 3.13** en instaladores, `mcp-moodle update` y CI, mediante la constante `moodle_tasks.PYTHON_VERSION`. Se mantiene `requires-python >= 3.11` y el CI prueba ambos intérpretes.
 - **`--compile-bytecode`** en `uv tool install`. Elimina la compilación del primer arranque, sobre todo en Windows y macOS.
 - **Caché de Chromium en CI**, con clave basada en `uv.lock`. No afecta al usuario, pero evita descargar el navegador en cada ejecución de las pruebas.

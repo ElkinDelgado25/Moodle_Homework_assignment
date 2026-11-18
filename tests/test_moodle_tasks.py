@@ -7,7 +7,8 @@ from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.assignment import read_assignment
-from moodle_tasks.core import Config, login, submission_state
+from moodle_tasks.core import login, submission_state
+from moodle_tasks.config import Config
 from moodle_tasks.main import print_tasks
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
 

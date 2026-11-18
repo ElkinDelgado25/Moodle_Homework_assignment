@@ -8,7 +8,8 @@ from playwright.sync_api import sync_playwright
 
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.assignment import read_assignment
-from moodle_tasks.core import Config, is_pending
+from moodle_tasks.core import is_pending
+from moodle_tasks.config import Config
 from moodle_tasks.main import collect_assignments
 from moodle_tasks.search import assignment_url, parse_moodle_date, search_assignments
 

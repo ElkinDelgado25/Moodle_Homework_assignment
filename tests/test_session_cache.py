@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks import session
 from moodle_tasks.errors import MoodleAuthenticationError
-from moodle_tasks.core import Config
+from moodle_tasks.config import Config
 from moodle_tasks.paths import UnsafePathError, check_upload_file
 
 CONFIG = Config("https://moodle.test", "estudiante@uleam.edu.ec", "secreto")
@@ -99,7 +99,7 @@ class SessionCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             env = Path(directory) / "credentials.env"
             env.write_text("MOODLE_URL=https://m.test\nMOODLE_USERNAME=u\nMOODLE_PASSWORD=p\nMOODLE_SESSION_CACHE=off\n")
-            from moodle_tasks.core import load_config
+            from moodle_tasks.config import load_config
             with patch.dict(os.environ, {"MOODLE_SESSION_CACHE": "true"}):
                 self.assertFalse(load_config(env).session_cache)
 

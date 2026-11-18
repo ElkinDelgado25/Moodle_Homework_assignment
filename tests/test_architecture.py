@@ -20,8 +20,11 @@ def local_imports(module: str) -> set[str]:
 
 
 class ArchitectureTests(unittest.TestCase):
-    def test_the_core_only_depends_on_errors_and_storage(self):
-        self.assertLessEqual(local_imports("core"), {"errors", "storage"})
+    def test_the_core_only_depends_on_errors_and_config(self):
+        self.assertLessEqual(local_imports("core"), {"errors", "config"})
+
+    def test_the_configuration_only_depends_on_storage(self):
+        self.assertLessEqual(local_imports("config"), {"storage"})
 
     def test_only_the_entry_points_import_the_terminal_command(self):
         importers = sorted(path.stem for path in PACKAGE.glob("*.py") if "main" in local_imports(path.stem))
@@ -34,6 +37,15 @@ class ArchitectureTests(unittest.TestCase):
                 " if name in sys.modules))")
         output = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
         self.assertEqual(output.strip(), "[]")
+
+    def test_the_terminal_command_reads_the_configuration_without_playwright(self):
+        # Playwright cuesta ~110 ms de importación; --help y la lectura de credentials.env no lo necesitan.
+        code = ("import sys\n"
+                "import moodle_tasks.cli\n"
+                "moodle_tasks.cli.config_values()\n"
+                "print('playwright' in sys.modules)")
+        output = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(output.strip(), "False")
 
     def test_the_terminal_query_does_not_load_the_mcp_server_or_the_document_builders(self):
         # print_tasks con una tarea pendiente es lo que antes cargaba todo el servidor para pending_table.

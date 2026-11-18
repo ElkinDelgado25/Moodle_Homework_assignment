@@ -6,7 +6,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
-from .core import Assignment, Config, is_pending, open_page, submission_state
+from .core import Assignment, is_pending, open_page, submission_state
+
+from .config import Config
 from .urls import assignment_view_id, moodle_path, parse_id
 
 

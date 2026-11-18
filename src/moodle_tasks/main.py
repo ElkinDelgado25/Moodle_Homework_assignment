@@ -5,7 +5,8 @@ import sys
 from datetime import datetime
 
 from .console import configure_utf8_streams
-from .core import Assignment, Config, is_pending, load_config
+from .core import Assignment, is_pending
+from .config import Config, load_config
 from .errors import redact_credentials
 from .listing import pending_table
 from .search import MODES, search_assignments

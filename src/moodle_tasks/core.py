@@ -1,27 +1,15 @@
-"""Núcleo de Moodle: configuración, inicio de sesión y lectura de páginas autenticadas.
+"""Núcleo de Moodle: inicio de sesión y lectura de páginas autenticadas.
 
-No importa ningún otro módulo de la aplicación salvo errors y storage, así que todos pueden
-importarlo sin dependencias circulares.
+Solo importa errors y config, así que todos los módulos pueden importarlo sin dependencias circulares.
 """
 
-import os
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from dotenv import dotenv_values
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from .config import Config
 from .errors import MoodleAuthenticationError, MoodleHTTPError
-from .storage import default_env_file
-
-
-@dataclass(frozen=True)
-class Config:
-    base_url: str
-    username: str
-    password: str = field(repr=False)
-    session_cache: bool = True
 
 
 @dataclass(frozen=True)
@@ -53,36 +41,7 @@ def is_pending(task: Assignment) -> bool:
     return task.submitted is not True and task.requires_submission is not False
 
 
-ENV_FILE = default_env_file()
 NO_DESCRIPTION = "No se encontró una descripción visible."
-
-
-def config_values(env_file: Path | None = None) -> dict[str, str | None]:
-    return {**dotenv_values(env_file or default_env_file(), interpolate=False), **os.environ}
-
-
-def required_env(name: str, values: dict[str, str | None]) -> str:
-    value = (values.get(name) or "").strip()
-    if not value:
-        raise ValueError(f"Falta la variable {name}. Ejecuta mcp-moodle run para configurar tu cuenta.")
-    return value
-
-
-OPT_OUT = ("0", "false", "no", "off", "n")
-
-
-def load_config(env_file: Path | None = None) -> Config:
-    # El archivo se lee una sola vez: el entorno gana sobre él, salvo en la opción de privacidad de abajo.
-    file_values = dotenv_values(env_file or default_env_file(), interpolate=False)
-    values = {**file_values, **os.environ}
-    return Config(
-        base_url=required_env("MOODLE_URL", values).rstrip("/"),
-        username=required_env("MOODLE_USERNAME", values),
-        password=required_env("MOODLE_PASSWORD", values),
-        # Desactivar la caché de sesión es una opción de privacidad: gana si lo indica el archivo o el entorno.
-        session_cache=not any((value or "").strip().lower() in OPT_OUT for value in (
-            values.get("MOODLE_SESSION_CACHE"), file_values.get("MOODLE_SESSION_CACHE"))),
-    )
 
 
 def clean_text(value: str | None) -> str:

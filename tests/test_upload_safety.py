@@ -160,7 +160,7 @@ class UploadSafetyTests(unittest.TestCase):
 
     def test_upload_tool_validates_before_launching_the_browser(self):
         from moodle_tasks.server import create_server
-        from moodle_tasks.core import Config
+        from moodle_tasks.config import Config
         import asyncio
         from mcp import Client
 

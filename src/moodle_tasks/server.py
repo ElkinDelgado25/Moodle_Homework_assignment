@@ -31,7 +31,8 @@ from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentia
 from .extract import MAX_FILE_CHARS, extract_text
 from .linked_content import read_linked_resources
 from .assignment import read_assignment
-from .core import ENV_FILE, NO_DESCRIPTION, Assignment, config_values, is_pending, load_config
+from .core import NO_DESCRIPTION, Assignment, is_pending
+from .config import ENV_FILE, config_values, load_config
 from .listing import course_name, deadline_display, pending_table
 from .main import collect_assignments
 from .paths import UnsafePathError, protect_credentials, resolve_destination_directory

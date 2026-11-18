@@ -14,7 +14,8 @@ from rich.text import Text
 
 from .agents import AGENTS, detect_agents, ordered_agents, synchronize_agents
 from .errors import MoodleAuthenticationError, MoodleHTTPError, redact_credentials
-from .core import Config, config_values, login
+from .core import login
+from .config import Config, config_values
 from .profile import record_verified_profile
 from .session import moodle_page
 from .storage import atomic_write, save_credentials, user_config_dir

@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 import helpers  # noqa: F401 - aísla las pruebas de la configuración real
 from moodle_tasks.downloads import attachment_name, download_attachment
 from moodle_tasks.errors import MoodleAuthenticationError, MoodleHTTPError
-from moodle_tasks.core import Config
+from moodle_tasks.config import Config
 
 
 class DownloadTests(unittest.TestCase):
@@ -228,7 +228,7 @@ class LinkedBudgetTests(unittest.TestCase):
 
     def test_moodle_file_links_point_to_the_download_tool(self):
         from moodle_tasks import linked_content
-        from moodle_tasks.core import Config
+        from moodle_tasks.config import Config
         config = Config("https://moodle.test", "u", "p")
         result = linked_content.read_linked_resources(None, [{"name": "", "url": "https://moodle.test/mod/resource/view.php?id=3"}],
                                                       config=config)

@@ -9,7 +9,8 @@ from urllib.parse import unquote, urljoin, urlsplit
 from playwright.sync_api import Page
 
 from .errors import MoodleAuthenticationError, MoodleHTTPError
-from .core import Config, login
+from .core import login
+from .config import Config
 from .paths import windows_reserved
 from .urls import moodle_path, same_origin
 
