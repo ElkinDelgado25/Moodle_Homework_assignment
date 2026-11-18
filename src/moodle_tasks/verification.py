@@ -5,9 +5,6 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
-
 from .document_model import TEMPLATE_TOKEN
 
 
@@ -90,6 +87,10 @@ def inspect_docx(path: Path) -> dict:
 
 def inspect_pdf(path: Path) -> dict:
     """Cuenta páginas y enlaces del PDF; lanza error si no es un PDF legible."""
+    # pypdf tarda ~150 ms en importarse: solo se carga al verificar un entregable, no al arrancar serve.
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
     try:
         with path.open("rb") as handle:
             if not handle.read(5).startswith(b"%PDF-"):

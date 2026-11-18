@@ -50,6 +50,15 @@ class ArchitectureTests(unittest.TestCase):
         output = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
         self.assertEqual(output.strip(), "False")
 
+    def test_the_mcp_server_starts_without_the_document_builders(self):
+        # pypdf, python-docx y fpdf2 suman ~200 ms: se cargan al generar o verificar un entregable.
+        code = ("import sys\n"
+                "from moodle_tasks.server import create_server\n"
+                "create_server()\n"
+                "print(sorted(name for name in ('docx', 'fpdf', 'pypdf') if name in sys.modules))")
+        output = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(output.strip().splitlines()[-1], "[]")
+
     def test_the_terminal_query_does_not_load_the_mcp_server_or_the_document_builders(self):
         # print_tasks con una tarea pendiente es lo que antes cargaba todo el servidor para pending_table.
         code = ("import contextlib, io, sys\n"

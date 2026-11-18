@@ -23,7 +23,6 @@ from pydantic import BeforeValidator, Field, ValidationError
 
 from .delivery import copy_pair, open_file, prepare_workspace
 from .delivery import finish_delivery as copy_and_open_delivery
-from .document import MissingCoverFields, build_delivery, cover_values
 from .document_model import COVER_FIELDS, CoverFields, DeliveryDocument
 from .downloads import attachments_directory, download_attachment
 from .downloads import documents_directory
@@ -602,6 +601,9 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     def build_task(document: DeliveryDocument | None, cover: CoverFields | None, draft_id: str | None,
                    assignment_id: int | None, destination_directory: str | None, file_name: str | None,
                    open_pdf: bool, pdf_engine: str) -> dict[str, Any]:
+        # python-docx y fpdf2 solo se cargan al generar un entregable: el arranque de serve no los paga.
+        from .document import MissingCoverFields, build_delivery, cover_values
+
         if document is None:
             if not draft_id:
                 raise ValueError("Indica document (el contenido) o el draft_id de un intento anterior.")
