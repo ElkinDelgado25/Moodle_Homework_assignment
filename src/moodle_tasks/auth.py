@@ -1,12 +1,21 @@
 """Inicio de sesión en Moodle (formulario propio o Microsoft 365) y renovación de una sesión vencida."""
 
 import re
+import time
 
 from playwright.sync_api import Page
 
 from .config import Config
 from .core import clean_text, open_page
 from .errors import MoodleAuthenticationError, MoodleHTTPError
+
+MICROSOFT_LOGIN_SECONDS = 60
+MICROSOFT_POLL_MS = 100
+MICROSOFT_ERRORS = ("#passwordError", "#usernameError", "#errorText")
+EMPTY_PASSWORD = re.compile(r"please enter your password|(?:escriba|introduzca|ingresa|ingrese) (?:su |tu |la )?contraseña",
+                            re.I)
+OTHER_ACCOUNT = re.compile(r"Use a different account|Usar una cuenta diferente|Utilizar otra cuenta", re.I)
+STAY_SIGNED_IN = re.compile(r"Stay signed in|mantener la sesión iniciada", re.I)
 
 
 def login(page: Page, config: Config) -> None:
@@ -66,35 +75,40 @@ def login_microsoft(page: Page, config: Config) -> None:
     email.fill(config.username)
     page.locator("#idSIButton9").click()
     submit_microsoft_password(page, config.password)
+    logged_in = page.locator("a[href*='/login/logout.php']")
+    errors = [page.locator(selector).first for selector in MICROSOFT_ERRORS]
+    alternate = page.get_by_role("link", name=OTHER_ACCOUNT).first
+    stay = page.get_by_role("button", name="No", exact=True).first
+    stay_prompt = page.get_by_text(STAY_SIGNED_IN)
     selected_again = False
     retried_empty_field = False
-    for _ in range(120):
-        if page.url.startswith(config.base_url + "/") and page.locator("a[href*='/login/logout.php']").count():
+    stay_answered_at = None
+    # Plazo total con reloj y sondeo corto: cada paso del acceso se detecta en ~0,1 s, no tras 0,5 s fijos.
+    deadline = time.monotonic() + MICROSOFT_LOGIN_SECONDS
+    while time.monotonic() < deadline:
+        if page.url.startswith(config.base_url + "/") and logged_in.count():
             return
-        for selector in ("#passwordError", "#usernameError", "#errorText"):
-            error = page.locator(selector).first
+        for error in errors:
             if error.count() and error.is_visible() and clean_text(error.inner_text()):
                 message = clean_text(error.inner_text())
-                if re.search(r"please enter your password|(?:escriba|introduzca|ingresa|ingrese) (?:su |tu |la )?contraseña", message, re.I):
+                if EMPTY_PASSWORD.search(message):
                     if not retried_empty_field:
                         retried_empty_field = True
                         submit_microsoft_password(page, config.password)
                         break
                     raise RuntimeError("Microsoft sigue detectando el campo de contraseña vacío. Falló el envío del formulario; no se confirmó el acceso.")
                 raise MoodleAuthenticationError("Microsoft no aceptó el acceso: " + message)
-        alternate = page.get_by_role("link", name=re.compile(
-            r"Use a different account|Usar una cuenta diferente|Utilizar otra cuenta", re.I))
-        if not selected_again and alternate.count() and alternate.first.is_visible():
-            alternate.first.click()
+        if not selected_again and alternate.count() and alternate.is_visible():
+            alternate.click()
             profile = page.get_by_text(config.username, exact=True).first
             profile.wait_for(state="visible", timeout=20_000)
             profile.click()
             selected_again = True
-        stay = page.get_by_role("button", name="No", exact=True)
-        if stay.count() and stay.first.is_visible() and page.get_by_text(re.compile(
-            r"Stay signed in|mantener la sesión iniciada", re.I)).count():
-            stay.first.click()
-        page.wait_for_timeout(500)
+        # «¿Mantener la sesión iniciada?» se responde una vez por página: el sondeo es más rápido que la navegación.
+        if stay_answered_at != page.url and stay.count() and stay.is_visible() and stay_prompt.count():
+            stay_answered_at = page.url
+            stay.click()
+        page.wait_for_timeout(MICROSOFT_POLL_MS)
     raise RuntimeError("Microsoft requiere completar el acceso o una verificación adicional. No se confirmó una sesión de Moodle.")
 
 
