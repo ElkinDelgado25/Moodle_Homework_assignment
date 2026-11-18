@@ -1,3 +1,4 @@
+import contextlib
 import os
 import signal
 import sys
@@ -20,6 +21,10 @@ def alive(pid: int) -> bool:
         with open(f"/proc/{pid}/stat", encoding="utf-8") as stat:
             # Sin un init que los recoja (contenedores de CI), un proceso ya muerto queda como zombi (Z).
             return stat.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        # Con /proc, que falte la entrada es un zombi recogido entre os.kill y open: ya no existe.
+        # Sin /proc (macOS) solo queda la respuesta de os.kill.
+        return not os.path.isdir("/proc/self")
     except (OSError, IndexError):
         return True
 
@@ -54,7 +59,9 @@ class LibreOfficeTimeoutTests(unittest.TestCase):
                 self.assertFalse(alive(child), "El proceso hijo de LibreOffice siguió vivo tras el tiempo límite.")
             finally:
                 if child and alive(child):
-                    os.kill(child, signal.SIGKILL)
+                    # Puede terminar entre la comprobación y la señal: la limpieza no debe fallar por eso.
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(child, signal.SIGKILL)
 
 
 if __name__ == "__main__":
