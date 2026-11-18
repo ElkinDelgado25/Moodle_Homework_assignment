@@ -231,9 +231,22 @@ class LinkedBudgetTests(unittest.TestCase):
         import time
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+        # Peticiones en curso a la vez: prueban la concurrencia sin depender de la velocidad del equipo.
+        self.in_flight = 0
+        self.max_in_flight = 0
+        lock = threading.Lock()
+        test = self
+
         class Slow(BaseHTTPRequestHandler):
             def do_GET(self):
-                time.sleep(delay)
+                with lock:
+                    test.in_flight += 1
+                    test.max_in_flight = max(test.max_in_flight, test.in_flight)
+                try:
+                    time.sleep(delay)
+                finally:
+                    with lock:
+                        test.in_flight -= 1
                 if self.path == "/archivo":
                     body = b"%PDF-1.7"
                     self.send_response(200)
@@ -256,8 +269,6 @@ class LinkedBudgetTests(unittest.TestCase):
         return f"http://127.0.0.1:{server.server_port}"
 
     def test_external_links_load_at_the_same_time_and_keep_their_order(self):
-        import time
-
         from playwright.sync_api import sync_playwright
 
         from moodle_tasks import linked_content
@@ -267,15 +278,14 @@ class LinkedBudgetTests(unittest.TestCase):
         with patch("moodle_tasks.linked_content.validate_public_url"), sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             try:
-                started = time.monotonic()
                 result = linked_content.read_linked_resources(browser, links)
-                elapsed = time.monotonic() - started
             finally:
                 browser.close()
         self.assertEqual([item["content"] for item in result["linked_resources"]],
                          [f"Consigna /{index}" for index in range(4)])
-        # En serie serían más de 4 s; a la vez cuestan lo que el enlace más lento.
-        self.assertLess(elapsed, 3.0)
+        # Leídos uno tras otro, el servidor nunca tendría dos peticiones abiertas a la vez. Se cuenta la
+        # concurrencia y no el tiempo total, que en un runner lento de CI no prueba nada.
+        self.assertGreaterEqual(self.max_in_flight, 2)
 
     def test_a_file_link_is_rejected_without_waiting_for_a_download(self):
         from playwright.sync_api import sync_playwright
