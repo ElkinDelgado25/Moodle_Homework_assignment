@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from mcp import Client
 
 from helpers import make_pdf
 from fake_moodle import FakeMoodle
+from moodle_tasks import session
 from moodle_tasks.server import create_server
 
 
@@ -110,6 +112,35 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
         for result in (listing, detail, download, build, upload, retry, secret_leak):
             self.assertNotIn(FakeMoodle.PASSWORD, json.dumps(result.structured_content, ensure_ascii=False))
         self.assertFalse(any(path.endswith("/grade") for _, path in self.moodle.requests))
+
+    async def test_one_chromium_serves_the_whole_conversation_and_closes_with_the_client(self):
+        with patch("moodle_tasks.session.sync_playwright", wraps=session.sync_playwright) as playwright:
+            async with Client(create_server(self.env_file)) as client:
+                for _ in range(2):
+                    listing = await client.call_tool("list_assignments")
+                    self.assertFalse(listing.is_error, listing)
+                detail = await client.call_tool("get_assignment", {"assignment_id": FakeMoodle.ASSIGNMENT_ID})
+                self.assertFalse(detail.is_error, detail)
+                connection = await client.call_tool("check_moodle_connection")
+                self.assertTrue(connection.structured_content["connected"])
+        # Un solo arranque de Chromium y un solo inicio de sesión para cuatro herramientas de Moodle.
+        self.assertEqual(playwright.call_count, 1)
+        self.assertEqual(self.moodle.logins, 1)
+        # Al desconectarse el cliente no queda el hilo del navegador.
+        self.assertEqual([thread.name for thread in threading.enumerate() if thread.name.startswith("moodle-browser")], [])
+
+    async def test_without_the_session_cache_only_the_browser_is_reused(self):
+        os.environ["MOODLE_SESSION_CACHE"] = "false"
+        with patch("moodle_tasks.session.sync_playwright", wraps=session.sync_playwright) as playwright:
+            async with Client(create_server(self.env_file)) as client:
+                for _ in range(2):
+                    result = await client.call_tool("get_assignment", {"assignment_id": FakeMoodle.ASSIGNMENT_ID})
+                    self.assertFalse(result.is_error, result)
+        self.assertEqual(playwright.call_count, 1)
+        # Las cookies no pasan de una herramienta a otra: cada llamada inicia sesión.
+        self.assertEqual(self.moodle.logins, 2)
+        sessions = self.root / "cache" / "sessions"
+        self.assertFalse(sessions.exists() and any(sessions.iterdir()))
 
     async def test_wrong_password_reports_an_error_and_keeps_no_session(self):
         self.env_file.write_text(f"MOODLE_URL={self.moodle.base_url}\nMOODLE_USERNAME={FakeMoodle.USERNAME}\nMOODLE_PASSWORD=incorrecta\n")

@@ -9,6 +9,7 @@ import secrets
 import shutil
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -35,7 +36,7 @@ from .listing import course_name, deadline_display, pending_table
 from .main import collect_assignments
 from .paths import UnsafePathError, protect_credentials, resolve_destination_directory
 from .profile import load_profile, remember_teacher, subject_key
-from .session import ensure_login, moodle_page
+from .session import BrowserThread, ensure_login, moodle_page
 from .storage import user_config_dir
 from .uploads import upload_files, validate_upload
 from .urls import ID_PATTERN, assignment_view_id, moodle_path, parse_id
@@ -377,6 +378,8 @@ class MoodleTools:
         # Memoria del proceso: materia de las tareas vistas y documentos ya validados, para no pedirlos de nuevo.
         self.known_tasks: dict[int, dict[str, str]] = {}
         self.drafts: OrderedDict[str, DeliveryDocument] = OrderedDict()
+        # Hilo de Moodle con su Chromium: el navegador y la sesión siguen abiertos entre herramientas.
+        self.browser = BrowserThread()
         self._secrets_stamp: tuple | None = None
         self._secrets: tuple[str | None, str | None] = (None, None)
 
@@ -406,7 +409,7 @@ class MoodleTools:
         try:
             if moodle:
                 async with self.moodle_lock:
-                    payload = await asyncio.to_thread(function, *args)
+                    payload = await asyncio.wrap_future(self.browser.submit(function, *args))
             else:
                 payload = await asyncio.to_thread(function, *args)
             result = compact(payload)
@@ -419,6 +422,10 @@ class MoodleTools:
         logger.info("tool=%s outcome=%s ms=%d chars=%d", tool, outcome, (time.monotonic() - started) * 1000,
                     len(result.content[0].text))
         return result
+
+    def close(self) -> None:
+        """Cierra el navegador de Moodle; el servidor lo llama al desconectarse el cliente."""
+        self.browser.close()
 
     def remember_task(self, identifier: int | None, task: Assignment) -> None:
         if identifier is not None:
@@ -669,8 +676,17 @@ def create_server(env_file: Path = ENV_FILE) -> MCPServer:
     # Las rutas protegidas ya cubren la carpeta de configuración predeterminada; un --env-file
     # propio (p. ej. el de setup --config-dir) también debe quedar fuera de subidas y descargas.
     protect_credentials(env_file)
-    server = MoodleServer("moodle", instructions=INSTRUCTIONS)
     tools = MoodleTools(env_file)
+
+    @asynccontextmanager
+    async def lifespan(_server: MCPServer):
+        try:
+            yield {}
+        finally:
+            # Al cerrarse el cliente no quedan procesos de Chromium huérfanos.
+            await asyncio.to_thread(tools.close)
+
+    server = MoodleServer("moodle", instructions=INSTRUCTIONS, lifespan=lifespan)
     readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=True)
     local_readonly = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
     download_annotations = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True)

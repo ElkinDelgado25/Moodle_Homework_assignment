@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -192,6 +193,57 @@ class EnsureLoginTests(unittest.TestCase):
 
     def test_no_cookies_goes_straight_to_login(self):
         self.assertEqual(self.run_case([]), (True, 1))
+
+
+class BrowserThreadTests(unittest.TestCase):
+    class FakeSession:
+        def __init__(self):
+            self.closed = threading.Event()
+            self.threads = set()
+
+        def use(self):
+            self.threads.add(threading.current_thread().name)
+            self.closed.clear()
+
+        def close(self):
+            self.threads.add(threading.current_thread().name)
+            self.closed.set()
+
+    def browser_thread(self, idle_seconds: float):
+        worker = session.BrowserThread(idle_seconds=idle_seconds)
+        worker.session = self.FakeSession()
+        self.addCleanup(worker.close)
+        return worker
+
+    def test_every_call_and_the_close_run_on_the_same_thread(self):
+        worker = self.browser_thread(60)
+        for _ in range(3):
+            worker.submit(worker.session.use).result(timeout=5)
+        worker.close()
+        self.assertTrue(worker.session.closed.is_set())
+        self.assertEqual(len(worker.session.threads), 1)
+        self.assertTrue(next(iter(worker.session.threads)).startswith("moodle-browser"))
+
+    def test_the_browser_closes_after_the_idle_time_and_reopens_on_demand(self):
+        worker = self.browser_thread(0.2)
+        worker.submit(worker.session.use).result(timeout=5)
+        self.assertTrue(worker.session.closed.wait(timeout=5))
+        worker.submit(worker.session.use).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+
+    def test_a_busy_browser_is_not_closed_for_being_idle(self):
+        worker = self.browser_thread(0.3)
+        worker.submit(worker.session.use).result(timeout=5)
+        for _ in range(4):
+            threading.Event().wait(0.15)
+            worker.submit(worker.session.use).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+
+    def test_the_thread_session_is_installed_only_in_the_browser_thread(self):
+        worker = session.BrowserThread()
+        self.addCleanup(worker.close)
+        self.assertIsNone(session.current_browser_session())
+        self.assertIs(worker.submit(session.current_browser_session).result(timeout=5), worker.session)
 
 
 if __name__ == "__main__":
