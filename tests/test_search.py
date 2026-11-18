@@ -65,6 +65,8 @@ class SearchTests(unittest.TestCase):
             more = json.dumps(self.event(4))
             body = '<div class="block_timeline"><button>Próximos 30 días</button>' + ''.join(self.event(i) for i in self.timeline_ids)
             body += f'<button onclick=\'this.insertAdjacentHTML("beforebegin", {more}); this.remove()\'>Mostrar más actividades</button></div>'
+            if getattr(self, "logged_in", False):
+                body += '<a href="/login/logout.php?sesskey=abc">Salir</a>'
         elif url.endswith("/my/courses.php"):
             body = '<a href="/course/view.php?id=7">Materia A</a><a href="/course/view.php?id=8">Materia B</a>'
         elif "/mod/assign/index.php" in url:
@@ -187,6 +189,23 @@ class SearchTests(unittest.TestCase):
             tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
         self.assertEqual(errors, [])
         self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])
+
+    def test_the_dashboard_loaded_by_the_login_check_is_not_loaded_again(self):
+        self.logged_in = True
+        self.page.goto("https://moodle.test/my/")
+        self.visited.clear()
+        tasks, stats = self.query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(stats["dashboard_pages_read"], 1)
+        self.assertNotIn("https://moodle.test/my/", self.visited)
+
+    def test_another_page_still_opens_the_dashboard(self):
+        self.logged_in = True
+        self.page.goto("https://moodle.test/my/courses.php")
+        self.visited.clear()
+        tasks, _ = self.query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(self.visited.count("https://moodle.test/my/"), 1)
 
     def test_overdue_excludes_future_deadlines(self):
         overdue, _ = self.query(mode="overdue", limit=None)

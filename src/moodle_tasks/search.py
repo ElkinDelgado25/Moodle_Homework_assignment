@@ -64,8 +64,19 @@ TIMELINE_EVENTS = """events => events.flatMap(e => {
 })"""
 
 
+DASHBOARD_PATHS = ("/my/", "/my/index.php")
+
+
+def on_dashboard(page: Page, config: Config) -> bool:
+    """La página ya muestra el Área personal con la sesión iniciada (así la deja ensure_login)."""
+    return (moodle_path(page.url, config.base_url) in DASHBOARD_PATHS
+            and bool(page.locator("a[href*='/login/logout.php']").count()))
+
+
 def dashboard_candidates(page: Page, config: Config, stats: dict):
-    open_page(page, config.base_url + "/my/")
+    # El Área personal es la página más pesada de Moodle: si ensure_login acaba de cargarla, se lee esa.
+    if not on_dashboard(page, config):
+        open_page(page, config.base_url + "/my/")
     stats["dashboard_pages_read"] += 1
     region = page.locator(".block_timeline, [data-block='timeline']").first
     if not region.count():
@@ -230,17 +241,15 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
 
     if mode == "upcoming":
         stats["source"] = "dashboard"
-        # Una página separada conserva la paginación mientras se leen detalles.
-        timeline = page.context.new_page()
+        # inspect no navega: la línea de tiempo se lee en la misma página, que puede ser el Área personal
+        # que ya cargó el inicio de sesión.
         try:
-            for candidate in dashboard_candidates(timeline, config, stats):
+            for candidate in dashboard_candidates(page, config, stats):
                 inspect(candidate)
                 if limit is not None and len(tasks) >= limit:
                     break
         except Exception as error:
             errors.append(f"La consulta de la línea de tiempo quedó incompleta: {error}")
-        finally:
-            timeline.close()
     timeline_ok = stats.get("timeline_status") in ("ok", "empty")
     if mode != "upcoming" or errors or (not tasks and not timeline_ok):
         stats["source"] = "course_indexes" if not tasks else "dashboard_and_course_indexes"

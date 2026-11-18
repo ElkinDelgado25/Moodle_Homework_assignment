@@ -119,6 +119,8 @@ class EndToEndTests(unittest.IsolatedAsyncioTestCase):
                 for _ in range(2):
                     listing = await client.call_tool("list_assignments")
                     self.assertFalse(listing.is_error, listing)
+                # Cada consulta lee el Área personal una sola vez: la que carga la comprobación de sesión.
+                self.assertEqual(sum(path == "/my/" for method, path in self.moodle.requests if method == "GET"), 2)
                 detail = await client.call_tool("get_assignment", {"assignment_id": FakeMoodle.ASSIGNMENT_ID})
                 self.assertFalse(detail.is_error, detail)
                 connection = await client.call_tool("check_moodle_connection")
