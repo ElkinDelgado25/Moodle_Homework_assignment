@@ -31,6 +31,14 @@ from .storage import atomic_write, sessions_dir, user_config_dir
 SESSION_MAX_AGE_SECONDS = 12 * 3600
 # Chromium ocupa ~100–200 MB: se cierra tras este tiempo sin herramientas de Moodle y se reabre al volver a usarse.
 BROWSER_IDLE_SECONDS = 10 * 60
+# Moodle se lee como texto: avatares, imágenes de cursos y fondos no se descargan. Es una opción de
+# Chromium y no un page.route, porque interceptar peticiones desactiva la caché HTTP y haría que CSS y
+# JavaScript se descargaran en cada página. El src de las imágenes de la consigna se sigue leyendo.
+LAUNCH_ARGS = ("--blink-settings=imagesEnabled=false",)
+
+
+def launch_browser(playwright):
+    return playwright.chromium.launch(headless=True, args=list(LAUNCH_ARGS))
 VERSION = 1
 
 
@@ -165,7 +173,7 @@ class BrowserSession:
         if self._browser is None:
             self._playwright = sync_playwright().start()
             try:
-                self._browser = self._playwright.chromium.launch(headless=True)
+                self._browser = launch_browser(self._playwright)
             except BaseException:
                 self.close()
                 raise
@@ -285,7 +293,7 @@ def moodle_page(config: Config, *, timeout_ms: int = 15_000, fresh: bool = False
     from .errors import MoodleAuthenticationError
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = launch_browser(playwright)
         try:
             state = None if fresh else load_state(config)
             context = browser.new_context(storage_state=state) if state else browser.new_context()

@@ -31,6 +31,7 @@ La ganancia grande está en el punto 2: antes, `cli.py` importaba todos los mód
 
 - **Imports por comando** en `src/moodle_tasks/cli.py`. Es la mejora que más se percibe.
 - **Chromium persistente en `serve`** (`BrowserThread` y `BrowserSession` en `session.py`). Todas las herramientas de Moodle corren en un único hilo que conserva el navegador y el contexto con las cookies; cada llamada abre solo una pestaña. Con `MOODLE_SESSION_CACHE=false` se reutiliza el proceso, nunca la sesión. Contra un Moodle local, a partir de la segunda herramienta cada llamada ahorra ~0,65 s en Linux (por ejemplo, `check_moodle_connection` pasa de ~770 ms a ~100 ms).
+- **Sin imágenes en las páginas de Moodle** (`LAUNCH_ARGS` en `session.py`). Chromium arranca con `imagesEnabled=false`: avatares, imágenes de cursos y fondos no se descargan. No se usa `page.route` porque interceptar peticiones desactiva la caché HTTP: en la medición, CSS y JavaScript se descargaban en cada página en vez de una vez.
 - **Generadores de documentos al primer uso** en `server.py` y `verification.py`. En Linux, importar el servidor MCP pasó de ~1,17 s a ~0,47 s: es el arranque que paga cada conversación nueva del agente.
 - **Configuración sin Playwright** en `src/moodle_tasks/config.py`. Leer `credentials.env` ya no importa Playwright (~110 ms): en Linux, importar el CLI pasó de ~160 ms a ~55 ms.
 - **Python 3.13** en instaladores, `mcp-moodle update` y CI, mediante la constante `moodle_tasks.PYTHON_VERSION`. Se mantiene `requires-python >= 3.11` y el CI prueba ambos intérpretes.

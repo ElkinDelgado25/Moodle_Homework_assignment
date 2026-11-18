@@ -195,6 +195,50 @@ class EnsureLoginTests(unittest.TestCase):
         self.assertEqual(self.run_case([]), (True, 1))
 
 
+class ImageBlockingTests(unittest.TestCase):
+    def test_moodle_pages_load_styles_and_scripts_but_not_images(self):
+        import collections
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        hits = collections.Counter()
+
+        class Moodle(BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits[self.path] += 1
+                if self.path == "/my/":
+                    body = (b'<link rel="stylesheet" href="/estilo.css"><script src="/app.js"></script>'
+                            b'<img id="avatar" src="/user/pix.php/1/f1.png" alt="Perfil">'
+                            b'<div style="background:url(/curso.jpg)">Curso</div>')
+                    kind = "text/html"
+                elif self.path == "/estilo.css":
+                    body, kind = b"body{color:#222}", "text/css"
+                elif self.path == "/app.js":
+                    body, kind = b"window.listo = true", "application/javascript"
+                else:
+                    body, kind = b"\x89PNG", "image/png"
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Moodle)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        config = Config(f"http://127.0.0.1:{server.server_port}", "estudiante", "secreto")
+        with session.moodle_page(config) as (_, page):
+            page.goto(config.base_url + "/my/", wait_until="load")
+            self.assertTrue(page.evaluate("window.listo"))
+            # La consigna sigue pudiendo leer la dirección de sus imágenes.
+            self.assertTrue(page.locator("#avatar").evaluate("img => img.src").endswith("/user/pix.php/1/f1.png"))
+        self.assertEqual((hits["/estilo.css"], hits["/app.js"]), (1, 1))
+        self.assertEqual(hits["/user/pix.php/1/f1.png"] + hits["/curso.jpg"], 0)
+
+
 class BrowserThreadTests(unittest.TestCase):
     class FakeSession:
         def __init__(self):
