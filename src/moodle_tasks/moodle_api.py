@@ -88,7 +88,10 @@ def action_events(page: Page, config: Config, since: datetime):
     """
     after = None
     for _ in range(MAX_EVENT_REQUESTS):
-        args = {"timesortfrom": int(since.timestamp()), "limitnum": EVENTS_PER_REQUEST}
+        # limittononsuspendedevents: como el bloque de línea de tiempo de Moodle, sin las tareas de cursos en los
+        # que la matrícula del estudiante está suspendida (la página nunca las mostraba).
+        args = {"timesortfrom": int(since.timestamp()), "limitnum": EVENTS_PER_REQUEST,
+                "limittononsuspendedevents": True}
         if after is not None:
             args["aftereventid"] = after
         data = call_service(page, config, "core_calendar_get_action_events_by_timesort", args)

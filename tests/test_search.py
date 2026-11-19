@@ -44,6 +44,8 @@ class SearchTests(unittest.TestCase):
         self.service = False
         self.service_error = False
         self.service_ids = (1, 2, 3, 4)
+        # Tareas de cursos con la matrícula suspendida: Moodle solo las omite si se pide limittononsuspendedevents.
+        self.suspended_ids = ()
         self.grouping = "inprogress"
         self.service_calls = []
         self.context.route("**/*", self.respond)
@@ -84,7 +86,10 @@ class SearchTests(unittest.TestCase):
                                               "nextoffset": 2}}]
         quiz = {"id": 99, "modulename": "quiz", "name": "Cuestionario", "url": "https://moodle.test/mod/quiz/view.php?id=9",
                 "timesort": int((self.now + timedelta(days=1)).timestamp())}
-        events = sorted([*(self.service_event(i) for i in self.service_ids), quiz], key=lambda event: event["timesort"])
+        ids = list(self.service_ids)
+        if not args.get("limittononsuspendedevents"):
+            ids += list(self.suspended_ids)
+        events = sorted([*(self.service_event(i) for i in ids), quiz], key=lambda event: event["timesort"])
         events = [event for event in events if event["timesort"] >= args["timesortfrom"]]
         if "aftereventid" in args:
             events = events[[event["id"] for event in events].index(args["aftereventid"]) + 1:]
@@ -280,6 +285,14 @@ class SearchTests(unittest.TestCase):
         self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
         # Páginas de dos eventos: [Tarea 1, cuestionario], [Tarea 2, Tarea 3], [Tarea 4]. Se detiene al tener dos tareas.
         self.assertEqual([call["args"].get("aftereventid") for call in self.service_calls], [None, 99, 103])
+
+    def test_the_timeline_service_skips_courses_where_the_enrolment_is_suspended(self):
+        # Igual que el bloque de línea de tiempo de Moodle, que siempre pide limittononsuspendedevents=true.
+        self.service_ids = (1, 2, 3)
+        self.suspended_ids = (4,)
+        tasks, _ = self.service_query(mode="upcoming", limit=5)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3"])
+        self.assertTrue(all(call["args"].get("limittononsuspendedevents") is True for call in self.service_calls))
 
     def test_the_timeline_service_keeps_the_rules_for_action_texts(self):
         self.tasks[3]["action_text"] = "Hantar tugasan"
