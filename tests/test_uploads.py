@@ -35,7 +35,7 @@ class AssignmentUploadTests(unittest.TestCase):
                       "drafts": True, "status_extra": "", "banner": False, "delayed_files": [], "hide_in_form": False,
                       "statement": False, "form_error": False, "form_cancel": False, "reject_without_cancel": False,
                       "sanitize": False, "maxfiles_js": None, "maxfiles_attr": "2", "late_delete_dialog": False,
-                      "global_file_input": False, "late_filepicker": False}
+                      "global_file_input": False, "late_filepicker": False, "table_view": False}
         self.page.route("**/*", self.respond)
 
     def tearDown(self):
@@ -99,7 +99,12 @@ class AssignmentUploadTests(unittest.TestCase):
         current_files = self.state["saved_files"]
         if current_files is None:
             current_files = [] if self.state["hide_in_form"] else self.state["existing_files"]
-        existing = "".join(f'<div class="fp-file"><input type="checkbox" data-togglegroup="files" data-toggle="slave" data-fullname="{name}"><div class="fp-filename">{name}</div></div>' for name in current_files)
+        if self.state["table_view"]:
+            # Vista de tabla del tema de la ULEAM: filas con .fp-filename-icon y ningún .fp-file.
+            existing = "".join(f'<tr><td><input type="checkbox" data-togglegroup="files" data-toggle="slave" data-fullname="{name}"></td><td><span class="fp-filename-icon"><a href="#"><span class="fp-filename">{name}</span></a></span></td></tr>' for name in current_files)
+            existing = f'<div class="fp-tableview"><table><tbody>{existing}</tbody></table></div>'
+        else:
+            existing = "".join(f'<div class="fp-file"><input type="checkbox" data-togglegroup="files" data-toggle="slave" data-fullname="{name}"><div class="fp-filename">{name}</div></div>' for name in current_files)
         add_control = '<div class="fp-btn-add"><a role="button" id="add-link">Agregar</a></div>' if self.state.get("inner_add") else '<button type="button" class="fp-btn-add">Agregar</button>'
         save_control = self.state.get("save_control") or '<button type="submit">Guardar cambios</button>'
         cancel_control = '<button type="submit" name="cancel" value="1">Cancelar</button>' if self.state["form_cancel"] else ""
@@ -130,17 +135,30 @@ class AssignmentUploadTests(unittest.TestCase):
             }});
           }});
           const fm = document.querySelector('.filemanager');
+          const tableView = {str(self.state["table_view"]).lower()};
+          const hasFiles = () => !!fm.querySelector('.fp-file, .fp-filename-icon');
+          const addEntry = (label) => {{
+            if (tableView) {{
+              let body = fm.querySelector('.fp-tableview tbody');
+              if (!body) {{ fm.querySelector('.fp-content').innerHTML = '<div class="fp-tableview"><table><tbody></tbody></table></div>'; body = fm.querySelector('.fp-tableview tbody'); }}
+              const row = document.createElement('tr');
+              row.innerHTML = '<td><input type="checkbox" data-togglegroup="files" data-toggle="slave"></td><td><span class="fp-filename-icon"><a href="#"><span class="fp-filename"></span></a></span></td>';
+              row.querySelector('input').setAttribute('data-fullname', label);
+              row.querySelector('.fp-filename').textContent = label;
+              body.appendChild(row);
+            }} else {{
+              const item = document.createElement('div'); item.className = 'fp-file';
+              const name = document.createElement('div'); name.className = 'fp-filename'; name.textContent = label;
+              item.appendChild(name); fm.querySelector('.fp-content').appendChild(item);
+            }}
+          }};
           if (fm) {{
             const delayed = {list(self.state["delayed_files"])!r};
             setTimeout(() => {{
-              delayed.forEach((name) => {{
-                const item = document.createElement('div'); item.className = 'fp-file';
-                item.innerHTML = '<div class="fp-filename"></div>'; item.firstChild.textContent = name;
-                fm.querySelector('.fp-content').appendChild(item);
-              }});
+              delayed.forEach((name) => addEntry(name));
               fm.classList.remove('fm-updating', 'fm-loading');
               fm.classList.add('fm-loaded');
-              if (!fm.querySelector('.fp-file')) fm.classList.add('fm-nofiles', 'fm-noitems');
+              if (!hasFiles()) fm.classList.add('fm-nofiles', 'fm-noitems');
             }}, delayed.length ? 600 : 50);
             fm.querySelector('.fp-vb-details').onclick = (event) => event.currentTarget.classList.add('checked');
             const add = fm.querySelector('.fp-btn-add a, .fp-btn-add');
@@ -159,9 +177,7 @@ class AssignmentUploadTests(unittest.TestCase):
                   }}
                   let label = file.name;
                   if (sanitize) label = label.replace(/[&<>"`|':\\\\/]/g, '').replace(/\\s+/g, ' ').trim();
-                  const item = document.createElement('div'); item.className = 'fp-file';
-                  const name = document.createElement('div'); name.className = 'fp-filename'; name.textContent = label;
-                  item.appendChild(name); fm.querySelector('.fp-content').appendChild(item);
+                  addEntry(label);
                   dialog.remove();
                 }};
               }};
@@ -171,7 +187,7 @@ class AssignmentUploadTests(unittest.TestCase):
               setTimeout(() => {{
                 const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog');
                 dialog.innerHTML = '<button type="button" id="delete">Sí</button>'; document.body.appendChild(dialog);
-                dialog.querySelector('#delete').onclick = () => {{ fm.querySelectorAll('.fp-file input:checked').forEach((input) => input.closest('.fp-file').remove()); dialog.remove(); }};
+                dialog.querySelector('#delete').onclick = () => {{ fm.querySelectorAll('.fp-content input:checked').forEach((input) => input.closest('.fp-file, tr').remove()); dialog.remove(); }};
               }}, {1200 if self.state["late_delete_dialog"] else 0});
             }};
           }}
@@ -215,6 +231,25 @@ class AssignmentUploadTests(unittest.TestCase):
         self.assertFalse(submission["submitted_by_tool"])
         self.assertIn("Enviar tarea", submission["note"])
         self.assertNotIn(("GET", "/grade"), self.state["requests"])
+
+    def test_table_view_of_the_file_manager_confirms_the_upload(self):
+        # Temas como el de la ULEAM muestran el área de entrega en vista de tabla, sin ningún .fp-file.
+        self.state["table_view"] = True
+        result = self.upload()
+        self.assertEqual(result["status"], "uploaded")
+        self.assertEqual(result["uploaded_files"], ["entrega.docx", "entrega.pdf"])
+        self.assertEqual(self.state["saved_files"], ["entrega.docx", "entrega.pdf"])
+
+    def test_table_view_existing_files_block_and_can_be_replaced(self):
+        self.state["table_view"] = True
+        self.state["existing_files"] = ["antigua.pdf"]
+        blocked = self.upload()
+        self.assertEqual(blocked["status"], "blocked_existing_files")
+        self.assertEqual(blocked["existing_files"], ["antigua.pdf"])
+        replaced = self.upload(replace_existing=True)
+        self.assertEqual(replaced["status"], "uploaded")
+        self.assertEqual(replaced["replaced_files"], ["antigua.pdf"])
+        self.assertEqual(self.state["saved_files"], ["entrega.docx", "entrega.pdf"])
 
     def test_drafts_disabled_reports_submitted_state(self):
         self.state["drafts"] = False

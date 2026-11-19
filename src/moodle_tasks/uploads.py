@@ -106,11 +106,13 @@ def _click_control(root: Locator | Page, pattern: re.Pattern[str], selectors: st
 
 
 def _file_names(filemanager: Locator) -> list[str]:
-    files = filemanager.locator(".fp-file")
+    # Vista de iconos: cada archivo es un .fp-file. Vista de tabla (la que usan temas como el de la ULEAM):
+    # cada archivo es una fila con .fp-filename-icon y no hay ningún .fp-file.
+    files = filemanager.locator(".fp-file, .fp-filename-icon")
     names: list[str] = []
     for index in range(files.count()):
         item = files.nth(index)
-        if item.locator(".fp-folder").count():
+        if item.locator(".fp-folder").count() or "fp-folder" in (item.get_attribute("class") or "").split():
             continue
         name = item.locator(".fp-filename").first.inner_text() if item.locator(".fp-filename").count() else ""
         name = name.strip() or (item.get_attribute("data-filename") or item.get_attribute("title") or "").strip()
@@ -339,7 +341,7 @@ def _remove_existing_files(page: Page, filemanager: Locator) -> list[str]:
                 checkbox = checkboxes.nth(index)
                 full_name = checkbox.get_attribute("data-fullname") or ""
                 row_text = checkbox.evaluate(
-                    "element => element.closest('.fp-file')?.innerText || element.parentElement?.innerText || ''"
+                    "element => element.closest('.fp-file, tr')?.innerText || element.parentElement?.innerText || ''"
                 )
                 if full_name == name or name in row_text:
                     checkbox.check(force=True)
