@@ -40,6 +40,14 @@ class SearchTests(unittest.TestCase):
             6: {"title": "Aún no abierta", "status": "Todavía no se han realizado envíos", "grade": "-", "open": 5, "due": 6},
         }
         self.timeline_ids = (1, 2, 3)
+        # Servicios AJAX de Moodle: desactivados salvo en las pruebas que los usan.
+        self.service = False
+        self.service_error = False
+        self.service_ids = (1, 2, 3, 4)
+        # Tareas de cursos con la matrícula suspendida: Moodle solo las omite si se pide limittononsuspendedevents.
+        self.suspended_ids = ()
+        self.grouping = "inprogress"
+        self.service_calls = []
         self.context.route("**/*", self.respond)
 
     def tearDown(self):
@@ -58,15 +66,61 @@ class SearchTests(unittest.TestCase):
                 f'<a aria-label="Pendiente para {self.date(task["due"])}" href="/mod/assign/view.php?id={identifier}">Tarea {identifier}</a>'
                 f'<small>Vencimiento de Tarea · Materia A</small></div>{action}</div>')
 
+    def service_event(self, identifier):
+        task = self.tasks[identifier]
+        actionable = task['open'] <= 0 and task['grade'] == '-' and task['status'] != 'Enviado para calificar'
+        due = self.now + timedelta(days=task['due'])
+        return {"id": 100 + identifier, "modulename": "assign", "activityname": f"Tarea {identifier}",
+                "name": f"Tarea {identifier} está en fecha de entrega", "timesort": int(due.timestamp()),
+                "url": f"https://moodle.test/mod/assign/view.php?id={identifier}",
+                "course": {"id": 7, "fullname": "Materia A"},
+                "action": {"name": task.get("action_text", "Agregar entrega"), "actionable": actionable,
+                           "url": f"https://moodle.test/mod/assign/view.php?id={identifier}&action=editsubmission"}}
+
+    def service_response(self, call):
+        if self.service_error:
+            return [{"error": True, "exception": {"errorcode": "invalidparameter", "message": "Invalid parameter"}}]
+        args = call["args"]
+        if call["methodname"] == "core_course_get_enrolled_courses_by_timeline_classification":
+            return [{"error": False, "data": {"courses": [{"id": 7, "fullname": "Materia A"}, {"id": 8, "fullname": "Materia B"}],
+                                              "nextoffset": 2}}]
+        quiz = {"id": 99, "modulename": "quiz", "name": "Cuestionario", "url": "https://moodle.test/mod/quiz/view.php?id=9",
+                "timesort": int((self.now + timedelta(days=1)).timestamp())}
+        ids = list(self.service_ids)
+        if not args.get("limittononsuspendedevents"):
+            ids += list(self.suspended_ids)
+        events = sorted([*(self.service_event(i) for i in ids), quiz], key=lambda event: event["timesort"])
+        events = [event for event in events if event["timesort"] >= args["timesortfrom"]]
+        if "aftereventid" in args:
+            events = events[[event["id"] for event in events].index(args["aftereventid"]) + 1:]
+        page = events[:args["limitnum"]]
+        return [{"error": False, "data": {"events": page, "firstid": page[0]["id"] if page else 0,
+                                          "lastid": page[-1]["id"] if page else 0}}]
+
     def respond(self, route):
         url = route.request.url
         self.visited.append(url)
+        if "/lib/ajax/service.php" in url:
+            if not self.service:
+                route.fulfill(status=404, content_type="text/html", body="")
+                return
+            call = json.loads(route.request.post_data)[0]
+            self.service_calls.append({"url": url, **call})
+            route.fulfill(content_type="application/json", body=json.dumps(self.service_response(call)))
+            return
         if url.endswith("/my/"):
             more = json.dumps(self.event(4))
             body = '<div class="block_timeline"><button>Próximos 30 días</button>' + ''.join(self.event(i) for i in self.timeline_ids)
             body += f'<button onclick=\'this.insertAdjacentHTML("beforebegin", {more}); this.remove()\'>Mostrar más actividades</button></div>'
+            if getattr(self, "logged_in", False):
+                body += '<a href="/login/logout.php?sesskey=abc">Salir</a>'
+            if self.service:
+                body += "<script>window.M = {cfg: {sesskey: 'clave123'}};</script>"
         elif url.endswith("/my/courses.php"):
             body = '<a href="/course/view.php?id=7">Materia A</a><a href="/course/view.php?id=8">Materia B</a>'
+            if self.service:
+                body = (f'<div data-region="courses-view" data-grouping="{self.grouping}"></div>'
+                        "<script>window.M = {cfg: {sesskey: 'clave123'}};</script>") + body
         elif "/mod/assign/index.php" in url:
             ids = (1, 2, 3) if "id=7" in url else (4, 5, 6)
             body = '<table>'
@@ -187,6 +241,95 @@ class SearchTests(unittest.TestCase):
             tasks, errors = executor.submit(collect_assignments, self.config, mode='upcoming', limit=2, only_pending=True).result()
         self.assertEqual(errors, [])
         self.assertEqual([task.title for task in tasks], ['Tarea 3', 'Tarea 4'])
+
+    def test_the_dashboard_loaded_by_the_login_check_is_not_loaded_again(self):
+        self.logged_in = True
+        self.page.goto("https://moodle.test/my/")
+        self.visited.clear()
+        tasks, stats = self.query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(stats["dashboard_pages_read"], 1)
+        self.assertNotIn("https://moodle.test/my/", self.visited)
+
+    def test_another_page_still_opens_the_dashboard(self):
+        self.logged_in = True
+        self.page.goto("https://moodle.test/my/courses.php")
+        self.visited.clear()
+        tasks, _ = self.query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(self.visited.count("https://moodle.test/my/"), 1)
+
+    def service_query(self, **kwargs):
+        self.service = True
+        self.page.goto("https://moodle.test/my/")
+        self.visited.clear()
+        return self.query(**kwargs)
+
+    def test_the_timeline_service_finds_the_same_tasks_without_waiting_for_the_dashboard(self):
+        tasks, stats = self.service_query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(stats["timeline_source"], "service")
+        self.assertEqual(stats["dashboard_load_more"], 0)
+        self.assertTrue(all(task.course == "Materia A" and task.due_at for task in tasks))
+        self.assertEqual(tasks[0].due_at, (self.now + timedelta(days=3)).isoformat())
+        self.assertIn("todas las entregas futuras", stats["coverage"])
+        # Una sola petición JSON con la clave de sesión de la página; ni índices ni actividades abiertas.
+        self.assertEqual(len(self.service_calls), 1)
+        self.assertIn("sesskey=clave123", self.service_calls[0]["url"])
+        self.assertEqual(self.service_calls[0]["methodname"], "core_calendar_get_action_events_by_timesort")
+        self.assertFalse(any("/mod/assign/" in url or "/my/" in url for url in self.visited))
+
+    def test_the_timeline_service_asks_for_more_events_only_when_needed(self):
+        with patch("moodle_tasks.moodle_api.EVENTS_PER_REQUEST", 2):
+            tasks, _ = self.service_query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        # Páginas de dos eventos: [Tarea 1, cuestionario], [Tarea 2, Tarea 3], [Tarea 4]. Se detiene al tener dos tareas.
+        self.assertEqual([call["args"].get("aftereventid") for call in self.service_calls], [None, 99, 103])
+
+    def test_the_timeline_service_skips_courses_where_the_enrolment_is_suspended(self):
+        # Igual que el bloque de línea de tiempo de Moodle, que siempre pide limittononsuspendedevents=true.
+        self.service_ids = (1, 2, 3)
+        self.suspended_ids = (4,)
+        tasks, _ = self.service_query(mode="upcoming", limit=5)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3"])
+        self.assertTrue(all(call["args"].get("limittononsuspendedevents") is True for call in self.service_calls))
+
+    def test_the_timeline_service_keeps_the_rules_for_action_texts(self):
+        self.tasks[3]["action_text"] = "Hantar tugasan"
+        self.tasks[4]["action_text"] = "Editar entrega"
+        tasks, stats = self.service_query(mode="upcoming", limit=5)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3"])
+        self.assertEqual(stats["availability_unconfirmed"], 1)
+        self.assertEqual(stats["unrecognized_action_texts"], ["Hantar tugasan"])
+
+    def test_an_empty_timeline_service_is_a_complete_answer(self):
+        self.service_ids = ()
+        tasks, stats = self.service_query(mode="upcoming", limit=5)
+        self.assertEqual(tasks, [])
+        self.assertEqual(stats["timeline_status"], "empty")
+        self.assertFalse(any("/mod/assign/index.php" in url or "courses.php" in url for url in self.visited))
+
+    def test_a_failing_service_falls_back_to_the_dashboard(self):
+        self.service_error = True
+        tasks, stats = self.service_query(mode="upcoming", limit=2)
+        self.assertEqual([task.title for task in tasks], ["Tarea 3", "Tarea 4"])
+        self.assertEqual(stats["timeline_source"], "page")
+        self.assertIn("invalidparameter", stats["service_error"])
+        self.assertEqual(stats["dashboard_load_more"], 1)
+
+    def test_the_courses_service_uses_the_filter_chosen_in_my_courses(self):
+        tasks, stats = self.service_query(mode="all", limit=None)
+        self.assertEqual([task.title for task in tasks], ["Vencida", "Pendiente reciente", "Pendiente anterior", "Aún no abierta"])
+        self.assertEqual(stats["courses_source"], "service")
+        self.assertEqual(stats["courses_found"], 2)
+        self.assertEqual([call["args"]["classification"] for call in self.service_calls], ["inprogress"])
+
+    def test_a_filter_the_service_cannot_reproduce_reads_the_course_cards(self):
+        self.grouping = "customfield"
+        tasks, stats = self.service_query(mode="all", limit=None)
+        self.assertEqual(len(tasks), 4)
+        self.assertEqual(stats["courses_source"], "page")
+        self.assertEqual(self.service_calls, [])
 
     def test_overdue_excludes_future_deadlines(self):
         overdue, _ = self.query(mode="overdue", limit=None)

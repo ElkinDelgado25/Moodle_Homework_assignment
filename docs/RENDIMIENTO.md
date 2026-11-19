@@ -8,7 +8,7 @@ Este documento explica cómo arranca Moodle MCP, qué se midió en la auditoría
 
 1. **Intérprete y paquete.** Python importa `moodle_tasks.cli`, que solo carga `argparse`, la configuración (`config.py`, sin Playwright) y Sentry. Es el coste más pequeño.
 2. **Comando elegido.** Cada comando se importa cuando se usa. `status` y `tasks` no cargan `mcp`, Playwright ni los generadores de documentos; `serve` carga el servidor MCP y Playwright, pero no `pypdf`, `python-docx` ni `fpdf2`, que esperan a la primera herramienta que genera o verifica un entregable.
-3. **Navegador.** El primer `chromium.launch()` de cada proceso abre Chromium y tarda más que todo lo anterior. Se paga una vez por ejecución, no por herramienta MCP.
+3. **Navegador.** El primer `chromium.launch()` abre Chromium y tarda más que todo lo anterior. En la terminal se paga en cada comando. En `serve`, un hilo dedicado mantiene Chromium y la sesión de Moodle abiertos entre herramientas: solo lo paga la primera herramienta de Moodle de la conversación, o la primera tras 10 minutos sin usarlas.
 
 El bytecode compilado (`.pyc`) evita recompilar módulos en cada arranque. Con `--compile-bytecode` ese trabajo ocurre durante la instalación, no cuando abres una terminal.
 
@@ -27,9 +27,28 @@ En la misma máquina, Python 3.13 fue alrededor de un 4 % más rápido que 3.11 
 
 La ganancia grande está en el punto 2: antes, `cli.py` importaba todos los módulos al cargarse, de modo que `status` pagaba el coste de `mcp`, Playwright y `fpdf2`. Ahora esos imports viven dentro de la rama del comando que los necesita y una prueba de arquitectura ([`tests/test_architecture.py`](../tests/test_architecture.py)) impide que vuelvan arriba.
 
+### Validación contra el Moodle de la ULEAM
+
+Comprobado el 18 de noviembre de 2026 con una cuenta de estudiante (Linux, zona horaria `America/Guayaquil`), en solo lectura y comparando la rama con `main`. Cada tiempo es una ejecución sobre la red real, así que varía de una consulta a otra.
+
+| Consulta (`only_pending=true`) | Tareas | `main` | Chromium persistente y servicios AJAX |
+| --- | --- | --- | --- |
+| `upcoming` | 6 | 12,0 s | 5,0 s |
+| `overdue` | 3 | 18,9 s | 11,1 s |
+| `all` | 16 | 21,1 s | 12,0 s |
+| Tres `upcoming` seguidos (límite 5) en el mismo servidor | 5 | 14,5 / 10,2 / 11,0 s | 5,2 / 4,6 / 5,8 s |
+
+- **Servicios AJAX.** `core_calendar_get_action_events_by_timesort` y `core_course_get_enrolled_courses_by_timeline_classification` responden con la sesión del estudiante, y Mis cursos publica `data-grouping`: `stats` muestra `timeline_source=service` y `courses_source=service`, sin `service_error`. Las tres consultas devuelven las mismas tareas, con las mismas fechas, que la línea de tiempo y los índices dibujados.
+- **Fechas.** `timesort` convertido con la hora del equipo coincide con el cierre que muestra Moodle cuando la zona horaria del equipo es la del perfil. Si no coinciden, la hora mostrada puede diferir de la página de Moodle; el tiempo restante se sigue calculando con el reloj del equipo.
+- **Subida sin imágenes.** Los controles del selector de archivos del tema `academi` no dependen de imágenes: «Agregar...» es un icono de fuente (`fa-circle-plus`) y «Subir un archivo» es texto con un icono de 16×16 de tamaño fijo. El área de entrega se muestra en vista de tabla, que `_file_names` reconoce.
+- **Procesos.** Con el navegador abierto hay un proceso de Chromium; tras `close()` y tras el cierre por inactividad no queda ninguno.
+
 ## Qué se cambió
 
 - **Imports por comando** en `src/moodle_tasks/cli.py`. Es la mejora que más se percibe.
+- **Chromium persistente en `serve`** (`BrowserThread` y `BrowserSession` en `session.py`). Todas las herramientas de Moodle corren en un único hilo que conserva el navegador y el contexto con las cookies; cada llamada abre solo una pestaña. Con `MOODLE_SESSION_CACHE=false` se reutiliza el proceso, nunca la sesión. Contra un Moodle local, a partir de la segunda herramienta cada llamada ahorra ~0,65 s en Linux (por ejemplo, `check_moodle_connection` pasa de ~770 ms a ~100 ms).
+- **Servicios AJAX de Moodle** (`moodle_api.py`). La línea de tiempo y la lista de cursos se piden como JSON a los mismos servicios que usan esas páginas, en vez de esperar a que el tema dibuje las tarjetas y pulsar «Mostrar más». Si el servicio falla, se lee la página que ya está cargada, sin coste extra. Además, una línea de tiempo ordenada por cursos o con un filtro corto ya no obliga a recorrer los índices de todas las materias.
+- **Sin imágenes en las páginas de Moodle** (`LAUNCH_ARGS` en `session.py`). Chromium arranca con `imagesEnabled=false`: avatares, imágenes de cursos y fondos no se descargan. No se usa `page.route` porque interceptar peticiones desactiva la caché HTTP: en la medición, CSS y JavaScript se descargaban en cada página en vez de una vez.
 - **Generadores de documentos al primer uso** en `server.py` y `verification.py`. En Linux, importar el servidor MCP pasó de ~1,17 s a ~0,47 s: es el arranque que paga cada conversación nueva del agente.
 - **Configuración sin Playwright** en `src/moodle_tasks/config.py`. Leer `credentials.env` ya no importa Playwright (~110 ms): en Linux, importar el CLI pasó de ~160 ms a ~55 ms.
 - **Python 3.13** en instaladores, `mcp-moodle update` y CI, mediante la constante `moodle_tasks.PYTHON_VERSION`. Se mantiene `requires-python >= 3.11` y el CI prueba ambos intérpretes.
@@ -59,11 +78,10 @@ En Apple Silicon, `uv` y Playwright descargan binarios `arm64` nativos; no uses 
 
 ### Agentes MCP
 
-El cliente lanza el servidor al inicio de la conversación y lo mantiene vivo. Por eso el coste de arranque se paga una vez por sesión y no por pregunta. Si tu cliente reinicia el servidor con frecuencia (por ejemplo, al abrir cada conversación), el arranque en caliente de ~1,3 s es el número que vas a percibir.
+El cliente lanza el servidor al inicio de la conversación y lo mantiene vivo. Por eso el coste de arranque se paga una vez por sesión y no por pregunta. Lo mismo ocurre con Chromium: se abre con la primera herramienta de Moodle, se reutiliza en las siguientes y se cierra cuando el cliente se desconecta o tras 10 minutos sin uso, de modo que no quedan procesos del navegador abiertos. Si tu cliente reinicia el servidor con frecuencia (por ejemplo, al abrir cada conversación), el arranque en caliente de ~1,3 s es el número que vas a percibir.
 
 ## Trabajo futuro
 
-- **Reutilizar Chromium entre llamadas.** Hoy cada herramienta abre y cierra su propio navegador. Mantener una instancia viva ahorraría entre 0,5 s y 1,5 s por llamada, pero Playwright sincrónico ata sus objetos al hilo que los creó y el servidor MCP atiende llamadas en hilos distintos. Hacerlo bien exige mover la sesión a un hilo dedicado con una cola de trabajos; es un cambio de arquitectura que no se incluyó en esta auditoría para no arriesgar la estabilidad de las descargas autenticadas.
 - **Medir con `python -X importtime`** en tu equipo antes de optimizar más. Cualquier cambio debe acompañarse de una medición reproducible.
 - **Revisar el tamaño de las dependencias** si `mcp` o `playwright` incorporan imports costosos en versiones futuras.
 

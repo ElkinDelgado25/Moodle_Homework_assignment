@@ -236,7 +236,7 @@ Antes de copiarlos, el servidor los verifica: campos de portada completos, PDF l
 ## Notas
 
 - Si Moodle responde con un error como `HTTP 502`, la consulta no se completó. Vuelve a intentarlo cuando el servidor esté disponible.
-- La búsqueda rápida respeta el filtro de la línea de tiempo; la completa consulta los índices de las materias visibles en Mis cursos. Ambas muestran su alcance. Si no encuentra resultados, no puede descartar tareas fuera de esa cobertura.
+- La búsqueda rápida pide a Moodle todas las entregas futuras de la línea de tiempo (si ese servicio no está disponible, lee la línea de tiempo con su filtro); la completa consulta los índices de las materias visibles en Mis cursos, con el filtro que tengas elegido en esa vista. Ambas muestran su alcance. Si no encuentra resultados, no puede descartar tareas fuera de esa cobertura.
 - Para identificar pendientes comprueba los datos de entrega y nota disponibles en los listados: una actividad ya calificada o que indique no subir documentos no se cuenta como pendiente solo por figurar sin entrega.
 - Las cuentas institucionales de ULEAM usan Microsoft 365 y la selección del mismo perfil cuando aparece «Use a different account». Si Microsoft exige CAPTCHA, códigos o verificación adicional, el programa no los resuelve ni afirma que la sesión esté validada.
 - Si tienes una prórroga, `get_assignment()` usa la fecha prorrogada como cierre y devuelve aparte el cierre original y la fecha límite para entregas tardías.

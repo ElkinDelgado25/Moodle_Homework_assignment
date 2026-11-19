@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -192,6 +193,111 @@ class EnsureLoginTests(unittest.TestCase):
 
     def test_no_cookies_goes_straight_to_login(self):
         self.assertEqual(self.run_case([]), (True, 1))
+
+
+class ImageBlockingTests(unittest.TestCase):
+    def test_moodle_pages_load_styles_and_scripts_but_not_images(self):
+        import collections
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        hits = collections.Counter()
+
+        class Moodle(BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits[self.path] += 1
+                if self.path == "/my/":
+                    body = (b'<link rel="stylesheet" href="/estilo.css"><script src="/app.js"></script>'
+                            b'<img id="avatar" src="/user/pix.php/1/f1.png" alt="Perfil">'
+                            b'<div style="background:url(/curso.jpg)">Curso</div>')
+                    kind = "text/html"
+                elif self.path == "/estilo.css":
+                    body, kind = b"body{color:#222}", "text/css"
+                elif self.path == "/app.js":
+                    body, kind = b"window.listo = true", "application/javascript"
+                else:
+                    body, kind = b"\x89PNG", "image/png"
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Moodle)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        config = Config(f"http://127.0.0.1:{server.server_port}", "estudiante", "secreto")
+        with session.moodle_page(config) as (_, page):
+            page.goto(config.base_url + "/my/", wait_until="load")
+            self.assertTrue(page.evaluate("window.listo"))
+            # La consigna sigue pudiendo leer la dirección de sus imágenes.
+            self.assertTrue(page.locator("#avatar").evaluate("img => img.src").endswith("/user/pix.php/1/f1.png"))
+        self.assertEqual((hits["/estilo.css"], hits["/app.js"]), (1, 1))
+        self.assertEqual(hits["/user/pix.php/1/f1.png"] + hits["/curso.jpg"], 0)
+
+
+class BrowserThreadTests(unittest.TestCase):
+    class FakeSession:
+        def __init__(self):
+            self.closed = threading.Event()
+            self.threads = set()
+
+        def use(self):
+            self.threads.add(threading.current_thread().name)
+            self.closed.clear()
+
+        def close(self):
+            self.threads.add(threading.current_thread().name)
+            self.closed.set()
+
+    def browser_thread(self, idle_seconds: float):
+        worker = session.BrowserThread(idle_seconds=idle_seconds)
+        worker.session = self.FakeSession()
+        self.addCleanup(worker.close)
+        return worker
+
+    def test_every_call_and_the_close_run_on_the_same_thread(self):
+        worker = self.browser_thread(60)
+        for _ in range(3):
+            worker.submit(worker.session.use).result(timeout=5)
+        worker.close()
+        self.assertTrue(worker.session.closed.is_set())
+        self.assertEqual(len(worker.session.threads), 1)
+        self.assertTrue(next(iter(worker.session.threads)).startswith("moodle-browser"))
+
+    def test_a_timer_that_wakes_up_early_checks_again_instead_of_giving_up(self):
+        worker = self.browser_thread(0.3)
+        worker.submit(worker.session.use).result(timeout=5)
+        with worker._lock:
+            worker._timer.cancel()
+        # Comprobación antes de tiempo, como un temporizador que despierta unos milisegundos antes (Windows).
+        worker._executor.submit(worker._close_session_if_idle).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+        self.assertTrue(worker.session.closed.wait(timeout=5))
+
+    def test_the_browser_closes_after_the_idle_time_and_reopens_on_demand(self):
+        worker = self.browser_thread(0.2)
+        worker.submit(worker.session.use).result(timeout=5)
+        self.assertTrue(worker.session.closed.wait(timeout=5))
+        worker.submit(worker.session.use).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+
+    def test_a_busy_browser_is_not_closed_for_being_idle(self):
+        worker = self.browser_thread(0.3)
+        worker.submit(worker.session.use).result(timeout=5)
+        for _ in range(4):
+            threading.Event().wait(0.15)
+            worker.submit(worker.session.use).result(timeout=5)
+        self.assertFalse(worker.session.closed.is_set())
+
+    def test_the_thread_session_is_installed_only_in_the_browser_thread(self):
+        worker = session.BrowserThread()
+        self.addCleanup(worker.close)
+        self.assertIsNone(session.current_browser_session())
+        self.assertIs(worker.submit(session.current_browser_session).result(timeout=5), worker.session)
 
 
 if __name__ == "__main__":

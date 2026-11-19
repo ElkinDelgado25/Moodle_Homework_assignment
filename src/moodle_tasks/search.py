@@ -1,5 +1,6 @@
 """Búsqueda por línea de tiempo o índices de tareas, con alcance explícito."""
 
+import itertools
 import re
 from datetime import datetime
 from urllib.parse import parse_qs, urlsplit
@@ -8,6 +9,7 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .core import Assignment, is_pending, open_page, submission_state
 from .config import Config
+from .moodle_api import MoodleServiceError, action_events, enrolled_courses
 from .urls import assignment_view_id, moodle_path, parse_id
 
 
@@ -49,12 +51,19 @@ def assignment_url(url: str, base_url: str) -> str | None:
 # El enlace action=editsubmission de la línea de tiempo sirve para «Agregar entrega» (sin entregar) y para
 # «Editar entrega» (ya entregada): solo el texto los distingue. Un texto que no se reconoce deja la disponibilidad
 # sin confirmar (null) en vez de descartar la tarea, que haría desaparecer pendientes sin ningún aviso.
-TIMELINE_EVENTS = """events => events.flatMap(e => {
+# Los mismos textos sirven a la página dibujada y al servicio de la línea de tiempo.
+ADD_SUBMISSION = (r"Agregar entrega|Agregar envío|Añadir entrega|Añadir envío|Add submission|Adicionar (?:entrega|envio)|"
+                  r"Ajouter un travail|Abgabe hinzufügen")
+EDIT_SUBMISSION = (r"Editar entrega|Editar envío|Modificar entrega|Edit submission|Editar tarefa|Modifier le travail|"
+                   r"Abgabe bearbeiten")
+SUBMISSION_ACTION_URL = r"[?&]action=editsubmission(?:&|$)"
+TIMELINE_EVENTS = """(events, [addText, editText, actionUrl]) => events.flatMap(e => {
     const a = e.querySelector('a[href*="/mod/assign/view.php"]');
     if (!a) return [];
-    const ADD = /Agregar entrega|Agregar envío|Añadir entrega|Añadir envío|Add submission|Adicionar (?:entrega|envio)|Ajouter un travail|Abgabe hinzufügen/i;
-    const EDIT = /Editar entrega|Editar envío|Modificar entrega|Edit submission|Editar tarefa|Modifier le travail|Abgabe bearbeiten/i;
-    const link = Array.from(e.querySelectorAll('a')).find(l => /[?&]action=editsubmission(?:&|$)/.test(l.href));
+    const ADD = new RegExp(addText, 'i');
+    const EDIT = new RegExp(editText, 'i');
+    const ACTION = new RegExp(actionUrl);
+    const link = Array.from(e.querySelectorAll('a')).find(l => ACTION.test(l.href));
     const label = link ? link.textContent.trim() : '';
     const available = !link ? false : ADD.test(label) ? true : EDIT.test(label) ? false : null;
     return [{url:a.href, title:a.innerText.trim(),
@@ -62,10 +71,94 @@ TIMELINE_EVENTS = """events => events.flatMap(e => {
         course:e.querySelector('.event-name-container > small')?.innerText.split('·').slice(1).join('·').trim() || '',
         available:available, actionText: available === null ? label : ''}];
 })"""
+TIMELINE_PATTERNS = [ADD_SUBMISSION, EDIT_SUBMISSION, SUBMISSION_ACTION_URL]
+ADD_PATTERN = re.compile(ADD_SUBMISSION, re.I)
+EDIT_PATTERN = re.compile(EDIT_SUBMISSION, re.I)
+ACTION_PATTERN = re.compile(SUBMISSION_ACTION_URL)
+SPANISH_MONTHS = tuple(name for name, _ in sorted(list(MONTHS.items())[:12], key=lambda item: item[1]))
+
+
+def moodle_date_text(moment: datetime) -> str:
+    """Fecha con el formato que muestra Moodle en español; parse_moodle_date la vuelve a leer igual."""
+    return f"{moment.day} de {SPANISH_MONTHS[moment.month - 1]} de {moment.year}, {moment:%H:%M}"
+
+
+def remember_action_text(stats: dict, text: str) -> None:
+    unknown = stats.setdefault("unrecognized_action_texts", [])
+    if text not in unknown and len(unknown) < 5:
+        unknown.append(text[:60])
+
+
+def event_candidate(event: dict, config: Config) -> dict | None:
+    """Un evento del servicio de la línea de tiempo con la misma forma que una fila de la página."""
+    if event.get("modulename") != "assign":
+        return None
+    url = assignment_url(str(event.get("url") or ""), config.base_url)
+    if not url:
+        return None
+    timesort = event.get("timesort")
+    # Hora local del equipo, la misma con la que se compara «ahora» y con la que se muestran los plazos.
+    due = datetime.fromtimestamp(timesort) if isinstance(timesort, int) and timesort > 0 else None
+    action = event.get("action") if isinstance(event.get("action"), dict) else {}
+    label = " ".join(str(action.get("name") or "").split())
+    # Como en la página: sin enlace accionable de entrega, la tarea no está disponible para entregar.
+    linked = bool(action.get("actionable")) and bool(ACTION_PATTERN.search(str(action.get("url") or "")))
+    available = False if not linked else True if ADD_PATTERN.search(label) else False if EDIT_PATTERN.search(label) else None
+    course = event.get("course") if isinstance(event.get("course"), dict) else {}
+    return {"url": url, "title": " ".join(str(event.get("activityname") or event.get("name") or "").split()),
+            "deadline": moodle_date_text(due) if due else "", "course": str(course.get("fullname") or "").strip(),
+            "available": available, "actionText": label if available is None else "", "row": None}
+
+
+def service_timeline_candidates(page: Page, config: Config, stats: dict):
+    """Línea de tiempo pedida al servicio de Moodle: todas las entregas futuras, sin el filtro del panel.
+
+    Lanza MoodleServiceError antes de producir candidatos si el servicio no está disponible.
+    """
+    events = action_events(page, config, datetime.now())
+    first = next(events, None)
+    stats.update(timeline_source="service", timeline_status="empty")
+    seen = set()
+    for event in itertools.chain([] if first is None else [first], events):
+        candidate = event_candidate(event, config)
+        if candidate is None or candidate["url"] in seen:
+            continue
+        seen.add(candidate["url"])
+        stats["timeline_status"] = "ok"
+        if candidate["actionText"]:
+            remember_action_text(stats, candidate["actionText"])
+        yield candidate
+
+
+def timeline_candidates(page: Page, config: Config, stats: dict):
+    """El servicio de la línea de tiempo y, si no está disponible, la línea de tiempo dibujada en /my/."""
+    candidates = service_timeline_candidates(page, config, stats)
+    try:
+        first = next(candidates, None)
+    except MoodleServiceError as error:
+        stats["timeline_source"] = "page"
+        stats["service_error"] = str(error)[:200]
+        yield from dashboard_candidates(page, config, stats)
+        return
+    if first is not None:
+        yield first
+        yield from candidates
+
+
+
+DASHBOARD_PATHS = ("/my/", "/my/index.php")
+
+
+def on_dashboard(page: Page, config: Config) -> bool:
+    """La página ya muestra el Área personal con la sesión iniciada (así la deja ensure_login)."""
+    return (moodle_path(page.url, config.base_url) in DASHBOARD_PATHS
+            and bool(page.locator("a[href*='/login/logout.php']").count()))
 
 
 def dashboard_candidates(page: Page, config: Config, stats: dict):
-    open_page(page, config.base_url + "/my/")
+    # El Área personal es la página más pesada de Moodle: si ensure_login acaba de cargarla, se lee esa.
+    if not on_dashboard(page, config):
+        open_page(page, config.base_url + "/my/")
     stats["dashboard_pages_read"] += 1
     region = page.locator(".block_timeline, [data-block='timeline']").first
     if not region.count():
@@ -93,15 +186,13 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
         return
     seen = set()
     for _ in range(100):
-        links = region.locator("[data-region='event-list-item']").evaluate_all(TIMELINE_EVENTS)
+        links = region.locator("[data-region='event-list-item']").evaluate_all(TIMELINE_EVENTS, TIMELINE_PATTERNS)
         for link in links:
             url = assignment_url(link["url"], config.base_url)
             if url and url not in seen:
                 seen.add(url)
                 if link.get("actionText"):
-                    unknown = stats.setdefault("unrecognized_action_texts", [])
-                    if link["actionText"] not in unknown and len(unknown) < 5:
-                        unknown.append(link["actionText"][:60])
+                    remember_action_text(stats, link["actionText"])
                 yield dict(link, url=url, row=None)
         more = region.get_by_role("button", name=re.compile(r"Mostrar más actividades|Show more activities", re.I))
         if not more.count() or not more.first.is_visible() or more.first.is_disabled():
@@ -118,13 +209,54 @@ def dashboard_candidates(page: Page, config: Config, stats: dict):
     raise RuntimeError("Se alcanzó el límite de paginación de la línea de tiempo.")
 
 
+# Filtros de Mis cursos que el servicio acepta tal cual; «customfield» necesita más datos y se lee de la página.
+SERVICE_GROUPINGS = ("all", "inprogress", "future", "past", "favourites", "hidden", "allincludinghidden")
+
+
+def service_courses(page: Page, config: Config) -> dict[str, str]:
+    """Cursos de Mis cursos pedidos al servicio, con el filtro que el estudiante dejó elegido en esa vista.
+
+    Moodle publica el filtro en data-grouping antes de dibujar las tarjetas: no hay que esperarlas ni
+    pulsar «Mostrar más cursos».
+    """
+    # El bloque llega dibujado en el HTML inicial (solo las tarjetas se piden después): no se espera.
+    view = page.locator("[data-region='courses-view'][data-grouping]").first
+    if not view.count():
+        raise MoodleServiceError("Mis cursos no indica su filtro.")
+    grouping = view.get_attribute("data-grouping")
+    if grouping not in SERVICE_GROUPINGS:
+        raise MoodleServiceError(f"El filtro de Mis cursos «{grouping}» se lee desde la página.")
+    courses = {}
+    for course in enrolled_courses(page, config, grouping):
+        course_id = parse_id(course.get("id"))
+        name = " ".join(str(course.get("fullname") or "").split())
+        if course_id and name:
+            courses.setdefault(str(course_id), name)
+    return courses
+
+
 def index_candidates(page: Page, config: Config, stats: dict, errors: list[str], progress=None) -> list[dict]:
     open_page(page, config.base_url + "/my/courses.php")
+    try:
+        courses = service_courses(page, config)
+        stats["courses_source"] = "service"
+    except MoodleServiceError as error:
+        stats["courses_source"] = "page"
+        stats.setdefault("service_error", str(error)[:200])
+        courses = page_courses(page, config, errors)
+        if courses is None:
+            return []
+    stats["courses_found"] = len(courses)
+    return course_index_candidates(page, config, courses, stats, errors, progress)
+
+
+def page_courses(page: Page, config: Config, errors: list[str]) -> dict[str, str] | None:
+    """Cursos leídos de las tarjetas de Mis cursos, recorriendo su paginación."""
     try:
         page.locator("a[href*='/course/view.php']").first.wait_for(state="attached", timeout=10_000)
     except PlaywrightTimeoutError:
         errors.append("No se encontraron cursos en la vista Mis cursos.")
-        return []
+        return None
     courses = {}
     for _ in range(100):
         links = page.locator("a[href*='/course/view.php']").evaluate_all(
@@ -151,7 +283,11 @@ def index_candidates(page: Page, config: Config, stats: dict, errors: list[str],
             break
     else:
         errors.append("Se alcanzó el límite de paginación de Mis cursos.")
-    stats["courses_found"] = len(courses)
+    return courses
+
+
+def course_index_candidates(page: Page, config: Config, courses: dict[str, str], stats: dict, errors: list[str],
+                            progress=None) -> list[dict]:
     candidates = {}
     for position, (course_id, course) in enumerate(courses.items()):
         if progress is not None:
@@ -230,17 +366,15 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
 
     if mode == "upcoming":
         stats["source"] = "dashboard"
-        # Una página separada conserva la paginación mientras se leen detalles.
-        timeline = page.context.new_page()
+        # inspect no navega: la línea de tiempo se lee en la misma página, que puede ser el Área personal
+        # que ya cargó el inicio de sesión.
         try:
-            for candidate in dashboard_candidates(timeline, config, stats):
+            for candidate in timeline_candidates(page, config, stats):
                 inspect(candidate)
                 if limit is not None and len(tasks) >= limit:
                     break
         except Exception as error:
             errors.append(f"La consulta de la línea de tiempo quedó incompleta: {error}")
-        finally:
-            timeline.close()
     timeline_ok = stats.get("timeline_status") in ("ok", "empty")
     if mode != "upcoming" or errors or (not tasks and not timeline_ok):
         stats["source"] = "course_indexes" if not tasks else "dashboard_and_course_indexes"
@@ -248,9 +382,13 @@ def search_assignments(page: Page, config: Config, *, mode: str = "upcoming", li
             inspect(candidate)
     tasks.sort(key=lambda task: task.due_at or "9999")
     stats["matched_count"] = len(tasks)
-    stats["coverage"] = (
-        "Línea de tiempo con su filtro actual; no incluye necesariamente tareas vencidas, sin fecha o fuera del filtro."
-        if stats["source"] == "dashboard" else
-        "Índices de tareas de los cursos visibles en Mis cursos; otras actividades o cursos ocultos pueden quedar fuera."
-    )
+    if stats["source"] != "dashboard":
+        stats["coverage"] = ("Índices de tareas de los cursos visibles en Mis cursos; otras actividades o cursos ocultos "
+                             "pueden quedar fuera.")
+    elif stats.get("timeline_source") == "service":
+        stats["coverage"] = ("Línea de tiempo de Moodle con todas las entregas futuras (sin el filtro de días del panel); "
+                             "no incluye tareas vencidas ni sin fecha.")
+    else:
+        stats["coverage"] = ("Línea de tiempo con su filtro actual; no incluye necesariamente tareas vencidas, sin fecha "
+                             "o fuera del filtro.")
     return tasks[:limit] if limit is not None else tasks, errors
