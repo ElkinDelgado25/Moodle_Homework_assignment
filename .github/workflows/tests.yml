@@ -44,6 +44,8 @@ jobs:
 
   tests:
     name: Ubuntu 24.04 (Debian)
+    # Las plataformas arrancan solo si pasan las pruebas de Python.
+    needs: unit
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -69,6 +71,7 @@ jobs:
 
   windows:
     name: Windows Server 2025 (x64)
+    needs: unit
     runs-on: windows-2025
     timeout-minutes: 20
     defaults:
@@ -100,6 +103,7 @@ jobs:
 
   arch:
     name: Arch Linux
+    needs: unit
     runs-on: ubuntu-24.04
     container:
       image: archlinux:base
@@ -124,6 +128,7 @@ jobs:
 
   macos:
     name: macOS 15 (${{ matrix.architecture }})
+    needs: unit
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
