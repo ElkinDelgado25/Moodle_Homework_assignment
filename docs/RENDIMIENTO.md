@@ -27,6 +27,22 @@ En la misma máquina, Python 3.13 fue alrededor de un 4 % más rápido que 3.11 
 
 La ganancia grande está en el punto 2: antes, `cli.py` importaba todos los módulos al cargarse, de modo que `status` pagaba el coste de `mcp`, Playwright y `fpdf2`. Ahora esos imports viven dentro de la rama del comando que los necesita y una prueba de arquitectura ([`tests/test_architecture.py`](../tests/test_architecture.py)) impide que vuelvan arriba.
 
+### Validación contra el Moodle de la ULEAM
+
+Comprobado el 18 de noviembre de 2026 con una cuenta de estudiante (Linux, zona horaria `America/Guayaquil`), en solo lectura y comparando la rama con `main`. Cada tiempo es una ejecución sobre la red real, así que varía de una consulta a otra.
+
+| Consulta (`only_pending=true`) | Tareas | `main` | Chromium persistente y servicios AJAX |
+| --- | --- | --- | --- |
+| `upcoming` | 6 | 12,0 s | 5,0 s |
+| `overdue` | 3 | 18,9 s | 11,1 s |
+| `all` | 16 | 21,1 s | 12,0 s |
+| Tres `upcoming` seguidos (límite 5) en el mismo servidor | 5 | 14,5 / 10,2 / 11,0 s | 5,2 / 4,6 / 5,8 s |
+
+- **Servicios AJAX.** `core_calendar_get_action_events_by_timesort` y `core_course_get_enrolled_courses_by_timeline_classification` responden con la sesión del estudiante, y Mis cursos publica `data-grouping`: `stats` muestra `timeline_source=service` y `courses_source=service`, sin `service_error`. Las tres consultas devuelven las mismas tareas, con las mismas fechas, que la línea de tiempo y los índices dibujados.
+- **Fechas.** `timesort` convertido con la hora del equipo coincide con el cierre que muestra Moodle cuando la zona horaria del equipo es la del perfil. Si no coinciden, la hora mostrada puede diferir de la página de Moodle; el tiempo restante se sigue calculando con el reloj del equipo.
+- **Subida sin imágenes.** Los controles del selector de archivos del tema `academi` no dependen de imágenes: «Agregar...» es un icono de fuente (`fa-circle-plus`) y «Subir un archivo» es texto con un icono de 16×16 de tamaño fijo. El área de entrega se muestra en vista de tabla, que `_file_names` reconoce.
+- **Procesos.** Con el navegador abierto hay un proceso de Chromium; tras `close()` y tras el cierre por inactividad no queda ninguno.
+
 ## Qué se cambió
 
 - **Imports por comando** en `src/moodle_tasks/cli.py`. Es la mejora que más se percibe.
